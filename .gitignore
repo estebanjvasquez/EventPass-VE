@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+vendor/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build
+dist/
+build/
+.next/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+
+# Testing
+coverage/
+
+# Temp
+*.tmp
+*.temp
+
+# Docker
+.docker/
+
+# Prisma
+prisma/migrations/dev.db
