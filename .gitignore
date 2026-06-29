@@ -40,3 +40,7 @@ coverage/
 # Supabase CLI
 supabase/.branches
 supabase/.temp
+
+.dev.vars*
+!.dev.vars.example
+!.env.example
