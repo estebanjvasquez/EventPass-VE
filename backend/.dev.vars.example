@@ -1,0 +1,5 @@
+# Copia a backend/.dev.vars (ignorado por git) para `wrangler dev`.
+# En producción usa: wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+ENVIRONMENT=development
