@@ -1,625 +1,232 @@
 # Skills, Herramientas y Dependencias Necesarias
 
+> **Stack vigente: Cloudflare + Supabase.** Este documento fue actualizado desde el
+> stack anterior (Node/Express/Prisma/Bull/Redis/AWS/SendGrid) para alinearse con
+> [`ANALISIS_COSTO_CLOUDFLARE_SUPABASE.md`](ANALISIS_COSTO_CLOUDFLARE_SUPABASE.md).
+> El andamiaje ya está creado en `frontend/`, `backend/` e `infra/`.
+
 ---
 
 ## PARTE 1: SKILLS A USAR EN CLAUDE CODE
 
+> Las skills de Claude Code no se "instalan": ya están disponibles y se invocan con `/<nombre>`.
+
 ### Skills Críticas (Usar Regularmente)
 
 #### 1. `/design-taste-frontend`
-**Qué es:** Skill especializado en UI/UX que fuerza reglas de diseño consistentes
-
-**Cuándo usar:**
-- Crear componentes nuevos
-- Revisar diseño de páginas
-- Resolver inconsistencias visuales
-- Mejorar accesibilidad
-
-**Ejemplo de uso:**
-```
-/design-taste-frontend
-
-Necesito crear un formulario de registro para eventos.
-Campos: nombre, email, teléfono, tipo evento.
-Debe ser responsive, validar en tiempo real.
-¿Cómo lo estructuro con Shadcn/ui?
-```
-
-**Comandos relacionados:**
-```bash
-/design-taste-frontend  # Sin argumentos
-/design-taste-frontend --review  # Revisar existente
-```
-
----
+UI/UX con reglas de diseño consistentes. Úsalo al crear componentes, revisar páginas o mejorar accesibilidad (formularios de registro, panel admin con Shadcn/ui + Tailwind).
 
 #### 2. `/code-review`
-**Qué es:** Revisa código en PRs buscando bugs, eficiencia, reutilización
-
-**Cuándo usar:**
-- Antes de mergear a main
-- Revisar código de otros developers
-- Buscar vulnerabilidades
-- Mejorar calidad
-
-**Ejemplo de uso:**
-```
-/code-review --fix
-
-Revisa el código del formulario de registro.
-Busca bugs, seguridad, performance.
-```
-
-**Niveles de review:**
-```bash
-/code-review low      # Bugs críticos solo
-/code-review medium   # Bugs + refactoring menor
-/code-review high     # Incluir todo
-/code-review ultra    # Deep review (cloud multi-agent)
-/code-review --comment  # Post como inline comments
-/code-review --fix    # Aplica fixes automático
-```
-
----
+Revisa PRs (bugs, seguridad, performance, reutilización). Niveles: `low`, `medium`, `high`, `ultra` (cloud multi-agente). Flags: `--comment`, `--fix`.
 
 #### 3. `/verify`
-**Qué es:** Ejecuta la app y verifica que funcione
+Ejecuta la app y valida flujos end-to-end (registro, email, confirmación de pago, credencial QR).
 
-**Cuándo usar:**
-- Después de completar feature
-- Antes de mergear
-- Verificar flujo de usuario
-- Testing manual
-
-**Ejemplo de uso:**
-```
-/verify
-
-Verifica que:
-1. Registro funciona end-to-end
-2. Email se envía
-3. Admin puede confirmar pago
-4. Credencial PDF se genera
-```
-
-**Qué valida:**
-- Funcionamiento en vivo de la app
-- UI se renderiza correctamente
-- No hay errores en consola
-- Flujos críticos completos
-
----
-
-### Skills de Referencia (Usar cuando Necesites Info)
+### Skills de Referencia
 
 #### 4. `/claude-api`
-**Qué es:** Referencia de Claude API, modelos, precios, features
+Referencia de Claude API: modelos, precios, caching, tool use. Útil si se agregan validaciones o reportes con IA.
 
-**Cuándo usar:**
-- Preguntar sobre capacidades de Claude
-- Pricing y modelo selection
-- Caching y batch API
-- Tool use y agent creation
+#### 5. `/security-review`
+Auditoría de seguridad antes de producción: RLS de Supabase, JWT, rate limiting, validación de inputs, manejo de comprobantes.
 
-**Ejemplo:**
-```
-/claude-api
-
-¿Qué modelo me recomendas para generar reportes?
-¿Hay costo por usar IA en validaciones?
-```
-
----
-
-### Skills Opcionales (Usar si se requieren)
-
-#### 5. `/data:sql-queries`
-**Qué es:** Genera queries SQL complejas
-
-**Cuándo usar:**
-- Crear reportes complejos
-- Análisis de datos
-- Migraciones especiales
-
-**Ejemplo:**
-```
-/data:sql-queries
-
-Necesito una query que muestre:
-- Registros por día
-- Tasa de conversión
-- Ingreso proyectado vs confirmado
-```
-
----
-
-#### 6. `/data:build-dashboard`
-**Qué es:** Crea dashboards de datos interactivos
-
-**Cuándo usar:**
-- Reportes en tiempo real
-- Visualización de métricas
-- Admin dashboard
-
----
-
-#### 7. `/security-review`
-**Qué es:** Auditoría de seguridad completa
-
-**Cuándo usar:**
-- Antes de lanzar a producción
-- Después de Sprint 4
-- Validación de HTTPS, JWT, etc.
-
-**Ejemplo:**
-```
-/security-review
-
-Audita seguridad del sistema:
-- Autenticación JWT
-- HTTPS/SSL
-- Rate limiting
-- Validación de inputs
-- Manejo de comprobantes
-```
-
----
-
-#### 8. `/schedule`
-**Qué es:** Planifica tareas en intervalos
-
-**Cuándo usar:**
-- Agendar backups
-- Ejecución de jobs periódicos
-- Reminders
-
----
-
-#### 9. `/update-config`
-**Qué es:** Configura settings y hooks
-
-**Cuándo usar:**
-- Setup inicial
-- Configurar permisos
-- Variables de entorno
+#### 6. `/schedule` y `/update-config`
+Tareas recurrentes y configuración de settings/hooks/permisos del entorno.
 
 ---
 
 ## PARTE 2: HERRAMIENTAS DE DESARROLLO (CLI/Local)
 
-### Herramientas Requeridas
+### Estado actual (verificado)
+
+| Herramienta | Requerido | Cómo se usa |
+|-------------|-----------|-------------|
+| **Node.js** v20+ | ✅ instalado (v24) | Runtime de build y tooling |
+| **npm** v10+ | ✅ instalado (v11) | Gestor de paquetes |
+| **Git** v2.40+ | ✅ instalado | Control de versiones |
+| **Wrangler** (Cloudflare) | ✅ dev-dependency en `backend/` | `npx wrangler ...` (dev/deploy del Worker) |
+| **Supabase CLI** | ✅ dev-dependency en `infra/` | `npx supabase ...` (migraciones, db local) |
+| ~~Docker~~ | ❌ no requerido | El stack serverless no lo necesita |
+
+> **No se requiere Docker, Redis ni PostgreSQL local.** La base de datos vive en
+> Supabase (nube). Para desarrollo local de la BD puede usarse `supabase start`
+> (que sí usa Docker internamente) — opcional.
+
+### Instalación / arranque
 
 ```bash
-# Node.js & npm
-node --version        # v20+ requerido
-npm --version         # v10+
+# Frontend (Cloudflare Pages)
+cd frontend
+npm install        # ya ejecutado
+npm run dev        # http://localhost:5173
 
-# Git
-git --version         # v2.40+
+# Backend (Cloudflare Worker)
+cd ../backend
+npm install        # ya ejecutado
+npm run dev        # http://localhost:8787  (requiere backend/.dev.vars)
 
-# Docker (para BD local)
-docker --version      # v24+
-docker-compose --version  # v2+
-
-# TypeScript compiler
-npx tsc --version
-
-# ESLint (linting)
-npx eslint --version
-```
-
-### Instalación Inicial
-
-```bash
-# Backend setup
-cd backend
-npm install
-npm run migrate:dev
-npm run seed
-npm run dev
-
-# Frontend setup
-cd ../frontend
-npm install
-npm run dev
-
-# En otra terminal: Base de datos
-docker-compose up
+# Infra (Supabase CLI)
+cd ../infra
+npm install        # ya ejecutado
+npx supabase login
+npx supabase link --project-ref YOUR_PROJECT_REF
 ```
 
 ---
 
-## PARTE 3: DEPENDENCIAS NPM
+## PARTE 3: DEPENDENCIAS NPM (instaladas)
 
-### Backend (`package.json`)
+### Frontend (`frontend/package.json`)
 
-```json
+```jsonc
 {
   "dependencies": {
-    "express": "^4.18.0",
-    "@prisma/client": "^5.0.0",
-    "jsonwebtoken": "^9.0.0",
-    "@sendgrid/mail": "^7.7.0",
-    "bull": "^4.11.0",
-    "redis": "^4.6.0",
-    "aws-sdk": "^2.1400.0",
-    "zod": "^3.22.0",
-    "cors": "^2.8.5",
-    "dotenv": "^16.3.0",
-    "express-async-errors": "^3.1.1"
+    "react": "^19",
+    "react-dom": "^19",
+    "react-router-dom": "^6",
+    "@tanstack/react-query": "^5",
+    "react-hook-form": "^7",
+    "@hookform/resolvers": "^5",
+    "zod": "^3",
+    "@supabase/supabase-js": "^2",   // auth + datos + storage
+    "qrcode.react": "^4",            // credenciales QR
+    "recharts": "^2",                // reportes/dashboards
+    "zustand": "^5",                 // estado
+    "class-variance-authority", "clsx", "tailwind-merge", "lucide-react" // base Shadcn/ui
   },
   "devDependencies": {
-    "typescript": "^5.0.0",
-    "jest": "^29.0.0",
-    "supertest": "^6.3.0",
-    "prisma": "^5.0.0",
-    "@types/node": "^20.0.0",
-    "@types/express": "^4.17.0",
-    "tsx": "^3.14.0"
+    "vite": "^8", "@vitejs/plugin-react": "^6",
+    "tailwindcss": "^4", "@tailwindcss/vite": "^4",
+    "typescript", "oxlint", "@types/react", "@types/react-dom", "@types/node"
   }
 }
 ```
 
-### Frontend (`package.json`)
+> Shadcn/ui se agrega con su CLI (`npx shadcn@latest init`) cuando se necesiten
+> componentes; copia el código al proyecto (no es un paquete npm).
+> Para mapa de asientos: agregar `konva` + `react-konva` cuando se implemente.
 
-```json
+### Backend (`backend/package.json`)
+
+```jsonc
 {
   "dependencies": {
-    "react": "^18.0.0",
-    "react-dom": "^18.0.0",
-    "react-router-dom": "^6.0.0",
-    "zustand": "^4.3.0",
-    "@tanstack/react-query": "^4.32.0",
-    "react-hook-form": "^7.45.0",
-    "zod": "^3.22.0",
-    "@hookform/resolvers": "^3.3.0",
-    "axios": "^1.4.0",
-    "@shadcn/ui": "^0.1.0",
-    "tailwindcss": "^3.3.0",
-    "qrcode.react": "^1.0.0",
-    "@react-pdf/renderer": "^3.1.0",
-    "recharts": "^2.10.0",
-    "konva": "^9.2.0",
-    "react-konva": "^18.2.0",
-    "zustand": "^4.3.0"
+    "hono": "^4",                  // framework para Workers
+    "@supabase/supabase-js": "^2", // cliente service-role
+    "zod": "^3"
   },
   "devDependencies": {
-    "typescript": "^5.0.0",
-    "vite": "^4.4.0",
-    "@vitejs/plugin-react": "^4.0.0",
-    "tailwindcss": "^3.3.0",
-    "postcss": "^8.4.0",
-    "autoprefixer": "^10.4.0",
-    "eslint": "^8.45.0"
+    "wrangler": "^4",
+    "@cloudflare/workers-types": "^4",
+    "typescript": "^5"
   }
 }
+```
+
+### Infra (`infra/package.json`)
+
+```jsonc
+{ "devDependencies": { "supabase": "^2" } }   // Supabase CLI local
 ```
 
 ---
 
 ## PARTE 4: VARIABLES DE ENTORNO
 
-### Backend `.env`
+### Frontend — `frontend/.env` (copiar de `.env.example`)
 
 ```env
-# === DATABASE ===
-DATABASE_URL=postgresql://user:password@localhost:5432/event_registration
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=your_password
-DB_NAME=event_registration
-
-# === JWT ===
-JWT_SECRET=your_super_long_secret_key_minimum_32_characters_1234567890
-JWT_REFRESH_SECRET=another_super_long_secret_key_minimum_32_characters_0987654321
-JWT_EXPIRY=24h
-JWT_REFRESH_EXPIRY=7d
-
-# === SENDGRID (EMAIL) ===
-SENDGRID_API_KEY=SG.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-SENDGRID_FROM_EMAIL=noreply@yourdomain.com
-SENDGRID_FROM_NAME="Sistema Registro Eventos"
-
-# === AWS S3 (COMPROBANTES) ===
-AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
-AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
-AWS_REGION=us-east-1
-AWS_S3_BUCKET=event-registration-bucket
-AWS_S3_URL=https://event-registration-bucket.s3.amazonaws.com
-
-# === REDIS (CACHE & JOBS) ===
-REDIS_URL=redis://localhost:6379
-REDIS_HOST=localhost
-REDIS_PORT=6379
-
-# === APP CONFIG ===
-NODE_ENV=development
-PORT=3001
-HOST=0.0.0.0
-FRONTEND_URL=http://localhost:5173
-BACKEND_URL=http://localhost:3001
-
-# === PAYMENT CONFIG ===
-PAYMENT_TIMEOUT_DAYS=10
-REMINDER_DAYS=3,7,9
-
-# === LOGGING ===
-LOG_LEVEL=debug
-LOG_FORMAT=json
-
-# === SECURITY ===
-CORS_ORIGIN=http://localhost:5173
-RATE_LIMIT_WINDOW_MS=900000
-RATE_LIMIT_MAX_REQUESTS=100
-
-# === SENTRY (ERROR TRACKING) ===
-SENTRY_DSN=https://your-sentry-key@sentry.io/xxxx
-SENTRY_ENV=development
-
-# === FILE UPLOAD ===
-MAX_FILE_SIZE=5242880  # 5MB en bytes
-ALLOWED_FILE_TYPES=image/jpeg,image/png,application/pdf
-```
-
-### Frontend `.env`
-
-```env
-VITE_API_URL=http://localhost:3001/api
-VITE_APP_NAME="Sistema Registro Eventos"
+VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_API_URL=http://localhost:8787
+VITE_APP_NAME="EventPass VE"
 VITE_ENVIRONMENT=development
-VITE_VERSION=1.0.0
-VITE_LOG_LEVEL=debug
 ```
+
+### Backend — `backend/.dev.vars` (copiar de `.dev.vars.example`)
+
+```env
+SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key   # SECRETO — nunca en el frontend
+ENVIRONMENT=development
+```
+
+En producción los secretos se cargan con:
+
+```bash
+cd backend && npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+```
+
+Variables no secretas viven en `backend/wrangler.toml` (`[vars]`).
 
 ---
 
-## PARTE 5: SERVICIOS EXTERNOS REQUERIDOS
+## PARTE 5: SERVICIOS EXTERNOS
 
-### 1. SendGrid (Email)
+| Servicio | Rol | Plan |
+|----------|-----|------|
+| **Supabase** | Postgres (multi-tenant + RLS), Auth, Storage | Free → **Pro $25/mes** |
+| **Cloudflare Pages** | Hosting del frontend | Gratis |
+| **Cloudflare Workers** | API/backend serverless + Cron Triggers | **$5/mes** (Paid) |
+| **Cloudflare for SaaS** | Dominios propios premium / subdominios | 100 hostnames gratis, luego $0.10 c/u |
+| **Cloudflare R2** | Comprobantes/credenciales (opcional) | 10 GB gratis, egreso gratis |
+| **Resend** | Email transaccional | Free 3K/mes → $20/mes |
+| **WhatsApp Cloud API** | Notificaciones (diferenciador VE) | Por conversación |
 
-```
-Cuenta: SendGrid (sendgrid.com)
-API Key: Necesaria para enviar emails
-Plan: Essentials ($20/mes) o Starter (gratis 100/día)
-Configuración:
-- Crear API key
-- Configurar sender domain (SPF + DKIM)
-- Verificar email de origen
-```
-
-### 2. AWS (S3 + Infraestructura)
-
-```
-Servicios necesarios:
-- S3: Almacenamiento de comprobantes
-- EC2: Servidor backend
-- RDS: Base de datos PostgreSQL
-- CloudFront: CDN para PDFs
-- IAM: Gestión de credenciales
-
-Estimado: $200-300/mes
-```
-
-### 3. PostgreSQL (Base de Datos)
-
-```
-Opción A: AWS RDS Managed (recomendado)
-- db.t3.small: ~$50/mes
-- Backups automáticos incluidos
-
-Opción B: Self-hosted (Docker)
-- Costo: $0 (si es en tu infraestructura)
-- Requiere: gestión manual de backups
-
-Versión mínima: PostgreSQL 14
-```
-
-### 4. Redis
-
-```
-Opción A: AWS ElastiCache
-- cache.t3.micro: ~$25/mes
-
-Opción B: Docker local
-- Costo: $0
-
-Necesario para:
-- Cache de sesiones
-- Bull job queues
-- Rate limiting
-```
-
-### 5. Dominios y DNS
-
-```
-Registro: GoDaddy, Namecheap, etc.
-- .com: ~$12/año
-- .com.co: ~$20/año
-
-DNS: Cloudflare (gratis)
-- CNAME para frontend (Vercel)
-- A record para backend (AWS)
-```
-
-### 6. Certificado SSL
-
-```
-Opción A: Let's Encrypt (recomendado)
-- Costo: GRATIS
-- Auto-renewal: Automático
-- Usado por: Vercel, Nginx
-
-Opción B: AWS Certificate Manager
-- Costo: GRATIS
-- Para ELB/CloudFront
-```
+> Ver costos completos en [`ANALISIS_COSTO_CLOUDFLARE_SUPABASE.md`](ANALISIS_COSTO_CLOUDFLARE_SUPABASE.md).
 
 ---
 
-## PARTE 6: HERRAMIENTAS DE MONITOREO
+## PARTE 6: DESPLIEGUE
 
-### Sentry (Error Tracking)
+```bash
+# Backend (Worker)
+cd backend
+npx wrangler deploy
 
-```
-URL: sentry.io
-Plan: Developer (gratis) o Team ($49/mes)
-Uso: Captura errores en producción
-Integración:
-- Backend: @sentry/node
-- Frontend: @sentry/react
-```
+# Frontend (Pages) — vía dashboard de Cloudflare (build: npm run build, output: dist)
+# o manual:
+cd ../frontend && npm run build
+npx wrangler pages deploy dist --project-name eventpass
 
-### Vercel Analytics
-
-```
-URL: vercel.com (incluido en Plan Pro)
-Costo: $20/mes
-Monitores: Performance, SEO, Core Web Vitals
+# Base de datos (migraciones)
+cd ../infra
+npx supabase db push
 ```
 
-### AWS CloudWatch
-
-```
-Incluido en RDS + EC2
-Monitores: CPU, memoria, conexiones DB
-Alarmas: Puede enviar a SNS/Email
-```
+- **Subdominios** de clientes normales: wildcard DNS `*.DOMINIO` (gratis).
+- **Dominios propios** de clientes premium: Cloudflare for SaaS (custom hostnames).
 
 ---
 
-## PARTE 7: COMANDOS ÚTILES POR FASE
+## PARTE 7: CHECKLIST PRE-DESARROLLO
 
-### Setup Inicial (Semana 1)
-
-```bash
-# Backend
-mkdir event-registration
-cd event-registration
-npm init -y
-npm install express @prisma/client jsonwebtoken @sendgrid/mail bull redis
-
-# Configurar Prisma
-npx prisma init
-npx prisma migrate dev --name init
-npx prisma seed
-
-# Frontend
-npm create vite@latest frontend -- --template react-ts
-cd frontend
-npm install react-router-dom zustand @tanstack/react-query react-hook-form zod
-npm install -D tailwindcss postcss autoprefixer
-npx tailwindcss init -p
-```
-
-### Desarrollo (Semanas 2-7)
-
-```bash
-# Backend: ejecutar en una terminal
-npm run dev
-
-# Frontend: ejecutar en otra terminal
-npm run dev
-
-# BD local
-docker-compose up
-
-# Tests
-npm test
-
-# Code quality
-npm run lint
-npm run format
-```
-
-### Deployment (Semana 8)
-
-```bash
-# Build
-npm run build
-
-# Test build localmente
-npm run preview
-
-# Deploy
-# Backend: git push (GitHub Actions automático)
-# Frontend: Vercel automático
-
-# Verificar salud
-curl https://api.yourdomain.com/health
-```
+- [x] Node.js v20+ / npm / Git instalados
+- [x] Frontend, backend e infra andamiados con dependencias instaladas
+- [x] Wrangler y Supabase CLI disponibles vía `npx`
+- [ ] Proyecto Supabase creado (obtener URL + anon key + service role key)
+- [ ] `frontend/.env` y `backend/.dev.vars` completados
+- [ ] Esquema multi-tenant diseñado (organizations, memberships, RLS) → ver `ANÁLISIS_SISTEMA_REGISTRO_EVENTOS.md`
+- [ ] Cuenta Cloudflare + dominio elegido
+- [ ] Cuenta Resend (API key)
 
 ---
 
-## PARTE 8: CHECKLIST PRE-DESARROLLO
+## PARTE 8: TROUBLESHOOTING RÁPIDO
 
-- [ ] **Node.js v20+** instalado y funcionando
-- [ ] **Docker** instalado para PostgreSQL + Redis
-- [ ] **GitHub** repo creado y configurado
-- [ ] **SendGrid** API key obtenida
-- [ ] **AWS** credenciales configuradas
-- [ ] **Dominio** registrado y apuntando a nameservers
-- [ ] **Variables de entorno** preparadas (.env)
-- [ ] **Base de datos** schema diseñado
-- [ ] **Equipos** asignados a roles
-- [ ] **Reunión de kickoff** programada
+**Worker no levanta:** verificar que exista `backend/.dev.vars` y que `wrangler.toml` tenga `main = "src/index.ts"`.
+
+**Frontend sin estilos:** Tailwind v4 se carga vía `@tailwindcss/vite` en `vite.config.ts` y `@import "tailwindcss";` en `src/index.css`.
+
+**Error de conexión a Supabase:** revisar `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` (frontend) y `SUPABASE_SERVICE_ROLE_KEY` (backend). El service role **nunca** va en el frontend.
+
+**RLS bloquea consultas:** confirmar políticas por `organization_id` y que el JWT incluya el tenant correcto.
 
 ---
 
-## PARTE 9: TROUBLESHOOTING RÁPIDO
+## CONTACTO & REFERENCIAS
 
-### Problem: Error de conexión a BD
-
-```bash
-# Verificar PostgreSQL está corriendo
-docker-compose ps
-
-# Ver logs
-docker-compose logs postgres
-
-# Resetear BD
-npx prisma migrate reset
-```
-
-### Problem: Email no se envía
-
-```bash
-# Verificar API key
-echo $SENDGRID_API_KEY
-
-# Test de envío
-curl --request POST \
-  --url https://api.sendgrid.com/v3/mail/send \
-  --header "Authorization: Bearer $SENDGRID_API_KEY"
-```
-
-### Problem: Jobs no se ejecutan
-
-```bash
-# Verificar Redis
-redis-cli ping  # debe retornar PONG
-
-# Ver queue en Bull UI
-npm install @bull-board/express
-```
-
-### Problem: Performance lenta
-
-```bash
-# Habilitar Query logging
-DATABASE_URL="...?logLevel=query"
-
-# Ver queries lentas
-npx prisma studio
-```
-
----
-
-## CONTACTO & SOPORTE
-
-Para preguntas sobre:
-- **Setup técnico:** Ver PLAN_TRABAJO.md
-- **APIs:** Ver API documentation (Swagger)
-- **Problemas:** Revisar logs en Sentry
-- **Features:** Referencia ANÁLISIS_SISTEMA_REGISTRO_EVENTOS.md
-
+- **Costos y arquitectura:** `ANALISIS_COSTO_CLOUDFLARE_SUPABASE.md`
+- **Features y modelo de datos:** `ANÁLISIS_SISTEMA_REGISTRO_EVENTOS.md`
+- **Mercado y modelo de negocio:** `ANÁLISIS_MERCADO_VENEZUELA.md`
+- **Cotización al cliente:** `COTIZACION_CLIENTE.md`

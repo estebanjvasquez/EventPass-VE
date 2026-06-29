@@ -25,12 +25,18 @@ SaaS en USD — tres planes:
 
 ## Stack Técnico
 
-- **Frontend:** React 18 + TypeScript + Tailwind CSS + Shadcn/ui
-- **Backend:** Node.js + Express + Prisma + PostgreSQL
-- **Jobs:** Bull + Redis
-- **Email:** SendGrid / Gmail SMTP
-- **Hosting:** DigitalOcean (São Paulo)
-- **Storage:** DigitalOcean Spaces
+- **Frontend:** React 18 + TypeScript + Tailwind CSS + Shadcn/ui en Cloudflare Pages
+- **Backend:** Cloudflare Workers (Hono) + Supabase Edge Functions
+- **Base de datos:** Supabase Postgres (multi-tenant con RLS)
+- **Auth:** Supabase Auth (JWT, roles por organización)
+- **Jobs:** Cloudflare Cron Triggers + pg_cron
+- **Email / WhatsApp:** Resend + WhatsApp Cloud API
+- **Storage:** Supabase Storage / Cloudflare R2
+- **Multi-dominio:** subdominios (wildcard DNS) + Cloudflare for SaaS (dominios propios premium)
+
+> Nota: los presupuestos `docs/PRESUPUESTO*.md` describen una arquitectura previa
+> (DigitalOcean + Node/Express). El análisis vigente es
+> [`docs/ANALISIS_COSTO_CLOUDFLARE_SUPABASE.md`](docs/ANALISIS_COSTO_CLOUDFLARE_SUPABASE.md).
 
 ## Estructura del Repositorio
 

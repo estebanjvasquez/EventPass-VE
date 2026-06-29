@@ -33,8 +33,10 @@ coverage/
 *.tmp
 *.temp
 
-# Docker
-.docker/
+# Cloudflare Workers / Wrangler
+.wrangler/
+.dev.vars
 
-# Prisma
-prisma/migrations/dev.db
+# Supabase CLI
+supabase/.branches
+supabase/.temp

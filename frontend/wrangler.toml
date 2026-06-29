@@ -1,0 +1,9 @@
+# Cloudflare Pages — frontend de EventPass VE
+# Deploy manual:   npx wrangler pages deploy dist --project-name eventpass
+# Deploy por Git:  conectar el repo en el dashboard de Cloudflare Pages
+#   - Root directory:   frontend
+#   - Build command:    npm run build
+#   - Output directory: dist
+name = "eventpass"
+pages_build_output_dir = "dist"
+compatibility_date = "2025-06-01"

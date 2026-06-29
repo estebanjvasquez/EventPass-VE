@@ -1,0 +1,15 @@
+name = "eventpass-backend"
+main = "src/index.ts"
+compatibility_date = "2025-06-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Recordatorios de pago y liberación de plazas vencidas.
+# Reemplaza a Bull/Redis del stack anterior.
+[triggers]
+crons = ["0 * * * *"]
+
+# Variables no secretas. Los secretos se cargan con:
+#   wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+[vars]
+SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co"
+ENVIRONMENT = "development"
