@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
-import { sendUploadLinkEmail, type EmailSendBinding } from './email'
+import { sendUploadLinkEmail, sendConfirmationEmail, type EmailSendBinding } from './email'
 import { runScheduledJobs } from './jobs'
 
 type Bindings = {
@@ -38,6 +38,13 @@ app.get('/api/events', async (c) => {
 // credential_token por privacidad), así que el Worker lo resuelve con
 // service-role y envía el correo a la dirección guardada en el registro.
 // ---------------------------------------------------------------------------
+// El join events(name) llega como objeto o como array según la relación.
+function extractEventName(events: unknown): string {
+  if (!events) return 'Tu evento'
+  const row = Array.isArray(events) ? events[0] : events
+  return (row as { name?: string } | undefined)?.name ?? 'Tu evento'
+}
+
 const notifySchema = z.object({
   event_id: z.string().uuid(),
   email: z.string().email(),
@@ -68,20 +75,13 @@ app.post('/api/registrations/notify', async (c) => {
     .eq('organization_id', reg.organization_id)
     .eq('is_active', true)
 
-  const eventName =
-    (reg.events as { name?: string } | { name?: string }[] | null) == null
-      ? 'Tu evento'
-      : Array.isArray(reg.events)
-        ? (reg.events[0]?.name ?? 'Tu evento')
-        : ((reg.events as { name?: string }).name ?? 'Tu evento')
-
   const base = c.env.APP_BASE_URL.replace(/\/$/, '')
   const sendError = await sendUploadLinkEmail({
     email: c.env.EMAIL,
     from: c.env.EMAIL_FROM,
     to: email,
     firstName: reg.first_name,
-    eventName,
+    eventName: extractEventName(reg.events),
     uploadUrl: `${base}/comprobante/${reg.credential_token}`,
     paymentMethods: methods ?? [],
   })
@@ -96,6 +96,53 @@ app.post('/api/registrations/notify', async (c) => {
 
   if (sendError) {
     console.error('[notify] envío fallido:', sendError)
+    return c.json({ ok: false }, 502)
+  }
+  return c.json({ ok: true })
+})
+
+// ---------------------------------------------------------------------------
+// Correo de confirmación de pago: lo invoca el panel admin tras confirmar un
+// registro. El Worker solo envía si el registro está realmente confirmado
+// (evita falsos "confirmado"). Incluye el enlace a la credencial con QR.
+// ---------------------------------------------------------------------------
+const confirmSchema = z.object({ registration_id: z.string().uuid() })
+
+app.post('/api/registrations/confirm-notify', async (c) => {
+  const parsed = confirmSchema.safeParse(await c.req.json().catch(() => null))
+  if (!parsed.success) return c.json({ error: 'Datos inválidos' }, 400)
+
+  const supabase = createClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY)
+  const { data: reg, error } = await supabase
+    .from('registrations')
+    .select('id, first_name, email, credential_token, status, organization_id, events(name)')
+    .eq('id', parsed.data.registration_id)
+    .maybeSingle()
+
+  if (error || !reg) return c.json({ ok: true })
+  // Solo se notifica una confirmación real.
+  if (reg.status !== 'confirmed') return c.json({ ok: true })
+
+  const base = c.env.APP_BASE_URL.replace(/\/$/, '')
+  const sendError = await sendConfirmationEmail({
+    email: c.env.EMAIL,
+    from: c.env.EMAIL_FROM,
+    to: reg.email,
+    firstName: reg.first_name,
+    eventName: extractEventName(reg.events),
+    credentialUrl: `${base}/credencial/${reg.credential_token}`,
+  })
+
+  await supabase.from('email_log').insert({
+    organization_id: reg.organization_id,
+    registration_id: reg.id,
+    email_type: 'payment_confirmed',
+    status: sendError ? 'failed' : 'sent',
+    sent_at: sendError ? null : new Date().toISOString(),
+  })
+
+  if (sendError) {
+    console.error('[confirm-notify] envío fallido:', sendError)
     return c.json({ ok: false }, 502)
   }
   return c.json({ ok: true })
