@@ -1,5 +1,10 @@
 # Copia a backend/.dev.vars (ignorado por git) para `wrangler dev`.
 # En producción usa: wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+# El envío de correo usa el binding `send_email` (no hay API key de email).
 SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ENVIRONMENT=development
+
+# Remitente (dominio verificado en Cloudflare) y enlace del frontend
+EMAIL_FROM=no-reply@eventosfacil.net
+APP_BASE_URL=http://localhost:5173

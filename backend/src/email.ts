@@ -1,0 +1,126 @@
+// Envío de correos transaccionales con el binding nativo de Cloudflare
+// Email Sending (`send_email`). No requiere API key ni servicio externo: la
+// autenticación es el propio binding y un dominio remitente verificado.
+
+// Forma mínima del binding `send_email` (API moderna por objeto). Se tipa aquí
+// para no depender de la versión de @cloudflare/workers-types.
+export type EmailSendBinding = {
+  send(message: {
+    to: string
+    from: string
+    subject: string
+    html?: string
+    text?: string
+  }): Promise<unknown>
+}
+
+type PaymentMethod = {
+  name: string
+  details: Record<string, unknown> | null
+}
+
+type UploadLinkParams = {
+  email: EmailSendBinding
+  from: string
+  to: string
+  firstName: string
+  eventName: string
+  uploadUrl: string
+  paymentMethods: PaymentMethod[]
+}
+
+const esc = (s: string) =>
+  s.replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!,
+  )
+
+function paymentMethodsHtml(methods: PaymentMethod[]): string {
+  if (methods.length === 0) return ''
+  const items = methods
+    .map((m) => {
+      const rows = Object.entries(m.details ?? {})
+        .map(
+          ([k, v]) =>
+            `<div style="font-size:13px;color:#52525b"><span style="color:#a1a1aa;text-transform:capitalize">${esc(
+              k,
+            )}:</span> ${esc(String(v))}</div>`,
+        )
+        .join('')
+      return `<li style="margin:0 0 12px;padding:12px 14px;background:#fafafa;border-radius:8px;list-style:none">
+        <div style="font-weight:600;font-size:14px;color:#27272a">${esc(m.name)}</div>${rows}</li>`
+    })
+    .join('')
+  return `<p style="font-weight:600;color:#27272a;margin:24px 0 8px">Datos de pago</p>
+    <ul style="margin:0;padding:0">${items}</ul>`
+}
+
+function paymentMethodsText(methods: PaymentMethod[]): string {
+  if (methods.length === 0) return ''
+  const lines = methods
+    .map((m) => {
+      const detail = Object.entries(m.details ?? {})
+        .map(([k, v]) => `   ${k}: ${String(v)}`)
+        .join('\n')
+      return ` - ${m.name}\n${detail}`
+    })
+    .join('\n')
+  return `\n\nDatos de pago:\n${lines}`
+}
+
+export function uploadLinkEmailHtml(p: UploadLinkParams): string {
+  return `<!doctype html>
+<html lang="es"><body style="margin:0;background:#f4f4f5;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
+  <div style="max-width:560px;margin:0 auto;padding:32px 20px">
+    <div style="background:#ffffff;border:1px solid #e4e4e7;border-radius:16px;padding:32px">
+      <p style="font-size:13px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#059669;margin:0">
+        ${esc(p.eventName)}
+      </p>
+      <h1 style="font-size:24px;color:#18181b;margin:8px 0 0">Hola, ${esc(p.firstName)}</h1>
+      <p style="font-size:15px;line-height:1.6;color:#52525b;margin:16px 0 0">
+        Recibimos tu registro. Para completar tu inscripción, realiza el pago y
+        carga tu comprobante en el siguiente enlace:
+      </p>
+      <p style="margin:24px 0">
+        <a href="${esc(p.uploadUrl)}"
+           style="display:inline-block;background:#059669;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;padding:12px 24px;border-radius:8px">
+          Cargar mi comprobante
+        </a>
+      </p>
+      ${paymentMethodsHtml(p.paymentMethods)}
+      <p style="font-size:12px;color:#a1a1aa;margin:24px 0 0;word-break:break-all">
+        Si el botón no funciona, copia este enlace:<br>${esc(p.uploadUrl)}
+      </p>
+    </div>
+    <p style="text-align:center;font-size:12px;color:#a1a1aa;margin:16px 0 0">
+      EventPass VE
+    </p>
+  </div>
+</body></html>`
+}
+
+function uploadLinkEmailText(p: UploadLinkParams): string {
+  return `Hola, ${p.firstName}
+
+Recibimos tu registro para "${p.eventName}". Para completar tu inscripción,
+realiza el pago y carga tu comprobante en este enlace:
+
+${p.uploadUrl}${paymentMethodsText(p.paymentMethods)}
+
+— EventPass VE`
+}
+
+// Devuelve null si se envió bien; un mensaje de error en caso contrario.
+export async function sendUploadLinkEmail(p: UploadLinkParams): Promise<string | null> {
+  try {
+    await p.email.send({
+      to: p.to,
+      from: p.from,
+      subject: `Completa tu inscripción — ${p.eventName}`,
+      html: uploadLinkEmailHtml(p),
+      text: uploadLinkEmailText(p),
+    })
+    return null
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err)
+  }
+}
