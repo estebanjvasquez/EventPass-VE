@@ -338,3 +338,72 @@ export async function sendSlotExpiredEmail(p: SlotExpiredParams): Promise<string
     return err instanceof Error ? err.message : String(err)
   }
 }
+
+// ---------------------------------------------------------------------------
+// Confirmación de pago: se envía cuando el organizador confirma el registro.
+// Incluye el enlace a la credencial con QR.
+// ---------------------------------------------------------------------------
+type ConfirmationParams = {
+  email: EmailSendBinding
+  from: string
+  to: string
+  firstName: string
+  eventName: string
+  credentialUrl: string
+}
+
+export function confirmationEmailHtml(p: ConfirmationParams): string {
+  return `<!doctype html>
+<html lang="es"><body style="margin:0;background:#f4f4f5;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
+  <div style="max-width:560px;margin:0 auto;padding:32px 20px">
+    <div style="background:#ffffff;border:1px solid #e4e4e7;border-radius:16px;padding:32px">
+      <p style="font-size:13px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#059669;margin:0">
+        ${esc(p.eventName)}
+      </p>
+      <h1 style="font-size:24px;color:#18181b;margin:8px 0 0">¡Inscripción confirmada!</h1>
+      <p style="font-size:15px;line-height:1.6;color:#52525b;margin:16px 0 0">
+        Hola, ${esc(p.firstName)}. Verificamos tu pago y tu lugar está reservado.
+        Abre tu credencial con el código QR y preséntala en el ingreso:
+      </p>
+      <p style="margin:24px 0">
+        <a href="${esc(p.credentialUrl)}"
+           style="display:inline-block;background:#059669;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;padding:12px 24px;border-radius:8px">
+          Ver mi credencial
+        </a>
+      </p>
+      <p style="font-size:12px;color:#a1a1aa;margin:24px 0 0;word-break:break-all">
+        Si el botón no funciona, copia este enlace:<br>${esc(p.credentialUrl)}
+      </p>
+    </div>
+    <p style="text-align:center;font-size:12px;color:#a1a1aa;margin:16px 0 0">
+      EventPass VE
+    </p>
+  </div>
+</body></html>`
+}
+
+function confirmationEmailText(p: ConfirmationParams): string {
+  return `¡Inscripción confirmada! — ${p.eventName}
+
+Hola, ${p.firstName}. Verificamos tu pago y tu lugar está reservado.
+Abre tu credencial con el código QR y preséntala en el ingreso:
+
+${p.credentialUrl}
+
+— EventPass VE`
+}
+
+export async function sendConfirmationEmail(p: ConfirmationParams): Promise<string | null> {
+  try {
+    await p.email.send({
+      to: p.to,
+      from: p.from,
+      subject: `Inscripción confirmada — ${p.eventName}`,
+      html: confirmationEmailHtml(p),
+      text: confirmationEmailText(p),
+    })
+    return null
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err)
+  }
+}

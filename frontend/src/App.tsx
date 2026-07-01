@@ -5,6 +5,7 @@ import CargarComprobante from './pages/CargarComprobante'
 import CredencialEvento from './pages/CredencialEvento'
 import Login from './pages/admin/Login'
 import AdminPanel from './pages/admin/AdminPanel'
+import CheckinEvento from './pages/admin/CheckinEvento'
 import RequireAuth from './components/RequireAuth'
 
 function App() {
@@ -21,6 +22,14 @@ function App() {
         element={
           <RequireAuth>
             <AdminPanel />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/admin/checkin"
+        element={
+          <RequireAuth>
+            <CheckinEvento />
           </RequireAuth>
         }
       />

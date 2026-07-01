@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Check, FileText, LogOut, RefreshCw, Ticket, X } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Check, FileText, LogOut, RefreshCw, ScanLine, Ticket, X } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
 import { supabase } from '../../lib/supabase'
 
@@ -113,8 +114,28 @@ export default function AdminPanel() {
     if (status === 'confirmed') patch.payment_confirmed_at = new Date().toISOString()
     if (status === 'rejected') patch.rejection_reason = rejection_reason
     const { error } = await supabase.from('registrations').update(patch).eq('id', row.id)
-    if (error) setError(error.message)
-    else await loadRegistrations(membership.organization_id)
+    if (error) {
+      setError(error.message)
+      setActingId(null)
+      return
+    }
+
+    // Al confirmar, dispara el correo con el enlace a la credencial (Worker).
+    // Best-effort: un fallo de correo no revierte la confirmación.
+    const apiUrl = import.meta.env.VITE_API_URL
+    if (status === 'confirmed' && apiUrl) {
+      try {
+        await fetch(`${apiUrl}/api/registrations/confirm-notify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ registration_id: row.id }),
+        })
+      } catch {
+        // Silencioso: el registro ya quedó confirmado.
+      }
+    }
+
+    await loadRegistrations(membership.organization_id)
     setActingId(null)
   }
 
@@ -152,13 +173,22 @@ export default function AdminPanel() {
               <p className="text-xs text-zinc-500">{user?.email}</p>
             </div>
           </div>
-          <button
-            onClick={() => signOut()}
-            className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3.5 py-2 text-sm font-medium text-zinc-700 transition-colors hover:border-zinc-400"
-          >
-            <LogOut className="h-4 w-4" />
-            Salir
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              to="/admin/checkin"
+              className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-3.5 py-2 text-sm font-medium text-white transition-transform active:scale-[0.98]"
+            >
+              <ScanLine className="h-4 w-4" />
+              Check-in
+            </Link>
+            <button
+              onClick={() => signOut()}
+              className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3.5 py-2 text-sm font-medium text-zinc-700 transition-colors hover:border-zinc-400"
+            >
+              <LogOut className="h-4 w-4" />
+              Salir
+            </button>
+          </div>
         </div>
       </header>
 
