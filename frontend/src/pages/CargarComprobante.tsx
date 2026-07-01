@@ -155,10 +155,22 @@ export default function CargarComprobante() {
         )}
 
         {!loading && reg && reg.status === 'confirmed' && !done && (
-          <SuccessCard
-            title="Pago confirmado"
-            body="Tu inscripción ya está confirmada. No necesitas cargar nada más."
-          />
+          <div className="animate-float-up rounded-2xl border border-emerald-200 bg-white p-8 text-center">
+            <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-emerald-50 text-emerald-600">
+              <CheckCircle2 className="h-8 w-8" />
+            </span>
+            <h2 className="mt-5 text-2xl font-bold text-zinc-900">Pago confirmado</h2>
+            <p className="mx-auto mt-3 max-w-md text-zinc-600">
+              Tu inscripción ya está confirmada. Ya puedes ver tu credencial con
+              el código QR de ingreso.
+            </p>
+            <a
+              href={`/credencial/${token}`}
+              className="mt-6 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition-transform active:scale-[0.98]"
+            >
+              Ver mi credencial
+            </a>
+          </div>
         )}
 
         {!loading && reg && reg.status !== 'confirmed' && !done && (
@@ -271,6 +283,7 @@ export default function CargarComprobante() {
                 <input
                   ref={inputRef}
                   type="file"
+                  aria-label="Comprobante de pago"
                   accept={ACCEPTED.join(',')}
                   className="hidden"
                   onChange={(e) => pickFile(e.target.files?.[0] ?? null)}

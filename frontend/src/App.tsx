@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router-dom'
 import Landing from './pages/Landing'
 import RegistroEvento from './pages/RegistroEvento'
 import CargarComprobante from './pages/CargarComprobante'
+import CredencialEvento from './pages/CredencialEvento'
 import Login from './pages/admin/Login'
 import AdminPanel from './pages/admin/AdminPanel'
 import RequireAuth from './components/RequireAuth'
@@ -13,6 +14,7 @@ function App() {
       <Route path="/registro" element={<RegistroEvento />} />
       <Route path="/e/:eventId" element={<RegistroEvento />} />
       <Route path="/comprobante/:token" element={<CargarComprobante />} />
+      <Route path="/credencial/:token" element={<CredencialEvento />} />
       <Route path="/admin/login" element={<Login />} />
       <Route
         path="/admin"
