@@ -1,6 +1,9 @@
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   ArrowRight,
   BellRing,
+  CalendarDays,
   Check,
   LayoutDashboard,
   QrCode,
@@ -9,6 +12,8 @@ import {
   Ticket,
   WifiOff,
 } from 'lucide-react'
+import { supabase } from '../lib/supabase'
+import { brandColor, brandName, useTenant, type Tenant } from '../lib/tenant'
 
 const features = [
   {
@@ -362,7 +367,118 @@ function Footer() {
   )
 }
 
+type PublicEvent = {
+  id: string
+  name: string
+  description: string | null
+  start_date: string | null
+}
+
+function TenantLanding({ tenant }: { tenant: Tenant }) {
+  const [events, setEvents] = useState<PublicEvent[]>([])
+  const [loading, setLoading] = useState(true)
+  const color = brandColor(tenant)
+  const name = brandName(tenant)
+  const logoUrl = tenant.branding?.logo_url ?? null
+
+  useEffect(() => {
+    let active = true
+    supabase
+      .from('events')
+      .select('id, name, description, start_date')
+      .eq('organization_id', tenant.id)
+      .eq('status', 'published')
+      .order('start_date', { ascending: true })
+      .then(({ data }) => {
+        if (active) {
+          setEvents((data ?? []) as PublicEvent[])
+          setLoading(false)
+        }
+      })
+    return () => {
+      active = false
+    }
+  }, [tenant.id])
+
+  return (
+    <div className="min-h-[100dvh] bg-[#fafafa]">
+      <header className="border-b border-zinc-200/70 bg-white">
+        <div className="mx-auto flex max-w-4xl items-center gap-2 px-5 py-4">
+          {logoUrl ? (
+            <img src={logoUrl} alt={name} className="h-9 w-9 rounded-lg object-cover" />
+          ) : (
+            <span
+              className="grid h-9 w-9 place-items-center rounded-lg"
+              style={{ backgroundColor: color ?? '#18181b' }}
+            >
+              <Ticket className="h-5 w-5 text-white" strokeWidth={2.2} />
+            </span>
+          )}
+          <span className="text-lg font-semibold tracking-tight text-zinc-900">{name}</span>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-4xl px-5 py-14">
+        <h1 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">Eventos abiertos</h1>
+        <p className="mt-2 text-zinc-600">Elige un evento para inscribirte.</p>
+
+        {loading ? (
+          <div className="mt-10 grid gap-4 sm:grid-cols-2">
+            {Array.from({ length: 2 }).map((_, i) => (
+              <div key={i} className="h-40 animate-pulse rounded-2xl bg-zinc-200" />
+            ))}
+          </div>
+        ) : events.length === 0 ? (
+          <div className="mt-10 rounded-2xl border border-zinc-200 bg-white p-8">
+            <p className="text-zinc-600">No hay eventos abiertos por ahora. Vuelve pronto.</p>
+          </div>
+        ) : (
+          <div className="mt-10 grid gap-4 sm:grid-cols-2">
+            {events.map((ev) => (
+              <div key={ev.id} className="flex flex-col rounded-2xl border border-zinc-200 bg-white p-6">
+                {ev.start_date && (
+                  <p className="inline-flex items-center gap-2 text-sm text-zinc-500">
+                    <CalendarDays className="h-4 w-4 text-zinc-400" />
+                    {new Date(ev.start_date).toLocaleDateString('es-VE', {
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric',
+                    })}
+                  </p>
+                )}
+                <h2 className="mt-2 text-xl font-bold text-zinc-900">{ev.name}</h2>
+                {ev.description && (
+                  <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-zinc-600">{ev.description}</p>
+                )}
+                <Link
+                  to={`/e/${ev.id}`}
+                  style={color ? { backgroundColor: color } : undefined}
+                  className="mt-5 inline-flex items-center justify-center gap-2 self-start rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition-transform active:scale-[0.98]"
+                >
+                  Inscribirme
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
+
+      <footer className="border-t border-zinc-200">
+        <div className="mx-auto max-w-4xl px-5 py-8 text-sm text-zinc-500">
+          {name} · con tecnología de EventPass VE
+        </div>
+      </footer>
+    </div>
+  )
+}
+
 export default function Landing() {
+  const { tenant, loading } = useTenant()
+  if (loading) {
+    return <div className="min-h-[100dvh] bg-[#fafafa]" />
+  }
+  if (tenant) return <TenantLanding tenant={tenant} />
   return (
     <div className="min-h-[100dvh]">
       <Header />

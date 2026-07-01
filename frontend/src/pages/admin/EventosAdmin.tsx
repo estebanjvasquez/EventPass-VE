@@ -261,8 +261,94 @@ export default function EventosAdmin() {
         </div>
 
         {orgId && <PaymentMethodsSection orgId={orgId} onError={setError} />}
+        {orgId && <BrandingSection orgId={orgId} onError={setError} />}
       </main>
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Marca de la organización (branding): nombre comercial, logo y color.
+// Se aplica en el subdominio público (<slug>.eventosfacil.net).
+// ---------------------------------------------------------------------------
+function BrandingSection({ orgId, onError }: { orgId: string; onError: (m: string) => void }) {
+  const [name, setName] = useState('')
+  const [logoUrl, setLogoUrl] = useState('')
+  const [color, setColor] = useState('#059669')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    supabase
+      .from('organizations')
+      .select('branding')
+      .eq('id', orgId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!active) return
+        const b = (data?.branding as { name?: string; logo_url?: string; color?: string } | null) ?? {}
+        setName(b.name ?? '')
+        setLogoUrl(b.logo_url ?? '')
+        setColor(b.color ?? '#059669')
+        setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [orgId])
+
+  async function save() {
+    setSaving(true)
+    setSaved(false)
+    const branding = {
+      name: name.trim() || null,
+      logo_url: logoUrl.trim() || null,
+      color: color || null,
+    }
+    const { error } = await supabase.from('organizations').update({ branding }).eq('id', orgId)
+    setSaving(false)
+    if (error) onError(error.message)
+    else {
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    }
+  }
+
+  if (loading) return null
+
+  return (
+    <section className="mt-10">
+      <h2 className="text-lg font-semibold text-zinc-900">Marca</h2>
+      <p className="mt-1 text-sm text-zinc-600">
+        Se aplica en tu subdominio público y en las páginas de registro.
+      </p>
+
+      <div className="mt-4 grid gap-4 rounded-xl border border-zinc-200 bg-white p-5 sm:grid-cols-2">
+        <label className="flex flex-col gap-2">
+          <span className="text-sm font-medium text-zinc-800">Nombre comercial</span>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Cómo se muestra tu organización" className={inputCls} />
+        </label>
+        <label className="flex flex-col gap-2">
+          <span className="text-sm font-medium text-zinc-800">URL del logo</span>
+          <input value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://…/logo.png" className={inputCls} />
+        </label>
+        <label className="flex flex-col gap-2">
+          <span className="text-sm font-medium text-zinc-800">Color principal</span>
+          <div className="flex items-center gap-3">
+            <input type="color" aria-label="Color principal" value={color} onChange={(e) => setColor(e.target.value)} className="h-10 w-14 cursor-pointer rounded-lg border border-zinc-300 bg-white" />
+            <input value={color} onChange={(e) => setColor(e.target.value)} className={inputCls} />
+          </div>
+        </label>
+        <div className="flex items-end gap-3">
+          <button type="button" onClick={save} disabled={saving} className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition-transform active:scale-[0.98] disabled:opacity-50">
+            {saving ? 'Guardando…' : 'Guardar marca'}
+          </button>
+          {saved && <span className="text-sm font-medium text-emerald-700">Guardado ✓</span>}
+        </div>
+      </div>
+    </section>
   )
 }
 
