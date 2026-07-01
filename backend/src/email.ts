@@ -275,3 +275,66 @@ export async function sendSlotReleaseEmail(p: SlotReleaseParams): Promise<string
     return err instanceof Error ? err.message : String(err)
   }
 }
+
+// ---------------------------------------------------------------------------
+// Aviso al asistente: su plaza se liberó por no completar el pago a tiempo.
+// ---------------------------------------------------------------------------
+type SlotExpiredParams = {
+  email: EmailSendBinding
+  from: string
+  to: string
+  firstName: string
+  eventName: string
+}
+
+export function slotExpiredEmailHtml(p: SlotExpiredParams): string {
+  return `<!doctype html>
+<html lang="es"><body style="margin:0;background:#f4f4f5;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
+  <div style="max-width:560px;margin:0 auto;padding:32px 20px">
+    <div style="background:#ffffff;border:1px solid #e4e4e7;border-radius:16px;padding:32px">
+      <p style="font-size:13px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#b45309;margin:0">
+        ${esc(p.eventName)}
+      </p>
+      <h1 style="font-size:24px;color:#18181b;margin:8px 0 0">Hola, ${esc(p.firstName)}</h1>
+      <p style="font-size:15px;line-height:1.6;color:#52525b;margin:16px 0 0">
+        Tu plaza se liberó porque no recibimos tu comprobante de pago dentro del
+        plazo. Sabemos que a veces surgen imprevistos: si aún deseas asistir,
+        puedes registrarte de nuevo mientras haya cupos disponibles.
+      </p>
+      <p style="font-size:14px;line-height:1.6;color:#71717a;margin:16px 0 0">
+        Si ya realizaste el pago, responde a este correo y lo revisamos.
+      </p>
+    </div>
+    <p style="text-align:center;font-size:12px;color:#a1a1aa;margin:16px 0 0">
+      EventPass VE
+    </p>
+  </div>
+</body></html>`
+}
+
+function slotExpiredEmailText(p: SlotExpiredParams): string {
+  return `Hola, ${p.firstName}
+
+Tu plaza para "${p.eventName}" se liberó porque no recibimos tu comprobante de
+pago dentro del plazo. Si aún deseas asistir, puedes registrarte de nuevo
+mientras haya cupos disponibles.
+
+Si ya realizaste el pago, responde a este correo y lo revisamos.
+
+— EventPass VE`
+}
+
+export async function sendSlotExpiredEmail(p: SlotExpiredParams): Promise<string | null> {
+  try {
+    await p.email.send({
+      to: p.to,
+      from: p.from,
+      subject: `Tu plaza se liberó — ${p.eventName}`,
+      html: slotExpiredEmailHtml(p),
+      text: slotExpiredEmailText(p),
+    })
+    return null
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err)
+  }
+}

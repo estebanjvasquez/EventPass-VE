@@ -5,7 +5,12 @@
 // recordatorios se apoya en email_log; la expiración filtra por estado + plazo.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { sendReminderEmail, sendSlotReleaseEmail, type EmailSendBinding } from './email'
+import {
+  sendReminderEmail,
+  sendSlotReleaseEmail,
+  sendSlotExpiredEmail,
+  type EmailSendBinding,
+} from './email'
 
 const REMINDER_DAYS = [3, 7, 9] as const
 const DAY_MS = 86_400_000
@@ -20,11 +25,19 @@ export type JobResult = {
   expired: number
   reminders: number
   releaseNotices: number
+  expiredNotices: number
   errors: string[]
 }
 
 type PaymentMethod = { name: string; details: Record<string, unknown> | null }
-type ReleasedSlot = { organizationId: string; attendee: string; eventName: string }
+type ReleasedSlot = {
+  registrationId: string
+  organizationId: string
+  attendee: string
+  firstName: string
+  email: string
+  eventName: string
+}
 
 function eventName(events: unknown): string {
   if (!events) return 'Tu evento'
@@ -37,8 +50,15 @@ export async function runScheduledJobs(
   supabase: SupabaseClient,
   env: JobEnv,
 ): Promise<JobResult> {
-  const result: JobResult = { expired: 0, reminders: 0, releaseNotices: 0, errors: [] }
+  const result: JobResult = {
+    expired: 0,
+    reminders: 0,
+    releaseNotices: 0,
+    expiredNotices: 0,
+    errors: [],
+  }
   const released = await releaseExpiredSlots(supabase, result)
+  await notifyAttendeesOfReleases(supabase, env, released, result)
   await notifyOrganizersOfReleases(supabase, env, released, result)
   await sendPaymentReminders(supabase, env, result)
   return result
@@ -52,7 +72,7 @@ async function releaseExpiredSlots(
   const nowIso = new Date().toISOString()
   const { data, error } = await supabase
     .from('registrations')
-    .select('id, organization_id, seat_id, first_name, last_name, events(name)')
+    .select('id, organization_id, seat_id, first_name, last_name, email, events(name)')
     .eq('status', 'pending_payment')
     .lt('payment_deadline', nowIso)
     .limit(500)
@@ -81,12 +101,42 @@ async function releaseExpiredSlots(
     })
     result.expired++
     released.push({
+      registrationId: r.id,
       organizationId: r.organization_id,
       attendee: `${r.first_name ?? ''} ${r.last_name ?? ''}`.trim() || 'Sin nombre',
+      firstName: r.first_name ?? 'Hola',
+      email: r.email,
       eventName: eventName(r.events),
     })
   }
   return released
+}
+
+async function notifyAttendeesOfReleases(
+  supabase: SupabaseClient,
+  env: JobEnv,
+  released: ReleasedSlot[],
+  result: JobResult,
+) {
+  for (const r of released) {
+    if (!r.email) continue
+    const sendError = await sendSlotExpiredEmail({
+      email: env.EMAIL,
+      from: env.EMAIL_FROM,
+      to: r.email,
+      firstName: r.firstName,
+      eventName: r.eventName,
+    })
+    await supabase.from('email_log').insert({
+      organization_id: r.organizationId,
+      registration_id: r.registrationId,
+      email_type: 'slot_expired',
+      status: sendError ? 'failed' : 'sent',
+      sent_at: sendError ? null : new Date().toISOString(),
+    })
+    if (sendError) result.errors.push(`expired notice ${r.registrationId}: ${sendError}`)
+    else result.expiredNotices++
+  }
 }
 
 // Email del organizador: settings.notification_email de la org, o el correo del
