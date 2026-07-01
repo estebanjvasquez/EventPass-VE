@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { ArrowRight, CalendarDays, CheckCircle2, Ticket } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { brandColor, brandName, useTenant } from '../lib/tenant'
 
 type EventRow = {
   id: string
@@ -36,6 +37,7 @@ type FormValues = z.infer<typeof schema>
 
 export default function RegistroEvento() {
   const { eventId } = useParams()
+  const { tenant, loading: tenantLoading } = useTenant()
   const [event, setEvent] = useState<EventRow | null>(null)
   const [seats, setSeats] = useState<Seat[]>([])
   const [selectedSeat, setSelectedSeat] = useState<string | null>(null)
@@ -51,6 +53,7 @@ export default function RegistroEvento() {
   } = useForm<FormValues>({ resolver: zodResolver(schema) })
 
   useEffect(() => {
+    if (tenantLoading) return
     let active = true
     async function load() {
       setLoading(true)
@@ -59,6 +62,8 @@ export default function RegistroEvento() {
         .from('events')
         .select('id, organization_id, name, description, start_date, organizations(name)')
         .eq('status', 'published')
+      // Aísla por organización cuando se resuelve un tenant por subdominio.
+      if (tenant) query = query.eq('organization_id', tenant.id)
       query = eventId
         ? query.eq('id', eventId)
         : query.order('created_at', { ascending: false })
@@ -86,7 +91,7 @@ export default function RegistroEvento() {
     return () => {
       active = false
     }
-  }, [eventId])
+  }, [eventId, tenant, tenantLoading])
 
   async function reloadSeats(evId: string) {
     const { data } = await supabase
@@ -159,15 +164,30 @@ export default function RegistroEvento() {
     setDone(true)
   }
 
+  const color = brandColor(tenant)
+  const name = brandName(tenant)
+  const logoUrl = tenant?.branding?.logo_url ?? null
+
   return (
     <div className="min-h-[100dvh] bg-[#fafafa]">
       <header className="border-b border-zinc-200/70 bg-white">
         <div className="mx-auto flex max-w-3xl items-center gap-2 px-5 py-4">
-          <span className="grid h-9 w-9 place-items-center rounded-lg bg-zinc-900 text-emerald-400">
-            <Ticket className="h-5 w-5" strokeWidth={2.2} />
-          </span>
+          {logoUrl ? (
+            <img src={logoUrl} alt={name} className="h-9 w-9 rounded-lg object-cover" />
+          ) : (
+            <span
+              className="grid h-9 w-9 place-items-center rounded-lg text-emerald-400"
+              style={{ backgroundColor: color ?? '#18181b' }}
+            >
+              <Ticket className="h-5 w-5 text-white" strokeWidth={2.2} />
+            </span>
+          )}
           <span className="text-lg font-semibold tracking-tight text-zinc-900">
-            EventPass <span className="text-emerald-600">VE</span>
+            {tenant ? name : (
+              <>
+                EventPass <span className="text-emerald-600">VE</span>
+              </>
+            )}
           </span>
         </div>
       </header>
@@ -236,6 +256,7 @@ export default function RegistroEvento() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
+                  style={color ? { backgroundColor: color } : undefined}
                   className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition-transform active:scale-[0.98] disabled:opacity-60"
                 >
                   {isSubmitting ? 'Enviando…' : 'Reservar mi plaza'}
