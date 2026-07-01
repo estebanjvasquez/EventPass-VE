@@ -3,6 +3,7 @@ import { cors } from 'hono/cors'
 import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import { sendUploadLinkEmail, type EmailSendBinding } from './email'
+import { runScheduledJobs } from './jobs'
 
 type Bindings = {
   SUPABASE_URL: string
@@ -11,6 +12,7 @@ type Bindings = {
   EMAIL: EmailSendBinding // binding `send_email` de Cloudflare Email Sending
   EMAIL_FROM: string
   APP_BASE_URL: string
+  CRON_SECRET?: string // habilita el disparo manual de las tareas programadas
 }
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -99,13 +101,25 @@ app.post('/api/registrations/notify', async (c) => {
   return c.json({ ok: true })
 })
 
+// Disparo manual de las tareas programadas (para pruebas). Protegido por
+// CRON_SECRET; si el secreto no está configurado, el endpoint queda deshabilitado.
+app.post('/api/jobs/run', async (c) => {
+  const secret = c.env.CRON_SECRET
+  if (!secret || c.req.header('x-cron-secret') !== secret) {
+    return c.json({ error: 'no autorizado' }, 401)
+  }
+  const supabase = createClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY)
+  const result = await runScheduledJobs(supabase, c.env)
+  return c.json(result)
+})
+
 export default {
   fetch: app.fetch,
 
-  // Cron Trigger: recordatorios de pago + liberación de plazas vencidas.
+  // Cron Trigger horario: recordatorios de pago + liberación de plazas vencidas.
   async scheduled(_event: ScheduledController, env: Bindings) {
     const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY)
-    // TODO: enviar recordatorios (días 3/7/9) y liberar plazas con paymentDeadline vencido.
-    void supabase
+    const result = await runScheduledJobs(supabase, env)
+    console.log('[cron] jobs:', JSON.stringify(result))
   },
 }
