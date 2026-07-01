@@ -5,7 +5,7 @@
 // recordatorios se apoya en email_log; la expiración filtra por estado + plazo.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { sendReminderEmail, type EmailSendBinding } from './email'
+import { sendReminderEmail, sendSlotReleaseEmail, type EmailSendBinding } from './email'
 
 const REMINDER_DAYS = [3, 7, 9] as const
 const DAY_MS = 86_400_000
@@ -19,10 +19,12 @@ type JobEnv = {
 export type JobResult = {
   expired: number
   reminders: number
+  releaseNotices: number
   errors: string[]
 }
 
 type PaymentMethod = { name: string; details: Record<string, unknown> | null }
+type ReleasedSlot = { organizationId: string; attendee: string; eventName: string }
 
 function eventName(events: unknown): string {
   if (!events) return 'Tu evento'
@@ -35,23 +37,28 @@ export async function runScheduledJobs(
   supabase: SupabaseClient,
   env: JobEnv,
 ): Promise<JobResult> {
-  const result: JobResult = { expired: 0, reminders: 0, errors: [] }
-  await releaseExpiredSlots(supabase, result)
+  const result: JobResult = { expired: 0, reminders: 0, releaseNotices: 0, errors: [] }
+  const released = await releaseExpiredSlots(supabase, result)
+  await notifyOrganizersOfReleases(supabase, env, released, result)
   await sendPaymentReminders(supabase, env, result)
   return result
 }
 
-async function releaseExpiredSlots(supabase: SupabaseClient, result: JobResult) {
+async function releaseExpiredSlots(
+  supabase: SupabaseClient,
+  result: JobResult,
+): Promise<ReleasedSlot[]> {
+  const released: ReleasedSlot[] = []
   const nowIso = new Date().toISOString()
   const { data, error } = await supabase
     .from('registrations')
-    .select('id, organization_id, seat_id')
+    .select('id, organization_id, seat_id, first_name, last_name, events(name)')
     .eq('status', 'pending_payment')
     .lt('payment_deadline', nowIso)
     .limit(500)
   if (error) {
     result.errors.push(`expired query: ${error.message}`)
-    return
+    return released
   }
   for (const r of data ?? []) {
     // Guard de carrera: solo actualiza si sigue pendiente.
@@ -73,6 +80,72 @@ async function releaseExpiredSlots(supabase: SupabaseClient, result: JobResult) 
       registration_id: r.id,
     })
     result.expired++
+    released.push({
+      organizationId: r.organization_id,
+      attendee: `${r.first_name ?? ''} ${r.last_name ?? ''}`.trim() || 'Sin nombre',
+      eventName: eventName(r.events),
+    })
+  }
+  return released
+}
+
+// Email del organizador: settings.notification_email de la org, o el correo del
+// primer miembro owner/admin (resuelto vía auth.admin).
+async function orgNotificationTarget(
+  supabase: SupabaseClient,
+  orgId: string,
+): Promise<{ email: string; name: string } | null> {
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('name, settings')
+    .eq('id', orgId)
+    .maybeSingle()
+  const name = (org?.name as string | undefined) ?? 'Tu organización'
+  const configured = (org?.settings as { notification_email?: string } | null)?.notification_email
+  if (configured) return { email: configured, name }
+
+  const { data: mem } = await supabase
+    .from('memberships')
+    .select('user_id')
+    .eq('organization_id', orgId)
+    .in('role', ['owner', 'admin'])
+    .limit(1)
+    .maybeSingle()
+  if (!mem?.user_id) return null
+  const { data: user } = await supabase.auth.admin.getUserById(mem.user_id)
+  const email = user?.user?.email
+  return email ? { email, name } : null
+}
+
+async function notifyOrganizersOfReleases(
+  supabase: SupabaseClient,
+  env: JobEnv,
+  released: ReleasedSlot[],
+  result: JobResult,
+) {
+  if (released.length === 0) return
+  // Un aviso-resumen por organización.
+  const byOrg = new Map<string, ReleasedSlot[]>()
+  for (const item of released) {
+    const list = byOrg.get(item.organizationId) ?? []
+    list.push(item)
+    byOrg.set(item.organizationId, list)
+  }
+  for (const [orgId, items] of byOrg) {
+    const target = await orgNotificationTarget(supabase, orgId)
+    if (!target) {
+      result.errors.push(`release notice ${orgId}: sin destinatario`)
+      continue
+    }
+    const sendError = await sendSlotReleaseEmail({
+      email: env.EMAIL,
+      from: env.EMAIL_FROM,
+      to: target.email,
+      orgName: target.name,
+      items: items.map((i) => ({ attendee: i.attendee, eventName: i.eventName })),
+    })
+    if (sendError) result.errors.push(`release notice ${orgId}: ${sendError}`)
+    else result.releaseNotices++
   }
 }
 

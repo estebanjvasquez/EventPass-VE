@@ -195,3 +195,83 @@ export async function sendReminderEmail(p: ReminderParams): Promise<string | nul
     return err instanceof Error ? err.message : String(err)
   }
 }
+
+// ---------------------------------------------------------------------------
+// Aviso al organizador: resumen de plazas liberadas por vencimiento de pago.
+// ---------------------------------------------------------------------------
+type ReleasedItem = { attendee: string; eventName: string }
+
+type SlotReleaseParams = {
+  email: EmailSendBinding
+  from: string
+  to: string
+  orgName: string
+  items: ReleasedItem[]
+}
+
+export function slotReleaseEmailHtml(p: SlotReleaseParams): string {
+  const rows = p.items
+    .map(
+      (it) =>
+        `<tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #f4f4f5;font-size:14px;color:#27272a">${esc(it.attendee)}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #f4f4f5;font-size:14px;color:#52525b">${esc(it.eventName)}</td>
+        </tr>`,
+    )
+    .join('')
+  return `<!doctype html>
+<html lang="es"><body style="margin:0;background:#f4f4f5;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
+  <div style="max-width:560px;margin:0 auto;padding:32px 20px">
+    <div style="background:#ffffff;border:1px solid #e4e4e7;border-radius:16px;padding:32px">
+      <p style="font-size:13px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#b45309;margin:0">
+        Plazas liberadas
+      </p>
+      <h1 style="font-size:22px;color:#18181b;margin:8px 0 0">${esc(p.orgName)}</h1>
+      <p style="font-size:15px;line-height:1.6;color:#52525b;margin:16px 0 0">
+        Se ${p.items.length === 1 ? 'liberó 1 plaza' : `liberaron ${p.items.length} plazas`}
+        por vencimiento del plazo de pago. Estos registros pasaron a rechazados
+        y su asiento volvió a estar disponible:
+      </p>
+      <table style="width:100%;border-collapse:collapse;margin:20px 0 0">
+        <thead>
+          <tr>
+            <th style="text-align:left;padding:8px 12px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#a1a1aa">Asistente</th>
+            <th style="text-align:left;padding:8px 12px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#a1a1aa">Evento</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <p style="text-align:center;font-size:12px;color:#a1a1aa;margin:16px 0 0">
+      EventPass VE · aviso automático
+    </p>
+  </div>
+</body></html>`
+}
+
+function slotReleaseEmailText(p: SlotReleaseParams): string {
+  const lines = p.items.map((it) => ` - ${it.attendee} (${it.eventName})`).join('\n')
+  return `${p.orgName} — Plazas liberadas
+
+Se ${p.items.length === 1 ? 'liberó 1 plaza' : `liberaron ${p.items.length} plazas`} por vencimiento del plazo de pago.
+Estos registros pasaron a rechazados y su asiento volvió a estar disponible:
+
+${lines}
+
+— EventPass VE (aviso automático)`
+}
+
+export async function sendSlotReleaseEmail(p: SlotReleaseParams): Promise<string | null> {
+  try {
+    await p.email.send({
+      to: p.to,
+      from: p.from,
+      subject: `Plazas liberadas (${p.items.length}) — ${p.orgName}`,
+      html: slotReleaseEmailHtml(p),
+      text: slotReleaseEmailText(p),
+    })
+    return null
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err)
+  }
+}
