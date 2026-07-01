@@ -83,6 +83,22 @@ export default function RegistroEvento() {
       )
       return
     }
+
+    // Dispara el correo con el enlace de carga de comprobante (Worker en
+    // Cloudflare). Best-effort: un fallo de correo no bloquea el registro.
+    const apiUrl = import.meta.env.VITE_API_URL
+    if (apiUrl) {
+      try {
+        await fetch(`${apiUrl}/api/registrations/notify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ event_id: event.id, email: values.email }),
+        })
+      } catch {
+        // El correo también puede reintentarse desde el panel admin.
+      }
+    }
+
     setDone(true)
   }
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Check, LogOut, RefreshCw, Ticket, X } from 'lucide-react'
+import { Check, FileText, LogOut, RefreshCw, Ticket, X } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
 import { supabase } from '../../lib/supabase'
 
@@ -10,6 +10,9 @@ type Registration = {
   email: string
   phone: string | null
   status: 'pending_payment' | 'payment_submitted' | 'confirmed' | 'rejected'
+  comprobante_path: string | null
+  payment_method: string | null
+  payment_amount: number | null
   created_at: string
 }
 
@@ -43,11 +46,14 @@ export default function AdminPanel() {
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('por_revisar')
   const [actingId, setActingId] = useState<string | null>(null)
+  const [viewingId, setViewingId] = useState<string | null>(null)
 
   const loadRegistrations = useCallback(async (orgId: string) => {
     const { data, error } = await supabase
       .from('registrations')
-      .select('id, first_name, last_name, email, phone, status, created_at')
+      .select(
+        'id, first_name, last_name, email, phone, status, comprobante_path, payment_method, payment_amount, created_at',
+      )
       .eq('organization_id', orgId)
       .order('created_at', { ascending: false })
     if (error) setError(error.message)
@@ -80,6 +86,21 @@ export default function AdminPanel() {
       active = false
     }
   }, [loadRegistrations])
+
+  async function viewComprobante(row: Registration) {
+    if (!row.comprobante_path) return
+    setViewingId(row.id)
+    setError(null)
+    const { data, error } = await supabase.storage
+      .from('comprobantes')
+      .createSignedUrl(row.comprobante_path, 60)
+    setViewingId(null)
+    if (error || !data) {
+      setError(error?.message ?? 'No se pudo abrir el comprobante.')
+      return
+    }
+    window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
+  }
 
   async function act(row: Registration, status: 'confirmed' | 'rejected') {
     if (!membership) return
@@ -239,6 +260,16 @@ export default function AdminPanel() {
                         </td>
                         <td className="px-5 py-3.5">
                           <div className="flex justify-end gap-2">
+                            {r.comprobante_path && (
+                              <button
+                                disabled={viewingId === r.id}
+                                onClick={() => viewComprobante(r)}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 transition-colors hover:border-emerald-300 hover:text-emerald-700 disabled:opacity-50"
+                              >
+                                <FileText className="h-3.5 w-3.5" />
+                                {viewingId === r.id ? 'Abriendo…' : 'Comprobante'}
+                              </button>
+                            )}
                             {r.status !== 'confirmed' && (
                               <button
                                 disabled={actingId === r.id}

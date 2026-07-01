@@ -1,4 +1,4 @@
-name = "eventpass-backend"
+name = "eventpass-api"
 main = "src/index.ts"
 compatibility_date = "2025-06-01"
 compatibility_flags = ["nodejs_compat"]
@@ -8,8 +8,17 @@ compatibility_flags = ["nodejs_compat"]
 [triggers]
 crons = ["0 * * * *"]
 
+# Binding nativo de Cloudflare Email Sending (no requiere API key).
+# Requiere plan Workers Paid y el dominio remitente verificado en el dashboard
+# (Email → Email Sending). El remitente debe pertenecer a ese dominio.
+[[send_email]]
+name = "EMAIL"
+
 # Variables no secretas. Los secretos se cargan con:
 #   wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 [vars]
-SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co"
-ENVIRONMENT = "development"
+SUPABASE_URL = "https://moqywmcbklaeaelttzdm.supabase.co"
+ENVIRONMENT = "production"
+# Remitente (dominio verificado en Cloudflare) y URL pública del frontend.
+EMAIL_FROM = "no-reply@eventosfacil.net"
+APP_BASE_URL = "https://eventosfacil.net"
