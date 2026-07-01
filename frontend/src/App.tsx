@@ -7,6 +7,7 @@ import Login from './pages/admin/Login'
 import AdminPanel from './pages/admin/AdminPanel'
 import CheckinEvento from './pages/admin/CheckinEvento'
 import EventosAdmin from './pages/admin/EventosAdmin'
+import AsientosAdmin from './pages/admin/AsientosAdmin'
 import RequireAuth from './components/RequireAuth'
 
 function App() {
@@ -39,6 +40,14 @@ function App() {
         element={
           <RequireAuth>
             <EventosAdmin />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/admin/asientos/:eventId"
+        element={
+          <RequireAuth>
+            <AsientosAdmin />
           </RequireAuth>
         }
       />

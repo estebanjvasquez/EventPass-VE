@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, CalendarCog, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Armchair, ArrowLeft, CalendarCog, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
 import { supabase } from '../../lib/supabase'
 
@@ -228,6 +228,13 @@ export default function EventosAdmin() {
                             Cerrar
                           </button>
                         )}
+                        <Link
+                          to={`/admin/asientos/${ev.id}`}
+                          className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 transition-colors hover:border-zinc-400"
+                        >
+                          <Armchair className="h-3.5 w-3.5" />
+                          Asientos
+                        </Link>
                         <button
                           type="button"
                           onClick={() => setEditing(ev)}
