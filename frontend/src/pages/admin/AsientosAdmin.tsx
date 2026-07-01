@@ -25,6 +25,8 @@ export default function AsientosAdmin() {
   const [orgId, setOrgId] = useState<string | null>(null)
   const [eventName, setEventName] = useState('')
   const [seats, setSeats] = useState<Seat[]>([])
+  const [occupied, setOccupied] = useState<Set<string>>(new Set())
+  const [togglingId, setTogglingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [rowsN, setRowsN] = useState(5)
@@ -34,15 +36,40 @@ export default function AsientosAdmin() {
 
   const loadSeats = useCallback(async () => {
     if (!eventId) return
-    const { data, error } = await supabase
-      .from('seats')
-      .select('id, row_label, column_number, seat_number, price, status')
-      .eq('event_id', eventId)
-      .order('row_label', { ascending: true })
-      .order('column_number', { ascending: true })
+    const [{ data, error }, { data: regs }] = await Promise.all([
+      supabase
+        .from('seats')
+        .select('id, row_label, column_number, seat_number, price, status')
+        .eq('event_id', eventId)
+        .order('row_label', { ascending: true })
+        .order('column_number', { ascending: true }),
+      supabase
+        .from('registrations')
+        .select('seat_id')
+        .eq('event_id', eventId)
+        .not('seat_id', 'is', null)
+        .neq('status', 'rejected'),
+    ])
     if (error) setError(error.message)
     else setSeats((data ?? []) as Seat[])
+    setOccupied(new Set((regs ?? []).map((r) => (r as { seat_id: string }).seat_id)))
   }, [eventId])
+
+  async function toggleSeat(seat: Seat) {
+    if (togglingId) return
+    setError(null)
+    // Los asientos ligados a un registro se gestionan desde Registros.
+    if (seat.status === 'confirmed' || occupied.has(seat.id)) {
+      setError('Este asiento está ocupado por un registro. Libéralo rechazándolo desde Registros.')
+      return
+    }
+    const next = seat.status === 'available' ? 'reserved' : 'available'
+    setTogglingId(seat.id)
+    const { error } = await supabase.from('seats').update({ status: next }).eq('id', seat.id)
+    setTogglingId(null)
+    if (error) setError(error.message)
+    else await loadSeats()
+  }
 
   useEffect(() => {
     let active = true
@@ -202,15 +229,23 @@ export default function AsientosAdmin() {
                   <div key={label} className="flex items-center gap-2">
                     <span className="w-5 text-xs font-semibold text-zinc-400">{label}</span>
                     <div className="flex flex-wrap gap-1.5">
-                      {rowSeats.map((s) => (
-                        <span
-                          key={s.id}
-                          title={`${s.seat_number ?? ''} · ${s.status}`}
-                          className={`grid h-7 w-7 place-items-center rounded-md border text-[10px] font-semibold ${STATUS_STYLE[s.status]}`}
-                        >
-                          {s.column_number}
-                        </span>
-                      ))}
+                      {rowSeats.map((s) => {
+                        const locked = s.status === 'confirmed' || occupied.has(s.id)
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            disabled={togglingId === s.id || locked}
+                            onClick={() => toggleSeat(s)}
+                            title={`${s.seat_number ?? ''} · ${s.status}${locked ? ' (ocupado por registro)' : ''}`}
+                            className={`grid h-7 w-7 place-items-center rounded-md border text-[10px] font-semibold transition-colors ${STATUS_STYLE[s.status]} ${
+                              locked ? 'cursor-not-allowed opacity-80' : 'hover:brightness-95'
+                            }`}
+                          >
+                            {s.column_number}
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
                 ))}
@@ -219,6 +254,8 @@ export default function AsientosAdmin() {
 
             <p className="mt-4 text-sm text-zinc-500">
               {seats.filter((s) => s.status === 'available').length} disponibles de {seats.length}.
+              Toca un asiento para reservarlo (bloquearlo) o liberarlo. Los asientos ocupados por un
+              registro se gestionan desde Registros.
             </p>
           </>
         )}
