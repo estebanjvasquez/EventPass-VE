@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Check, FileText, LogOut, RefreshCw, ScanLine, Ticket, X } from 'lucide-react'
+import { CalendarCog, Check, FileText, LogOut, RefreshCw, ScanLine, Ticket, X } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
 import { supabase } from '../../lib/supabase'
 
@@ -174,6 +174,13 @@ export default function AdminPanel() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Link
+              to="/admin/eventos"
+              className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3.5 py-2 text-sm font-medium text-zinc-700 transition-colors hover:border-zinc-400"
+            >
+              <CalendarCog className="h-4 w-4" />
+              Eventos
+            </Link>
             <Link
               to="/admin/checkin"
               className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-3.5 py-2 text-sm font-medium text-white transition-transform active:scale-[0.98]"

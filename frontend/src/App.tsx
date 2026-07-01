@@ -6,6 +6,7 @@ import CredencialEvento from './pages/CredencialEvento'
 import Login from './pages/admin/Login'
 import AdminPanel from './pages/admin/AdminPanel'
 import CheckinEvento from './pages/admin/CheckinEvento'
+import EventosAdmin from './pages/admin/EventosAdmin'
 import RequireAuth from './components/RequireAuth'
 
 function App() {
@@ -30,6 +31,14 @@ function App() {
         element={
           <RequireAuth>
             <CheckinEvento />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/admin/eventos"
+        element={
+          <RequireAuth>
+            <EventosAdmin />
           </RequireAuth>
         }
       />
