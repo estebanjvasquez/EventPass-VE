@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CalendarCog, Check, FileText, LogOut, RefreshCw, ScanLine, Ticket, X } from 'lucide-react'
+import { CalendarCog, Check, FileText, LogOut, MapPin, RefreshCw, ScanLine, Ticket, X } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
 import { supabase } from '../../lib/supabase'
+
+type SeatInfo = { seat_number: string | null; row_label: string | null; column_number: number | null }
 
 type Registration = {
   id: string
@@ -14,7 +16,18 @@ type Registration = {
   comprobante_path: string | null
   payment_method: string | null
   payment_amount: number | null
+  seat_id: string | null
+  seats: SeatInfo | SeatInfo[] | null
   created_at: string
+}
+
+type EventOption = { id: string; name: string }
+
+function seatLabel(seats: Registration['seats']): string | null {
+  if (!seats) return null
+  const s = Array.isArray(seats) ? seats[0] : seats
+  if (!s) return null
+  return s.seat_number ?? ([s.row_label, s.column_number].filter((x) => x != null).join('') || null)
 }
 
 type Membership = {
@@ -48,15 +61,18 @@ export default function AdminPanel() {
   const [tab, setTab] = useState<Tab>('por_revisar')
   const [actingId, setActingId] = useState<string | null>(null)
   const [viewingId, setViewingId] = useState<string | null>(null)
+  const [events, setEvents] = useState<EventOption[]>([])
+  const [eventFilter, setEventFilter] = useState<string>('all')
 
-  const loadRegistrations = useCallback(async (orgId: string) => {
-    const { data, error } = await supabase
+  const loadRegistrations = useCallback(async (orgId: string, eventId: string = 'all') => {
+    let query = supabase
       .from('registrations')
       .select(
-        'id, first_name, last_name, email, phone, status, comprobante_path, payment_method, payment_amount, created_at',
+        'id, first_name, last_name, email, phone, status, comprobante_path, payment_method, payment_amount, seat_id, seats(seat_number, row_label, column_number), created_at',
       )
       .eq('organization_id', orgId)
-      .order('created_at', { ascending: false })
+    if (eventId !== 'all') query = query.eq('event_id', eventId)
+    const { data, error } = await query.order('created_at', { ascending: false })
     if (error) setError(error.message)
     else setRows((data ?? []) as Registration[])
   }, [])
@@ -79,7 +95,15 @@ export default function AdminPanel() {
       }
       const m = mem as Membership | null
       setMembership(m)
-      if (m) await loadRegistrations(m.organization_id)
+      if (m) {
+        const { data: evs } = await supabase
+          .from('events')
+          .select('id, name')
+          .eq('organization_id', m.organization_id)
+          .order('created_at', { ascending: false })
+        if (active) setEvents((evs ?? []) as EventOption[])
+        await loadRegistrations(m.organization_id)
+      }
       if (active) setLoading(false)
     }
     init()
@@ -87,6 +111,11 @@ export default function AdminPanel() {
       active = false
     }
   }, [loadRegistrations])
+
+  function onFilterChange(eventId: string) {
+    setEventFilter(eventId)
+    if (membership) void loadRegistrations(membership.organization_id, eventId)
+  }
 
   async function viewComprobante(row: Registration) {
     if (!row.comprobante_path) return
@@ -112,12 +141,23 @@ export default function AdminPanel() {
     setActingId(row.id)
     const patch: Record<string, unknown> = { status }
     if (status === 'confirmed') patch.payment_confirmed_at = new Date().toISOString()
-    if (status === 'rejected') patch.rejection_reason = rejection_reason
+    if (status === 'rejected') {
+      patch.rejection_reason = rejection_reason
+      patch.seat_id = null // al rechazar, se suelta el asiento
+    }
     const { error } = await supabase.from('registrations').update(patch).eq('id', row.id)
     if (error) {
       setError(error.message)
       setActingId(null)
       return
+    }
+
+    // Refleja el estado del asiento reservado.
+    if (row.seat_id) {
+      await supabase
+        .from('seats')
+        .update({ status: status === 'confirmed' ? 'confirmed' : 'available' })
+        .eq('id', row.seat_id)
     }
 
     // Al confirmar, dispara el correo con el enlace a la credencial (Worker).
@@ -135,7 +175,7 @@ export default function AdminPanel() {
       }
     }
 
-    await loadRegistrations(membership.organization_id)
+    await loadRegistrations(membership.organization_id, eventFilter)
     setActingId(null)
   }
 
@@ -208,13 +248,28 @@ export default function AdminPanel() {
             </p>
           </div>
           {membership && (
-            <button
-              onClick={() => loadRegistrations(membership.organization_id)}
-              className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3.5 py-2 text-sm font-medium text-zinc-700 transition-colors hover:border-zinc-400"
-            >
-              <RefreshCw className="h-4 w-4" />
-              Actualizar
-            </button>
+            <div className="flex items-center gap-2">
+              <select
+                aria-label="Filtrar por evento"
+                value={eventFilter}
+                onChange={(e) => onFilterChange(e.target.value)}
+                className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-700 outline-none transition-colors focus:border-emerald-500"
+              >
+                <option value="all">Todos los eventos</option>
+                {events.map((ev) => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => loadRegistrations(membership.organization_id, eventFilter)}
+                className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3.5 py-2 text-sm font-medium text-zinc-700 transition-colors hover:border-zinc-400"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Actualizar
+              </button>
+            </div>
           )}
         </div>
 
@@ -269,6 +324,7 @@ export default function AdminPanel() {
                     <tr className="border-b border-zinc-200 text-xs uppercase tracking-wider text-zinc-400">
                       <th className="px-5 py-3 font-medium">Asistente</th>
                       <th className="px-5 py-3 font-medium">Contacto</th>
+                      <th className="px-5 py-3 font-medium">Asiento</th>
                       <th className="px-5 py-3 font-medium">Estado</th>
                       <th className="px-5 py-3 font-medium text-right">Acciones</th>
                     </tr>
@@ -287,6 +343,16 @@ export default function AdminPanel() {
                         <td className="px-5 py-3.5 text-zinc-600">
                           <p>{r.email}</p>
                           <p className="text-xs text-zinc-500">{r.phone}</p>
+                        </td>
+                        <td className="px-5 py-3.5 text-zinc-600">
+                          {seatLabel(r.seats) ? (
+                            <span className="inline-flex items-center gap-1 text-sm font-medium text-zinc-800">
+                              <MapPin className="h-3.5 w-3.5 text-zinc-400" />
+                              {seatLabel(r.seats)}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-zinc-400">—</span>
+                          )}
                         </td>
                         <td className="px-5 py-3.5">
                           <span

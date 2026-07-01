@@ -15,6 +15,15 @@ type EventRow = {
   organizations: { name: string | null } | null
 }
 
+type Seat = {
+  id: string
+  row_label: string | null
+  column_number: number | null
+  seat_number: string | null
+  price: number | null
+  status: 'available' | 'reserved' | 'confirmed'
+}
+
 const schema = z.object({
   first_name: z.string().min(2, 'Ingresa tu nombre'),
   last_name: z.string().optional(),
@@ -28,6 +37,8 @@ type FormValues = z.infer<typeof schema>
 export default function RegistroEvento() {
   const { eventId } = useParams()
   const [event, setEvent] = useState<EventRow | null>(null)
+  const [seats, setSeats] = useState<Seat[]>([])
+  const [selectedSeat, setSelectedSeat] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -53,8 +64,22 @@ export default function RegistroEvento() {
         : query.order('created_at', { ascending: false })
       const { data, error } = await query.limit(1).maybeSingle()
       if (!active) return
-      if (error) setLoadError(error.message)
-      else setEvent(data as unknown as EventRow)
+      if (error) {
+        setLoadError(error.message)
+        setLoading(false)
+        return
+      }
+      const ev = data as unknown as EventRow | null
+      setEvent(ev)
+      if (ev) {
+        const { data: seatData } = await supabase
+          .from('seats')
+          .select('id, row_label, column_number, seat_number, price, status')
+          .eq('event_id', ev.id)
+          .order('row_label', { ascending: true })
+          .order('column_number', { ascending: true })
+        if (active) setSeats((seatData ?? []) as Seat[])
+      }
       setLoading(false)
     }
     load()
@@ -63,24 +88,56 @@ export default function RegistroEvento() {
     }
   }, [eventId])
 
+  async function reloadSeats(evId: string) {
+    const { data } = await supabase
+      .from('seats')
+      .select('id, row_label, column_number, seat_number, price, status')
+      .eq('event_id', evId)
+      .order('row_label', { ascending: true })
+      .order('column_number', { ascending: true })
+    setSeats((data ?? []) as Seat[])
+  }
+
   async function onSubmit(values: FormValues) {
     if (!event) return
     setSubmitError(null)
-    const { error } = await supabase.from('registrations').insert({
-      organization_id: event.organization_id,
-      event_id: event.id,
-      first_name: values.first_name,
-      last_name: values.last_name || null,
-      email: values.email,
-      phone: values.phone,
-      cedula: values.cedula || null,
-    })
+
+    const hasSeats = seats.length > 0
+    if (hasSeats && !selectedSeat) {
+      setSubmitError('Selecciona un asiento disponible.')
+      return
+    }
+
+    const { error } = hasSeats
+      ? await supabase.rpc('register_with_seat', {
+          p_event_id: event.id,
+          p_seat_id: selectedSeat,
+          p_first_name: values.first_name,
+          p_last_name: values.last_name || '',
+          p_email: values.email,
+          p_phone: values.phone,
+          p_cedula: values.cedula || '',
+        })
+      : await supabase.from('registrations').insert({
+          organization_id: event.organization_id,
+          event_id: event.id,
+          first_name: values.first_name,
+          last_name: values.last_name || null,
+          email: values.email,
+          phone: values.phone,
+          cedula: values.cedula || null,
+        })
     if (error) {
-      setSubmitError(
-        error.code === '23505'
-          ? 'Ya existe un registro con ese correo para este evento.'
-          : error.message,
-      )
+      if (error.code === '23505') {
+        setSubmitError('Ya existe un registro con ese correo para este evento.')
+      } else {
+        setSubmitError(error.message)
+        // Si el asiento fue tomado por otra persona, refresca el mapa.
+        if (hasSeats) {
+          setSelectedSeat(null)
+          await reloadSeats(event.id)
+        }
+      }
       return
     }
 
@@ -163,6 +220,12 @@ export default function RegistroEvento() {
                 <FieldText label="Cédula o pasaporte (opcional)" error={errors.cedula?.message} {...register('cedula')} />
               </div>
 
+              {seats.length > 0 && (
+                <div className="sm:col-span-2">
+                  <SeatPicker seats={seats} selected={selectedSeat} onSelect={setSelectedSeat} />
+                </div>
+              )}
+
               {submitError && (
                 <p className="sm:col-span-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                   {submitError}
@@ -199,6 +262,72 @@ export default function RegistroEvento() {
           </div>
         )}
       </main>
+    </div>
+  )
+}
+
+function SeatPicker({
+  seats,
+  selected,
+  onSelect,
+}: {
+  seats: Seat[]
+  selected: string | null
+  onSelect: (id: string) => void
+}) {
+  const rows = new Map<string, Seat[]>()
+  for (const s of seats) {
+    const key = s.row_label ?? '—'
+    const list = rows.get(key) ?? []
+    list.push(s)
+    rows.set(key, list)
+  }
+  const selectedSeat = seats.find((s) => s.id === selected)
+
+  return (
+    <div>
+      <span className="text-sm font-medium text-zinc-800">Elige tu asiento</span>
+      <div className="mt-3 overflow-x-auto rounded-xl border border-zinc-200 bg-white p-4">
+        <div className="mx-auto mb-4 w-full rounded bg-zinc-900 py-1.5 text-center text-xs font-medium uppercase tracking-widest text-zinc-300">
+          Escenario
+        </div>
+        <div className="flex flex-col gap-2">
+          {[...rows.entries()].map(([label, rowSeats]) => (
+            <div key={label} className="flex items-center gap-2">
+              <span className="w-5 text-xs font-semibold text-zinc-400">{label}</span>
+              <div className="flex flex-wrap gap-1.5">
+                {rowSeats.map((s) => {
+                  const available = s.status === 'available'
+                  const isSelected = s.id === selected
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      disabled={!available}
+                      onClick={() => onSelect(s.id)}
+                      title={`${s.seat_number ?? ''}${s.price ? ` · $${s.price}` : ''}`}
+                      className={`grid h-8 w-8 place-items-center rounded-md border text-[10px] font-semibold transition-colors ${
+                        isSelected
+                          ? 'border-emerald-600 bg-emerald-600 text-white'
+                          : available
+                            ? 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:border-emerald-500'
+                            : 'cursor-not-allowed border-zinc-200 bg-zinc-100 text-zinc-300'
+                      }`}
+                    >
+                      {s.column_number}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <p className="mt-2 text-xs text-zinc-500">
+        {selectedSeat
+          ? `Seleccionado: ${selectedSeat.seat_number}${selectedSeat.price ? ` · $${selectedSeat.price}` : ''}`
+          : 'Toca un asiento disponible (verde).'}
+      </p>
     </div>
   )
 }
