@@ -1,9 +1,10 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import { sendUploadLinkEmail, sendConfirmationEmail, type EmailSendBinding } from './email'
 import { runScheduledJobs } from './jobs'
+import { normalizeSlug, provisionDomain, getDomainStatus, type CfEnv } from './tenants'
 
 type Bindings = {
   SUPABASE_URL: string
@@ -13,6 +14,13 @@ type Bindings = {
   EMAIL_FROM: string
   APP_BASE_URL: string
   CRON_SECRET?: string // habilita el disparo manual de las tareas programadas
+  // Aprovisionamiento de subdominios de tenant (Cloudflare Pages API).
+  CF_API_TOKEN?: string // secret; token con permiso Cloudflare Pages: Edit (+ Zone DNS: Edit para DNS automático)
+  CF_ACCOUNT_ID?: string
+  CF_PAGES_PROJECT?: string
+  ROOT_DOMAIN?: string
+  CF_ZONE_ID?: string // opcional; habilita la creación automática del DNS
+  CF_PAGES_HOST?: string // opcional; destino del CNAME (p.ej. eventpass-d7d.pages.dev)
 }
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -146,6 +154,111 @@ app.post('/api/registrations/confirm-notify', async (c) => {
     return c.json({ ok: false }, 502)
   }
   return c.json({ ok: true })
+})
+
+// ---------------------------------------------------------------------------
+// Aprovisionamiento de subdominio de tenant.
+// El admin de una organización activa su subdominio <slug>.eventosfacil.net.
+// El Worker registra el hostname como custom domain del proyecto Pages vía la
+// API de Cloudflare (Pages no admite comodines, hay que registrar cada host).
+// ---------------------------------------------------------------------------
+// Devuelve la config de Cloudflare si está completa, o null si falta algo.
+function cfConfig(env: Bindings): CfEnv | null {
+  if (!env.CF_API_TOKEN || !env.CF_ACCOUNT_ID) return null
+  return {
+    CF_API_TOKEN: env.CF_API_TOKEN,
+    CF_ACCOUNT_ID: env.CF_ACCOUNT_ID,
+    CF_PAGES_PROJECT: env.CF_PAGES_PROJECT || 'eventpass',
+    ROOT_DOMAIN: env.ROOT_DOMAIN || 'eventosfacil.net',
+    CF_ZONE_ID: env.CF_ZONE_ID,
+    CF_PAGES_HOST: env.CF_PAGES_HOST,
+  }
+}
+
+type SupabaseAdmin = SupabaseClient
+
+// Verifica el JWT del header Authorization y devuelve el user id, o null.
+async function authUserId(supabase: SupabaseAdmin, authorization?: string): Promise<string | null> {
+  if (!authorization?.startsWith('Bearer ')) return null
+  const { data, error } = await supabase.auth.getUser(authorization.slice(7))
+  if (error || !data.user) return null
+  return data.user.id
+}
+
+// Slug válido de la organización si el usuario tiene el rol requerido, o un error.
+async function orgSlugForRole(
+  supabase: SupabaseAdmin,
+  orgId: string,
+  userId: string,
+  roles: string[],
+): Promise<{ slug: string } | { error: string; code: 400 | 403 }> {
+  const { data: mem } = await supabase
+    .from('memberships')
+    .select('role')
+    .eq('organization_id', orgId)
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (!mem || !roles.includes(mem.role as string)) return { error: 'no autorizado', code: 403 }
+
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('slug')
+    .eq('id', orgId)
+    .maybeSingle()
+  const slug = normalizeSlug((org as { slug?: string } | null)?.slug)
+  if (!slug) {
+    return { error: 'La organización necesita un slug válido (minúsculas, números y guiones).', code: 400 }
+  }
+  return { slug }
+}
+
+const provisionSchema = z.object({ organization_id: z.string().uuid() })
+
+app.post('/api/tenants/provision-domain', async (c) => {
+  const cf = cfConfig(c.env)
+  if (!cf) return c.json({ error: 'Aprovisionamiento no configurado' }, 501)
+
+  const parsed = provisionSchema.safeParse(await c.req.json().catch(() => null))
+  if (!parsed.success) return c.json({ error: 'Datos inválidos' }, 400)
+
+  const supabase = createClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY)
+  const userId = await authUserId(supabase, c.req.header('Authorization'))
+  if (!userId) return c.json({ error: 'no autorizado' }, 401)
+
+  const info = await orgSlugForRole(supabase, parsed.data.organization_id, userId, ['owner', 'admin'])
+  if ('error' in info) return c.json({ error: info.error }, info.code)
+
+  const result = await provisionDomain(cf, info.slug)
+  if (!result.ok) {
+    console.error('[provision-domain] fallo:', result.error)
+    return c.json({ error: result.error, hostname: result.hostname }, 502)
+  }
+  if (result.dns === 'failed') {
+    console.warn('[provision-domain] DNS no creado:', result.dnsError)
+  }
+  return c.json({ ok: true, hostname: result.hostname, status: result.status, dns: result.dns })
+})
+
+app.get('/api/tenants/domain-status', async (c) => {
+  const cf = cfConfig(c.env)
+  if (!cf) return c.json({ error: 'Aprovisionamiento no configurado' }, 501)
+
+  const orgId = c.req.query('organization_id')
+  if (!orgId) return c.json({ error: 'Datos inválidos' }, 400)
+
+  const supabase = createClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY)
+  const userId = await authUserId(supabase, c.req.header('Authorization'))
+  if (!userId) return c.json({ error: 'no autorizado' }, 401)
+
+  const info = await orgSlugForRole(supabase, orgId, userId, ['owner', 'admin', 'staff'])
+  if ('error' in info) {
+    // Sin slug válido no es un error de permisos: aún no hay subdominio.
+    return info.code === 400 ? c.json({ status: 'none' }) : c.json({ error: info.error }, info.code)
+  }
+
+  const hostname = `${info.slug}.${cf.ROOT_DOMAIN}`
+  const st = await getDomainStatus(cf, hostname)
+  return c.json({ hostname, status: st?.status ?? 'none', validation: st?.validation ?? null })
 })
 
 // Disparo manual de las tareas programadas (para pruebas). Protegido por

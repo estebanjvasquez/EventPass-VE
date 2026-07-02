@@ -22,3 +22,16 @@ ENVIRONMENT = "production"
 # Remitente (dominio verificado en Cloudflare) y URL pública del frontend.
 EMAIL_FROM = "no-reply@eventosfacil.net"
 APP_BASE_URL = "https://eventosfacil.net"
+
+# Aprovisionamiento de subdominios de tenant vía la API de Cloudflare Pages.
+# El secreto CF_API_TOKEN (token con permiso "Cloudflare Pages: Edit") se carga con:
+#   wrangler secret put CF_API_TOKEN
+CF_ACCOUNT_ID = "cb77662770c0955288691715afa25690"
+CF_PAGES_PROJECT = "eventpass"
+ROOT_DOMAIN = "eventosfacil.net"
+# Habilitan la creación automática del registro DNS del subdominio
+# (CNAME <slug> -> CF_PAGES_HOST, proxied). Requiere que CF_API_TOKEN tenga
+# permiso "Zone.DNS: Edit" sobre la zona. Si el token no lo tiene, la parte
+# DNS se omite y se confía en un registro wildcard.
+CF_ZONE_ID = "627e78510f507ae70e87129eea65e5d1"
+CF_PAGES_HOST = "eventpass-d7d.pages.dev"

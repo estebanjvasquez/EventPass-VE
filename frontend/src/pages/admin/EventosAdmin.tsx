@@ -262,6 +262,7 @@ export default function EventosAdmin() {
 
         {orgId && <PaymentMethodsSection orgId={orgId} onError={setError} />}
         {orgId && <BrandingSection orgId={orgId} onError={setError} />}
+        {orgId && <SubdomainSection orgId={orgId} onError={setError} />}
       </main>
     </div>
   )
@@ -347,6 +348,210 @@ function BrandingSection({ orgId, onError }: { orgId: string; onError: (m: strin
           </button>
           {saved && <span className="text-sm font-medium text-emerald-700">Guardado ✓</span>}
         </div>
+      </div>
+    </section>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Subdominio del tenant (<slug>.eventosfacil.net).
+// Guarda el slug y activa el subdominio llamando al Worker, que lo registra
+// como custom domain del proyecto Pages vía la API de Cloudflare.
+// ---------------------------------------------------------------------------
+const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? ''
+const ROOT_DOMAIN = 'eventosfacil.net'
+
+const STATUS_TEXT: Record<string, string> = {
+  active: 'Activo',
+  pending: 'Validando…',
+  initializing: 'Inicializando…',
+  none: 'Sin activar',
+}
+const STATUS_BADGE: Record<string, string> = {
+  active: 'bg-emerald-100 text-emerald-700',
+  pending: 'bg-amber-100 text-amber-700',
+  initializing: 'bg-amber-100 text-amber-700',
+  none: 'bg-zinc-100 text-zinc-500',
+}
+
+async function authFetch(path: string, init?: RequestInit): Promise<Response> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  return fetch(`${API_URL}${path}`, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      ...(init?.headers ?? {}),
+    },
+  })
+}
+
+function SubdomainSection({ orgId, onError }: { orgId: string; onError: (m: string) => void }) {
+  const [slug, setSlug] = useState('')
+  const [savedSlug, setSavedSlug] = useState('')
+  const [status, setStatus] = useState<string>('none')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [activating, setActivating] = useState(false)
+
+  const loadStatus = useCallback(async () => {
+    if (!API_URL) return
+    try {
+      const res = await authFetch(`/api/tenants/domain-status?organization_id=${orgId}`)
+      if (res.ok) {
+        const j = (await res.json()) as { status?: string }
+        setStatus(j.status ?? 'none')
+      }
+    } catch {
+      /* estado no disponible: se muestra "sin activar" */
+    }
+  }, [orgId])
+
+  useEffect(() => {
+    let active = true
+    supabase
+      .from('organizations')
+      .select('slug')
+      .eq('id', orgId)
+      .maybeSingle()
+      .then(async ({ data }) => {
+        if (!active) return
+        const s = (data?.slug as string | null) ?? ''
+        setSlug(s)
+        setSavedSlug(s)
+        await loadStatus()
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [orgId, loadStatus])
+
+  const cleanSlug = slug.trim().toLowerCase()
+  const slugValid = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(cleanSlug)
+
+  async function saveSlug() {
+    if (!slugValid) {
+      onError('El subdominio solo admite minúsculas, números y guiones.')
+      return
+    }
+    setSaving(true)
+    const { error } = await supabase.from('organizations').update({ slug: cleanSlug }).eq('id', orgId)
+    setSaving(false)
+    if (error) return onError(error.message)
+    setSavedSlug(cleanSlug)
+  }
+
+  async function activate() {
+    if (!API_URL) {
+      onError('VITE_API_URL no está configurada.')
+      return
+    }
+    setActivating(true)
+    try {
+      const res = await authFetch('/api/tenants/provision-domain', {
+        method: 'POST',
+        body: JSON.stringify({ organization_id: orgId }),
+      })
+      const j = (await res.json().catch(() => ({}))) as { status?: string; error?: string }
+      if (!res.ok) onError(j.error ?? 'No se pudo activar el subdominio.')
+      else setStatus(j.status ?? 'initializing')
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'Error de red al activar el subdominio.')
+    } finally {
+      setActivating(false)
+    }
+  }
+
+  if (loading) return null
+
+  const host = `${cleanSlug || 'tu-org'}.${ROOT_DOMAIN}`
+  const dirty = cleanSlug !== savedSlug
+
+  return (
+    <section className="mt-10">
+      <h2 className="text-lg font-semibold text-zinc-900">Subdominio</h2>
+      <p className="mt-1 text-sm text-zinc-600">
+        La dirección pública de tu organización. Al activarla se registra en Cloudflare automáticamente.
+      </p>
+
+      <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-5">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-1 flex-col gap-2">
+            <span className="text-sm font-medium text-zinc-800">Nombre del subdominio</span>
+            <div className="flex items-stretch overflow-hidden rounded-lg border border-zinc-300 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20">
+              <input
+                value={slug}
+                onChange={(e) => setSlug(e.target.value)}
+                placeholder="mi-organizacion"
+                className="min-w-0 flex-1 px-3.5 py-2.5 text-sm text-zinc-900 outline-none"
+              />
+              <span className="flex items-center whitespace-nowrap bg-zinc-50 px-3 text-sm text-zinc-500">
+                .{ROOT_DOMAIN}
+              </span>
+            </div>
+          </label>
+          <button
+            type="button"
+            onClick={saveSlug}
+            disabled={saving || !dirty || !slugValid}
+            className="rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 transition-colors hover:border-zinc-400 disabled:opacity-50"
+          >
+            {saving ? 'Guardando…' : 'Guardar'}
+          </button>
+        </div>
+
+        {!slugValid && cleanSlug !== '' && (
+          <p className="mt-2 text-xs text-red-600">Solo minúsculas, números y guiones (sin espacios ni puntos).</p>
+        )}
+
+        <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-zinc-100 pt-4">
+          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_BADGE[status] ?? STATUS_BADGE.none}`}>
+            {STATUS_TEXT[status] ?? status}
+          </span>
+          {status === 'active' ? (
+            <a
+              href={`https://${host}`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm font-medium text-emerald-700 hover:underline"
+            >
+              {host} ↗
+            </a>
+          ) : (
+            <span className="text-sm text-zinc-500">{host}</span>
+          )}
+          <div className="ml-auto flex items-center gap-2">
+            {(status === 'pending' || status === 'initializing') && (
+              <button
+                type="button"
+                onClick={loadStatus}
+                className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 transition-colors hover:border-zinc-400"
+              >
+                Actualizar estado
+              </button>
+            )}
+            {status !== 'active' && (
+              <button
+                type="button"
+                onClick={activate}
+                disabled={activating || dirty || !savedSlug || !slugValid}
+                title={dirty ? 'Guarda el subdominio antes de activarlo' : undefined}
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-transform active:scale-[0.98] disabled:opacity-50"
+              >
+                {activating ? 'Activando…' : 'Activar subdominio'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {(status === 'pending' || status === 'initializing') && (
+          <p className="mt-3 text-xs text-zinc-500">
+            La validación del certificado puede tardar 1–2 minutos. Pulsa “Actualizar estado” para comprobar.
+          </p>
+        )}
       </div>
     </section>
   )
