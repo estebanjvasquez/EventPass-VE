@@ -16,6 +16,8 @@ const AdminPanel = lazy(() => import('./pages/admin/AdminPanel'))
 const CheckinEvento = lazy(() => import('./pages/admin/CheckinEvento'))
 const EventosAdmin = lazy(() => import('./pages/admin/EventosAdmin'))
 const AsientosAdmin = lazy(() => import('./pages/admin/AsientosAdmin'))
+const SuscripcionAdmin = lazy(() => import('./pages/admin/SuscripcionAdmin'))
+const SuperAdmin = lazy(() => import('./pages/admin/SuperAdmin'))
 
 function PageFallback() {
   return (
@@ -66,6 +68,22 @@ function App() {
           element={
             <RequireAuth>
               <AsientosAdmin />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/suscripcion"
+          element={
+            <RequireAuth>
+              <SuscripcionAdmin />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/superadmin"
+          element={
+            <RequireAuth>
+              <SuperAdmin />
             </RequireAuth>
           }
         />
