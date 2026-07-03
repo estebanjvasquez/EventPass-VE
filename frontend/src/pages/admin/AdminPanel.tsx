@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CalendarCog, Check, FileText, LogOut, MapPin, RefreshCw, ScanLine, Ticket, X } from 'lucide-react'
+import { CalendarCog, Check, CreditCard, FileText, LogOut, MapPin, RefreshCw, ScanLine, ShieldCheck, Ticket, X } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
 import { supabase } from '../../lib/supabase'
 
@@ -63,6 +63,11 @@ export default function AdminPanel() {
   const [viewingId, setViewingId] = useState<string | null>(null)
   const [events, setEvents] = useState<EventOption[]>([])
   const [eventFilter, setEventFilter] = useState<string>('all')
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false)
+
+  useEffect(() => {
+    supabase.rpc('is_platform_admin').then(({ data }) => setIsPlatformAdmin(data === true))
+  }, [])
 
   const loadRegistrations = useCallback(async (orgId: string, eventId: string = 'all') => {
     let query = supabase
@@ -214,6 +219,22 @@ export default function AdminPanel() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {isPlatformAdmin && (
+              <Link
+                to="/superadmin"
+                className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3.5 py-2 text-sm font-medium text-zinc-700 transition-colors hover:border-zinc-400"
+              >
+                <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                Superadmin
+              </Link>
+            )}
+            <Link
+              to="/admin/suscripcion"
+              className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3.5 py-2 text-sm font-medium text-zinc-700 transition-colors hover:border-zinc-400"
+            >
+              <CreditCard className="h-4 w-4" />
+              Suscripción
+            </Link>
             <Link
               to="/admin/eventos"
               className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3.5 py-2 text-sm font-medium text-zinc-700 transition-colors hover:border-zinc-400"
