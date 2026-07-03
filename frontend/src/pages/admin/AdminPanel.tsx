@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { CalendarCog, Check, CreditCard, FileText, LogOut, MapPin, RefreshCw, ScanLine, ShieldCheck, Ticket, X } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
 import { supabase } from '../../lib/supabase'
+import { resolveActiveOrg, type ActiveOrg } from '../../lib/activeOrg'
+import ImpersonationBanner from '../../components/ImpersonationBanner'
 
 type SeatInfo = { seat_number: string | null; row_label: string | null; column_number: number | null }
 
@@ -30,11 +32,7 @@ function seatLabel(seats: Registration['seats']): string | null {
   return s.seat_number ?? ([s.row_label, s.column_number].filter((x) => x != null).join('') || null)
 }
 
-type Membership = {
-  organization_id: string
-  role: string
-  organizations: { name: string | null } | null
-}
+type Membership = ActiveOrg
 
 const STATUS_LABEL: Record<Registration['status'], string> = {
   pending_payment: 'Pendiente de pago',
@@ -87,18 +85,8 @@ export default function AdminPanel() {
     async function init() {
       setLoading(true)
       setError(null)
-      const { data: mem, error: memErr } = await supabase
-        .from('memberships')
-        .select('organization_id, role, organizations(name)')
-        .limit(1)
-        .maybeSingle()
+      const m = await resolveActiveOrg()
       if (!active) return
-      if (memErr) {
-        setError(memErr.message)
-        setLoading(false)
-        return
-      }
-      const m = mem as Membership | null
       setMembership(m)
       if (m) {
         const { data: evs } = await supabase
@@ -205,6 +193,7 @@ export default function AdminPanel() {
 
   return (
     <div className="min-h-[100dvh] bg-[#fafafa]">
+      <ImpersonationBanner />
       <header className="border-b border-zinc-200 bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-4">
           <div className="flex items-center gap-3">

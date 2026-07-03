@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowLeft, Building2, ExternalLink, ShieldCheck, Trash2, Users } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { ArrowLeft, Building2, ExternalLink, LogIn, ShieldCheck, Trash2, Users } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { setImpersonatedOrg } from '../../lib/activeOrg'
 
 const inputCls =
   'w-full rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20'
@@ -188,11 +189,17 @@ type Member = { user_id: string; email: string; role: string; created_at: string
 type OrgEvent = { id: string; name: string; status: string; start_date: string | null; total_slots: number; registration_count: number }
 
 function OrgDetail({ org, onError, onChanged }: { org: Org; onError: (m: string) => void; onChanged: () => void }) {
+  const navigate = useNavigate()
   const [members, setMembers] = useState<Member[]>([])
   const [events, setEvents] = useState<OrgEvent[]>([])
   const [plan, setPlan] = useState(org.plan)
   const [status, setStatus] = useState(org.status)
   const [saving, setSaving] = useState(false)
+
+  function manageAsClient() {
+    setImpersonatedOrg(org.id)
+    navigate('/admin')
+  }
 
   useEffect(() => {
     setPlan(org.plan)
@@ -232,6 +239,15 @@ function OrgDetail({ org, onError, onChanged }: { org: Org; onError: (m: string)
       <p className="mt-1 text-xs text-zinc-500">
         Suscripción hasta: {org.period_end ? new Date(org.period_end).toLocaleDateString('es-VE') : '—'}
       </p>
+
+      <button
+        type="button"
+        onClick={manageAsClient}
+        className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-transform active:scale-[0.98]"
+      >
+        <LogIn className="h-4 w-4" />
+        Gestionar como cliente
+      </button>
 
       {/* Gestión de plan y estado */}
       <div className="mt-4 grid grid-cols-2 gap-3 border-t border-zinc-100 pt-4">
