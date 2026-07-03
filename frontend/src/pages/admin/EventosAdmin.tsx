@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { Armchair, ArrowLeft, CalendarCog, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
 import { supabase } from '../../lib/supabase'
+import { resolveActiveOrg } from '../../lib/activeOrg'
+import ImpersonationBanner from '../../components/ImpersonationBanner'
 
 type EventType = 'forum' | 'workshop' | 'social'
 type EventStatus = 'draft' | 'published' | 'closed' | 'archived'
@@ -74,24 +76,15 @@ export default function EventosAdmin() {
     async function init() {
       setLoading(true)
       setError(null)
-      const { data: mem, error: memErr } = await supabase
-        .from('memberships')
-        .select('organization_id, organizations(name)')
-        .limit(1)
-        .maybeSingle()
+      const m = await resolveActiveOrg()
       if (!active) return
-      if (memErr || !mem) {
-        setError(memErr?.message ?? 'Sin organización asociada.')
+      if (!m) {
+        setError('Sin organización asociada.')
         setLoading(false)
         return
       }
-      const m = mem as {
-        organization_id: string
-        organizations: { name: string | null } | { name: string | null }[] | null
-      }
-      const orgs = Array.isArray(m.organizations) ? m.organizations[0] : m.organizations
       setOrgId(m.organization_id)
-      setOrgName(orgs?.name ?? 'Mi organización')
+      setOrgName(m.organizations?.name ?? 'Mi organización')
       await loadEvents(m.organization_id)
       if (active) setLoading(false)
     }
@@ -118,6 +111,7 @@ export default function EventosAdmin() {
 
   return (
     <div className="min-h-[100dvh] bg-[#fafafa]">
+      <ImpersonationBanner />
       <header className="border-b border-zinc-200 bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-4">
           <Link to="/admin" className="inline-flex items-center gap-2 text-sm font-medium text-zinc-600 hover:text-zinc-900">

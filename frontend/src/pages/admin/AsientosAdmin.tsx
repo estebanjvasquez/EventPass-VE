@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Armchair, ArrowLeft, Trash2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import ImpersonationBanner from '../../components/ImpersonationBanner'
 
 type Seat = {
   id: string
@@ -151,6 +152,7 @@ export default function AsientosAdmin() {
 
   return (
     <div className="min-h-[100dvh] bg-[#fafafa]">
+      <ImpersonationBanner />
       <header className="border-b border-zinc-200 bg-white">
         <div className="mx-auto flex max-w-4xl items-center justify-between px-5 py-4">
           <Link to="/admin/eventos" className="inline-flex items-center gap-2 text-sm font-medium text-zinc-600 hover:text-zinc-900">
