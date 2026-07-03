@@ -15,6 +15,7 @@ const DefinirClave = lazy(() => import('./pages/DefinirClave'))
 const Login = lazy(() => import('./pages/admin/Login'))
 const AdminPanel = lazy(() => import('./pages/admin/AdminPanel'))
 const CheckinEvento = lazy(() => import('./pages/admin/CheckinEvento'))
+const AcreditacionEvento = lazy(() => import('./pages/admin/AcreditacionEvento'))
 const EventosAdmin = lazy(() => import('./pages/admin/EventosAdmin'))
 const AsientosAdmin = lazy(() => import('./pages/admin/AsientosAdmin'))
 const SuscripcionAdmin = lazy(() => import('./pages/admin/SuscripcionAdmin'))
@@ -54,6 +55,14 @@ function App() {
           element={
             <RequireAuth>
               <CheckinEvento />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/acreditacion"
+          element={
+            <RequireAuth>
+              <AcreditacionEvento />
             </RequireAuth>
           }
         />
