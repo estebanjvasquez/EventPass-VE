@@ -11,6 +11,7 @@ const CargarComprobante = lazy(() => import('./pages/CargarComprobante'))
 const CredencialEvento = lazy(() => import('./pages/CredencialEvento'))
 const CrearCuenta = lazy(() => import('./pages/CrearCuenta'))
 const Bienvenida = lazy(() => import('./pages/Bienvenida'))
+const DefinirClave = lazy(() => import('./pages/DefinirClave'))
 const Login = lazy(() => import('./pages/admin/Login'))
 const AdminPanel = lazy(() => import('./pages/admin/AdminPanel'))
 const CheckinEvento = lazy(() => import('./pages/admin/CheckinEvento'))
@@ -38,6 +39,7 @@ function App() {
         <Route path="/credencial/:token" element={<CredencialEvento />} />
         <Route path="/crear-cuenta" element={<CrearCuenta />} />
         <Route path="/bienvenida" element={<Bienvenida />} />
+        <Route path="/definir-clave" element={<DefinirClave />} />
         <Route path="/admin/login" element={<Login />} />
         <Route
           path="/admin"
