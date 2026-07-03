@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { LogIn, Ticket } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
 
@@ -78,6 +78,13 @@ export default function Login() {
             {!busy && <LogIn className="h-4 w-4" />}
           </button>
         </form>
+
+        <p className="mt-6 text-center text-sm text-zinc-500">
+          ¿No tienes cuenta?{' '}
+          <Link to="/crear-cuenta" className="font-medium text-emerald-700 hover:underline">
+            Crea tu organización
+          </Link>
+        </p>
       </div>
     </div>
   )

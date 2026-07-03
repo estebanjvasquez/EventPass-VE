@@ -110,12 +110,12 @@ function Header() {
             Planes
           </a>
         </nav>
-        <a
-          href="#contacto"
+        <Link
+          to="/crear-cuenta"
           className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-transform active:scale-[0.98]"
         >
-          Solicitar demo
-        </a>
+          Crear organización
+        </Link>
       </div>
     </header>
   )
@@ -140,13 +140,13 @@ function Hero() {
             panel — incluso sin internet en el evento.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
-            <a
-              href="#contacto"
+            <Link
+              to="/crear-cuenta"
               className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition-transform active:scale-[0.98]"
             >
-              Solicitar demo
+              Empezar gratis
               <ArrowRight className="h-4 w-4" />
-            </a>
+            </Link>
             <a
               href="#planes"
               className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold text-zinc-800 transition-colors hover:border-zinc-400"
@@ -302,8 +302,8 @@ function Pricing() {
               ))}
             </ul>
 
-            <a
-              href="#contacto"
+            <Link
+              to="/crear-cuenta"
               className={`mt-8 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold transition-transform active:scale-[0.98] ${
                 plan.highlight
                   ? 'bg-emerald-500 text-zinc-900'
@@ -312,7 +312,7 @@ function Pricing() {
             >
               Empezar
               <ArrowRight className="h-4 w-4" />
-            </a>
+            </Link>
           </div>
         ))}
       </div>

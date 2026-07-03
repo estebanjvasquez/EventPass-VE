@@ -3,6 +3,8 @@ import Landing from './pages/Landing'
 import RegistroEvento from './pages/RegistroEvento'
 import CargarComprobante from './pages/CargarComprobante'
 import CredencialEvento from './pages/CredencialEvento'
+import CrearCuenta from './pages/CrearCuenta'
+import Bienvenida from './pages/Bienvenida'
 import Login from './pages/admin/Login'
 import AdminPanel from './pages/admin/AdminPanel'
 import CheckinEvento from './pages/admin/CheckinEvento'
@@ -18,6 +20,8 @@ function App() {
       <Route path="/e/:eventId" element={<RegistroEvento />} />
       <Route path="/comprobante/:token" element={<CargarComprobante />} />
       <Route path="/credencial/:token" element={<CredencialEvento />} />
+      <Route path="/crear-cuenta" element={<CrearCuenta />} />
+      <Route path="/bienvenida" element={<Bienvenida />} />
       <Route path="/admin/login" element={<Login />} />
       <Route
         path="/admin"
