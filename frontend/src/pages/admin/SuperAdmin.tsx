@@ -369,10 +369,35 @@ function OrgDetail({ org, onError, onChanged }: { org: Org; onError: (m: string)
   const [plan, setPlan] = useState(org.plan)
   const [status, setStatus] = useState(org.status)
   const [saving, setSaving] = useState(false)
+  const [domainStatus, setDomainStatus] = useState<string>('...')
+  const [activating, setActivating] = useState(false)
+
+  useEffect(() => {
+    setDomainStatus('...')
+    authFetch(`/api/tenants/domain-status?organization_id=${org.id}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => setDomainStatus((j as { status?: string } | null)?.status ?? 'none'))
+      .catch(() => setDomainStatus('none'))
+  }, [org.id])
 
   function manageAsClient() {
     setImpersonatedOrg(org.id)
     navigate('/admin')
+  }
+
+  async function activateDomain() {
+    setActivating(true)
+    try {
+      const res = await authFetch('/api/tenants/provision-domain', {
+        method: 'POST',
+        body: JSON.stringify({ organization_id: org.id }),
+      })
+      const j = (await res.json().catch(() => ({}))) as { status?: string; error?: string }
+      if (!res.ok) onError(j.error ?? 'No se pudo activar el subdominio.')
+      else setDomainStatus(j.status ?? 'initializing')
+    } finally {
+      setActivating(false)
+    }
   }
 
   useEffect(() => {
@@ -422,6 +447,32 @@ function OrgDetail({ org, onError, onChanged }: { org: Org; onError: (m: string)
         <LogIn className="h-4 w-4" />
         Gestionar como cliente
       </button>
+
+      {/* Subdominio */}
+      <div className="mt-3 flex items-center justify-between rounded-lg border border-zinc-200 px-3 py-2">
+        <span className="text-xs text-zinc-600">
+          Subdominio:{' '}
+          <span className={domainStatus === 'active' ? 'font-medium text-emerald-700' : 'text-zinc-500'}>
+            {domainStatus === 'active'
+              ? 'Activo'
+              : domainStatus === 'pending' || domainStatus === 'initializing'
+                ? 'Validando…'
+                : domainStatus === '...'
+                  ? '…'
+                  : 'Sin activar'}
+          </span>
+        </span>
+        {domainStatus !== 'active' && domainStatus !== '...' && (
+          <button
+            type="button"
+            onClick={activateDomain}
+            disabled={activating}
+            className="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-transform active:scale-[0.98] disabled:opacity-50"
+          >
+            {activating ? 'Activando…' : 'Activar subdominio'}
+          </button>
+        )}
+      </div>
 
       {/* Gestión de plan y estado */}
       <div className="mt-4 grid grid-cols-2 gap-3 border-t border-zinc-100 pt-4">
