@@ -198,7 +198,17 @@ async function orgSlugForRole(
     .eq('organization_id', orgId)
     .eq('user_id', userId)
     .maybeSingle()
-  if (!mem || !roles.includes(mem.role as string)) return { error: 'no autorizado', code: 403 }
+  let authorized = !!mem && roles.includes(mem.role as string)
+  // Los superadmins pueden gestionar el subdominio de cualquier cliente.
+  if (!authorized) {
+    const { data: pa } = await supabase
+      .from('platform_admins')
+      .select('user_id')
+      .eq('user_id', userId)
+      .maybeSingle()
+    authorized = !!pa
+  }
+  if (!authorized) return { error: 'no autorizado', code: 403 }
 
   const { data: org } = await supabase
     .from('organizations')
@@ -338,7 +348,15 @@ app.post('/api/admin/clients', async (c) => {
     admins.push({ email, status })
   }
 
-  return c.json({ ok: true, org, admins })
+  // Aprovisiona el subdominio automáticamente (DNS + custom domain en Pages).
+  let domain: { hostname: string; status?: string; error?: string } | null = null
+  const cf = cfConfig(c.env)
+  if (cf) {
+    const pr = await provisionDomain(cf, slug)
+    domain = pr.ok ? { hostname: pr.hostname, status: pr.status } : { hostname: pr.hostname, error: pr.error }
+  }
+
+  return c.json({ ok: true, org, admins, domain })
 })
 
 // Disparo manual de las tareas programadas (para pruebas). Protegido por
