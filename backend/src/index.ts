@@ -261,6 +261,86 @@ app.get('/api/tenants/domain-status', async (c) => {
   return c.json({ hostname, status: st?.status ?? 'none', validation: st?.validation ?? null })
 })
 
+// ---------------------------------------------------------------------------
+// Alta manual de clientes por el superadmin: crea la organización e invita a
+// uno o varios correos como administradores (owner). Los correos que aún no
+// tienen cuenta reciben una invitación para definir su clave; los existentes
+// se enlazan directamente. Requiere service role (crear usuarios) y por eso
+// vive en el Worker, no en una RPC.
+// ---------------------------------------------------------------------------
+const createClientSchema = z.object({
+  name: z.string().min(2),
+  slug: z.string(),
+  plan: z.enum(['arranque', 'profesional', 'asociacion']).optional(),
+  admin_emails: z.array(z.string().email()).min(1).max(10),
+})
+
+app.post('/api/admin/clients', async (c) => {
+  const parsed = createClientSchema.safeParse(await c.req.json().catch(() => null))
+  if (!parsed.success) return c.json({ error: 'Datos inválidos' }, 400)
+
+  const supabase = createClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY)
+  const userId = await authUserId(supabase, c.req.header('Authorization'))
+  if (!userId) return c.json({ error: 'no autorizado' }, 401)
+
+  // Solo superadmins de la plataforma.
+  const { data: pa } = await supabase
+    .from('platform_admins')
+    .select('user_id')
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (!pa) return c.json({ error: 'no autorizado' }, 403)
+
+  const slug = normalizeSlug(parsed.data.slug)
+  if (!slug) return c.json({ error: 'Subdominio inválido' }, 400)
+
+  const { data: dup } = await supabase.from('organizations').select('id').eq('slug', slug).maybeSingle()
+  if (dup) return c.json({ error: 'El subdominio ya está en uso' }, 409)
+
+  const { data: org, error: orgErr } = await supabase
+    .from('organizations')
+    .insert({ name: parsed.data.name.trim(), slug, status: 'active', plan: parsed.data.plan ?? 'arranque' })
+    .select('id, slug')
+    .single()
+  if (orgErr || !org) return c.json({ error: orgErr?.message ?? 'No se pudo crear la organización' }, 500)
+
+  const base = c.env.APP_BASE_URL.replace(/\/$/, '')
+  const emails = [...new Set(parsed.data.admin_emails.map((e) => e.toLowerCase().trim()))]
+  const admins: { email: string; status: 'invited' | 'linked' | 'error'; error?: string }[] = []
+
+  for (const email of emails) {
+    let uid: string | null = null
+    let status: 'invited' | 'linked' = 'invited'
+
+    const inv = await supabase.auth.admin.inviteUserByEmail(email, { redirectTo: `${base}/definir-clave` })
+    if (inv.data?.user) {
+      uid = inv.data.user.id
+    } else if (inv.error && /registered|exist/i.test(inv.error.message)) {
+      const { data: found } = await supabase.rpc('get_user_id_by_email', { p_email: email })
+      uid = (found as string | null) ?? null
+      status = 'linked'
+    } else {
+      admins.push({ email, status: 'error', error: inv.error?.message })
+      continue
+    }
+    if (!uid) {
+      admins.push({ email, status: 'error', error: 'No se pudo resolver el usuario' })
+      continue
+    }
+
+    const { error: memErr } = await supabase
+      .from('memberships')
+      .insert({ organization_id: org.id, user_id: uid, role: 'owner' })
+    if (memErr && !/duplicate|unique/i.test(memErr.message)) {
+      admins.push({ email, status: 'error', error: memErr.message })
+      continue
+    }
+    admins.push({ email, status })
+  }
+
+  return c.json({ ok: true, org, admins })
+})
+
 // Disparo manual de las tareas programadas (para pruebas). Protegido por
 // CRON_SECRET; si el secreto no está configurado, el endpoint queda deshabilitado.
 app.post('/api/jobs/run', async (c) => {

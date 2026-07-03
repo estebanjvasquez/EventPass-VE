@@ -3,6 +3,23 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Building2, ExternalLink, LogIn, ShieldCheck, Trash2, Users } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { setImpersonatedOrg } from '../../lib/activeOrg'
+import { slugAvailable, slugify } from '../../lib/onboarding'
+
+const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? ''
+
+async function authFetch(path: string, init?: RequestInit): Promise<Response> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  return fetch(`${API_URL}${path}`, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      ...init?.headers,
+    },
+  })
+}
 
 const inputCls =
   'w-full rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20'
@@ -111,6 +128,7 @@ function ClientsTab({ onError }: { onError: (m: string) => void }) {
   const [orgs, setOrgs] = useState<Org[]>([])
   const [selected, setSelected] = useState<Org | null>(null)
   const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.rpc('admin_organizations')
@@ -126,6 +144,28 @@ function ClientsTab({ onError }: { onError: (m: string) => void }) {
   if (loading) return <div className="h-40 animate-pulse rounded-xl bg-white" />
 
   return (
+    <>
+    <div className="mb-4 flex items-center justify-between">
+      <h1 className="text-xl font-bold tracking-tight text-zinc-900">Clientes</h1>
+      <button
+        type="button"
+        onClick={() => setCreating(true)}
+        className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-transform active:scale-[0.98]"
+      >
+        <Building2 className="h-4 w-4" />
+        Nuevo cliente
+      </button>
+    </div>
+    {creating && (
+      <NewClientModal
+        onClose={() => setCreating(false)}
+        onDone={async () => {
+          setCreating(false)
+          await load()
+        }}
+        onError={onError}
+      />
+    )}
     <div className="grid gap-6 lg:grid-cols-5">
       <div className="lg:col-span-3">
         <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
@@ -179,6 +219,140 @@ function ClientsTab({ onError }: { onError: (m: string) => void }) {
               Selecciona un cliente para ver su detalle.
             </span>
           </div>
+        )}
+      </div>
+    </div>
+    </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Alta manual de un cliente: crea la organización e invita administradores.
+// ---------------------------------------------------------------------------
+function NewClientModal({ onClose, onDone, onError }: { onClose: () => void; onDone: () => void; onError: (m: string) => void }) {
+  const [name, setName] = useState('')
+  const [slug, setSlug] = useState('')
+  const [slugEdited, setSlugEdited] = useState(false)
+  const [plan, setPlan] = useState('arranque')
+  const [emails, setEmails] = useState('')
+  const [available, setAvailable] = useState<boolean | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState<{ email: string; status: string; error?: string }[] | null>(null)
+
+  const effSlug = slugEdited ? slug : slugify(name)
+
+  useEffect(() => {
+    setAvailable(null)
+    if (effSlug.length < 3) return
+    const t = setTimeout(async () => setAvailable(await slugAvailable(effSlug)), 400)
+    return () => clearTimeout(t)
+  }, [effSlug])
+
+  async function submit() {
+    const list = emails
+      .split(/[\s,;]+/)
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean)
+    if (!name.trim()) return onError('Escribe el nombre del cliente.')
+    if (effSlug.length < 3) return onError('El subdominio debe tener al menos 3 caracteres.')
+    if (list.length === 0) return onError('Agrega al menos un correo de administrador.')
+
+    setBusy(true)
+    try {
+      const res = await authFetch('/api/admin/clients', {
+        method: 'POST',
+        body: JSON.stringify({ name: name.trim(), slug: effSlug, plan, admin_emails: list }),
+      })
+      const j = (await res.json().catch(() => ({}))) as { error?: string; admins?: { email: string; status: string; error?: string }[] }
+      if (!res.ok) {
+        onError(j.error ?? 'No se pudo crear el cliente.')
+        setBusy(false)
+        return
+      }
+      setResult(j.admins ?? [])
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'Error de red.')
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 px-5 py-8" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-2xl bg-white p-6" onClick={(e) => e.stopPropagation()}>
+        {result ? (
+          <>
+            <h2 className="text-lg font-semibold text-zinc-900">Cliente creado</h2>
+            <p className="mt-1 text-sm text-zinc-600">Estado de los administradores:</p>
+            <ul className="mt-4 space-y-2">
+              {result.map((r) => (
+                <li key={r.email} className="flex items-center justify-between rounded-lg border border-zinc-200 px-3 py-2 text-sm">
+                  <span className="text-zinc-800">{r.email}</span>
+                  <span className={r.status === 'error' ? 'text-red-600' : 'text-emerald-700'}>
+                    {r.status === 'invited' ? 'Invitado ✉️' : r.status === 'linked' ? 'Enlazado ✓' : `Error: ${r.error ?? ''}`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <button type="button" onClick={onDone} className="mt-6 w-full rounded-lg bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white">
+              Listo
+            </button>
+          </>
+        ) : (
+          <>
+            <h2 className="text-lg font-semibold text-zinc-900">Nuevo cliente</h2>
+            <label className="mt-4 flex flex-col gap-2">
+              <span className="text-sm font-medium text-zinc-800">Nombre de la organización</span>
+              <input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} placeholder="Asociación de Vecinos…" />
+            </label>
+            <label className="mt-4 flex flex-col gap-2">
+              <span className="text-sm font-medium text-zinc-800">Subdominio</span>
+              <div className="flex items-stretch overflow-hidden rounded-lg border border-zinc-300 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20">
+                <input
+                  value={effSlug}
+                  onChange={(e) => {
+                    setSlugEdited(true)
+                    setSlug(slugify(e.target.value))
+                  }}
+                  className="min-w-0 flex-1 px-3.5 py-2.5 text-sm text-zinc-900 outline-none"
+                  placeholder="mi-cliente"
+                />
+                <span className="flex items-center whitespace-nowrap bg-zinc-50 px-3 text-sm text-zinc-500">.{ROOT_DOMAIN}</span>
+              </div>
+              {effSlug.length >= 3 && (
+                <span className={`text-xs ${available === false ? 'text-red-600' : available ? 'text-emerald-700' : 'text-zinc-400'}`}>
+                  {available === false ? 'No disponible' : available ? 'Disponible ✓' : 'Comprobando…'}
+                </span>
+              )}
+            </label>
+            <label className="mt-4 flex flex-col gap-2">
+              <span className="text-sm font-medium text-zinc-800">Plan</span>
+              <select value={plan} onChange={(e) => setPlan(e.target.value)} className={inputCls}>
+                <option value="arranque">Arranque</option>
+                <option value="profesional">Profesional</option>
+                <option value="asociacion">Asociación</option>
+              </select>
+            </label>
+            <label className="mt-4 flex flex-col gap-2">
+              <span className="text-sm font-medium text-zinc-800">Correos de administradores</span>
+              <textarea
+                value={emails}
+                onChange={(e) => setEmails(e.target.value)}
+                rows={3}
+                className={inputCls}
+                placeholder="Uno o varios correos separados por coma o salto de línea"
+              />
+              <span className="text-xs text-zinc-500">Los que no tengan cuenta recibirán una invitación para definir su clave.</span>
+            </label>
+
+            <div className="mt-6 flex gap-2">
+              <button type="button" onClick={submit} disabled={busy || available === false} className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition-transform active:scale-[0.98] disabled:opacity-60">
+                {busy ? 'Creando…' : 'Crear cliente'}
+              </button>
+              <button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 bg-white px-5 py-2.5 text-sm font-semibold text-zinc-700 hover:border-zinc-400">
+                Cancelar
+              </button>
+            </div>
+          </>
         )}
       </div>
     </div>
