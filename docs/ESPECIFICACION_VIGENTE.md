@@ -31,15 +31,20 @@ rol independiente de plataforma (`platform_admins`).
 
 1. **Alta de organización.** El usuario crea cuenta, confirma el correo y crea
    su organización. Se valida el slug y se aprovisiona su subdominio.
-2. **Configuración.** Un admin crea/edita/publica eventos, medios de pago y,
-   opcionalmente, el mapa de asientos.
-3. **Registro y pago.** El visitante se registra, reserva asiento de forma
+2. **Configuración.** Un admin crea/edita/publica eventos, medios de pago y
+   planos: asientos para foros y una cuadrícula inicial de stands para
+   exposiciones.
+3. **Programa y registro para octubre.** Un programa reúne uno o más eventos
+   relacionados (por ejemplo, foro y exposición); el registro público perfila
+   al participante y permite emitir pases con acceso por evento, día, sesión o
+   zona. La venta continúa fuera de la plataforma en esta versión.
+4. **Registro y pago.** El visitante se registra, reserva asiento de forma
    atómica si corresponde y recibe un enlace para cargar el comprobante.
-4. **Verificación.** Un admin confirma o rechaza el comprobante. La
+5. **Verificación.** Un admin confirma o rechaza el comprobante. La
    confirmación habilita la credencial QR y dispara la notificación.
-5. **Operación en sitio.** El personal hace check-in con QR o búsqueda y puede
+6. **Operación en sitio.** El personal hace check-in con QR o búsqueda y puede
    imprimir gafetes.
-6. **Suscripción.** La organización solicita un plan y adjunta comprobante; el
+7. **Suscripción.** La organización solicita un plan y adjunta comprobante; el
    superadmin lo aprueba o rechaza. La base de datos aplica los límites del plan.
 
 ## 4. Arquitectura
@@ -68,7 +73,10 @@ flowchart LR
 
 - **Plataforma:** `organizations`, `memberships`, `subscriptions`, `plans`,
   `platform_admins`, `platform_payment_methods`, `subscription_payments`.
-- **Eventos:** `events`, `payment_methods`, `seats`, `registrations`.
+- **Eventos:** `events`, `payment_methods`, `seats`, `registrations`,
+  `event_programs`, `program_events`, `event_sessions`, `event_zones`,
+  `people`, `event_participations`, `passes`, `pass_entitlements`,
+  `venue_maps`, `venue_map_elements` y `booth_assignments`.
 - **Auditoría:** `admin_actions`, `email_log`.
 
 Estados relevantes:
@@ -78,6 +86,7 @@ Estados relevantes:
 | Evento | `draft`, `published`, `closed`, `archived` |
 | Registro | `pending_payment`, `payment_submitted`, `confirmed`, `rejected` |
 | Asiento | `available`, `reserved`, `confirmed` |
+| Stand | `available`, `reserved`, `assigned`, `blocked` |
 | Asistencia | `no_attendance`, `checked_in` |
 
 ## 6. Seguridad y reglas críticas
@@ -99,7 +108,9 @@ Estados relevantes:
   `/credencial/:token`.
 - Cuenta: `/crear-cuenta`, `/bienvenida`, `/definir-clave`.
 - Administración: `/admin`, `/admin/eventos`, `/admin/asientos/:eventId`,
-  `/admin/checkin`, `/admin/acreditacion`, `/admin/suscripcion`, `/superadmin`.
+  `/admin/stands/:eventId`, `/admin/programas`, `/admin/checkin`,
+  `/admin/acreditacion`, `/admin/suscripcion`, `/superadmin`.
+- Registro por programa: `/p/:programId/registro`.
 - Worker: salud, notificaciones de registro/confirmación, dominio del tenant,
   alta de clientes y cron manual protegido.
 
@@ -120,6 +131,9 @@ Estados relevantes:
 3. Documentar y validar explícitamente el alcance offline/PWA de check-in; no
    hay evidencia de un service worker dedicado en el repositorio actual.
 4. Formalizar el checklist de release del Worker y de migraciones manuales.
+5. Completar el editor visual de exposición: dimensiones, pasillos, zonas y
+   asignación de empresas a stands; hoy solo permite crear una cuadrícula y
+   reservar sus stands.
 
 ## 10. Criterios de aceptación de esta especificación
 
