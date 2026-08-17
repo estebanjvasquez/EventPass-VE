@@ -141,6 +141,9 @@ export default function EventosAdmin() {
             Nuevo evento
           </button>
         </div>
+        <Link to="/admin/programas" className="mt-4 inline-flex rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-zinc-400">
+          Gestionar programas, foro y exposición
+        </Link>
 
         {error && (
           <p className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>

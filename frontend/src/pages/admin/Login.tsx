@@ -69,6 +69,10 @@ export default function Login() {
             </p>
           )}
 
+          <Link to="/recuperar-clave" className="-mt-1 text-right text-sm font-medium text-emerald-700 hover:underline">
+            ¿Olvidaste tu contraseña?
+          </Link>
+
           <button
             type="submit"
             disabled={busy}
