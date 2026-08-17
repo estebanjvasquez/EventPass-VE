@@ -6,7 +6,7 @@ import { supabase } from '../../lib/supabase'
 import { resolveActiveOrg } from '../../lib/activeOrg'
 import ImpersonationBanner from '../../components/ImpersonationBanner'
 
-type EventType = 'forum' | 'workshop' | 'social'
+type EventType = 'forum' | 'exhibition' | 'workshop' | 'social'
 type EventStatus = 'draft' | 'published' | 'closed' | 'archived'
 
 type EventRow = {
@@ -24,6 +24,7 @@ type EventRow = {
 
 const TYPE_LABEL: Record<EventType, string> = {
   forum: 'Foro',
+  exhibition: 'Exposición',
   workshop: 'Taller',
   social: 'Social',
 }
@@ -226,11 +227,11 @@ export default function EventosAdmin() {
                           </button>
                         )}
                         <Link
-                          to={`/admin/asientos/${ev.id}`}
+                          to={ev.event_type === 'exhibition' ? `/admin/stands/${ev.id}` : `/admin/asientos/${ev.id}`}
                           className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 transition-colors hover:border-zinc-400"
                         >
                           <Armchair className="h-3.5 w-3.5" />
-                          Asientos
+                          {ev.event_type === 'exhibition' ? 'Stands' : 'Asientos'}
                         </Link>
                         <button
                           type="button"
@@ -627,6 +628,7 @@ function EventForm({
         <Field label="Tipo">
           <select value={form.event_type} onChange={(e) => set('event_type', e.target.value as EventType)} className={inputCls}>
             <option value="forum">Foro</option>
+            <option value="exhibition">Exposición</option>
             <option value="workshop">Taller</option>
             <option value="social">Social</option>
           </select>
