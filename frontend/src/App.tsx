@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import RequireAuth from './components/RequireAuth'
 
 // Carga diferida por ruta: cada página es su propio chunk. Así el visitante
@@ -80,6 +80,7 @@ function App() {
           }
         />
         <Route path="/admin/programas" element={<RequireAuth><ProgramasAdmin /></RequireAuth>} />
+        <Route path="/admin/programs" element={<Navigate to="/admin/programas" replace />} />
         <Route
           path="/admin/asientos/:eventId"
           element={
