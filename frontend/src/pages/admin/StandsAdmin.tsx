@@ -1,183 +1,74 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Building2, Grid2X2, MapPin, Store, X } from 'lucide-react'
+import { DragDropProvider, useDraggable, useDroppable } from '@dnd-kit/react'
+import { ArrowLeft, Store } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
-type StandStatus = 'available' | 'reserved' | 'assigned' | 'blocked'
-type Stand = { id: string; label: string; status: StandStatus; x: number; y: number }
-type MapElement = { id: string; label: string; element_type: 'zone' | 'aisle'; x: number; y: number; width: number; height: number }
-type Company = { id: string; name: string; contact_name: string | null; contact_email: string | null; kind: 'partner' | 'sponsor' | 'exhibitor' | 'buyer' }
-type Assignment = { id: string; element_id: string; company_id: string; status: 'reserved' | 'confirmed' | 'cancelled'; notes: string | null }
+type Status = 'available' | 'reserved' | 'assigned' | 'blocked'
+type FixedType = 'aisle' | 'blank' | 'special'
+type Stand = { id: string; label: string; status: Status; x: number; y: number; width: number; height: number }
+type Company = { id: string; name: string }
+type Assignment = { element_id: string; company_id: string }
+type FixedElement = { id: string; label: string; element_type: 'zone' | 'aisle' | 'stage'; x: number; y: number; width: number; height: number; metadata?: { floorplan_kind?: FixedType } | null }
+type ElementRect = Pick<Stand, 'x' | 'y' | 'width' | 'height'>
 
-const statusCopy: Record<StandStatus, string> = { available: 'Disponible', reserved: 'Reservado', assigned: 'Asignado', blocked: 'Bloqueado' }
-const statusClass: Record<StandStatus, string> = {
-  available: 'border-emerald-300 bg-emerald-50 text-emerald-900 hover:border-emerald-500',
-  reserved: 'border-amber-300 bg-amber-50 text-amber-900 hover:border-amber-500',
-  assigned: 'border-sky-400 bg-sky-50 text-sky-950 hover:border-sky-600',
-  blocked: 'border-zinc-300 bg-zinc-100 text-zinc-500 hover:border-zinc-400',
+const cellId = (x: number, y: number) => `cell:${x}:${y}`
+const classes: Record<Status, string> = { available: 'border-emerald-300 bg-emerald-50 text-emerald-950', reserved: 'border-amber-300 bg-amber-50 text-amber-950', assigned: 'border-sky-400 bg-sky-50 text-sky-950', blocked: 'border-zinc-300 bg-zinc-100 text-zinc-500' }
+const fixedTypeOf = (item: FixedElement): FixedType => item.metadata?.floorplan_kind ?? (item.element_type === 'aisle' ? 'aisle' : item.element_type === 'stage' ? 'special' : 'blank')
+const databaseTypeFor = (type: FixedType): FixedElement['element_type'] => type === 'aisle' ? 'aisle' : type === 'special' ? 'stage' : 'zone'
+const labelFor = (type: FixedType) => type === 'aisle' ? 'Pasillo' : type === 'blank' ? 'Espacio libre' : 'Área especial'
+
+function overlaps(a: ElementRect, b: ElementRect) { return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y }
+
+function GridCell({ x, y }: { x: number; y: number }) {
+  const { ref, isDropTarget } = useDroppable({ id: cellId(x, y) })
+  return <div ref={ref} className={`border border-zinc-100 ${isDropTarget ? 'bg-emerald-100' : ''}`} style={{ gridColumnStart: x + 1, gridRowStart: y + 1 }} />
+}
+
+function DraggableStand({ stand, company, selected, onSelect }: { stand: Stand; company?: Company; selected: boolean; onSelect: () => void }) {
+  const { ref, isDragging } = useDraggable({ id: stand.id })
+  return <button ref={ref} type="button" onClick={onSelect} className={`z-10 min-h-24 rounded-xl border-2 p-3 text-left transition ${classes[stand.status]} ${selected ? 'ring-2 ring-emerald-700 ring-offset-2' : ''} ${isDragging ? 'opacity-40' : ''}`} style={{ gridColumn: `${stand.x + 1} / span ${stand.width}`, gridRow: `${stand.y + 1} / span ${stand.height}` }}><span className="block text-xs font-bold">{stand.label}</span><span className="mt-2 block text-sm font-semibold leading-tight">{company?.name ?? 'Disponible'}</span></button>
+}
+
+function FixedMapElement({ item, selected, onSelect }: { item: FixedElement; selected: boolean; onSelect: () => void }) {
+  const kind = fixedTypeOf(item)
+  const visual = kind === 'aisle' ? 'border-zinc-400 bg-zinc-100 text-zinc-600' : kind === 'special' ? 'border-violet-400 bg-violet-100 text-violet-950' : 'border-slate-300 bg-slate-100 text-slate-600'
+  return <button type="button" onClick={onSelect} className={`z-[1] flex min-h-12 items-center justify-center rounded-lg border border-dashed p-2 text-center text-xs font-semibold transition ${visual} ${selected ? 'ring-2 ring-emerald-700 ring-offset-2' : ''}`} style={{ gridColumn: `${item.x + 1} / span ${item.width}`, gridRow: `${item.y + 1} / span ${item.height}` }}><span>{item.label}</span></button>
+}
+
+function FloorplanCanvas({ stands, fixed, companies, assignments, selectedStandId, selectedFixedId, onSelectStand, onSelectFixed, onMove }: { stands: Stand[]; fixed: FixedElement[]; companies: Map<string, Company>; assignments: Map<string, Assignment>; selectedStandId: string | null; selectedFixedId: string | null; onSelectStand: (stand: Stand) => void; onSelectFixed: (item: FixedElement) => void; onMove: (id: string, x: number, y: number) => void }) {
+  const columns = Math.max(1, ...stands.map((stand) => stand.x + stand.width), ...fixed.map((item) => item.x + item.width))
+  const rows = Math.max(1, ...stands.map((stand) => stand.y + stand.height), ...fixed.map((item) => item.y + item.height))
+  return <DragDropProvider onDragEnd={(event) => { if (event.canceled) return; const source = String(event.operation.source?.id ?? ''); const target = String(event.operation.target?.id ?? ''); const match = /^cell:(\d+):(\d+)$/.exec(target); if (match) onMove(source, Number(match[1]), Number(match[2])) }}><div className="overflow-x-auto"><div className="grid min-w-[640px] gap-1 rounded-xl bg-zinc-200 p-1" style={{ gridTemplateColumns: `repeat(${columns}, minmax(96px, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(84px, 1fr))` }}>{Array.from({ length: columns * rows }, (_, index) => <GridCell key={index} x={index % columns} y={Math.floor(index / columns)} />)}{fixed.map((item) => <FixedMapElement key={item.id} item={item} selected={selectedFixedId === item.id} onSelect={() => onSelectFixed(item)} />)}{stands.map((stand) => <DraggableStand key={stand.id} stand={stand} company={companies.get(assignments.get(stand.id)?.company_id ?? '')} selected={selectedStandId === stand.id} onSelect={() => onSelectStand(stand)} />)}</div></div></DragDropProvider>
+}
+
+function FloorplanControls({ onAdd }: { onAdd: (type: FixedType, label: string, x: number, y: number, width: number, height: number) => void }) {
+  const [type, setType] = useState<FixedType>('aisle'), [label, setLabel] = useState(labelFor('aisle')), [x, setX] = useState(0), [y, setY] = useState(0), [width, setWidth] = useState(1), [height, setHeight] = useState(1)
+  function changeType(next: FixedType) { setType(next); setLabel(labelFor(next)) }
+  return <form onSubmit={(event) => { event.preventDefault(); onAdd(type, label.trim() || labelFor(type), x, y, width, height) }} className="mt-6 border-t border-zinc-200 pt-5"><h3 className="font-semibold">Añadir elemento al plano</h3><p className="mt-1 text-xs text-zinc-600">Columna y fila indican la celda inicial. Ancho y alto indican cuántas celdas ocupa. Un pasillo desplaza los stands situados a partir de esa línea.</p><div className="mt-3 grid gap-3 sm:grid-cols-3"><label className="grid gap-1 text-xs font-medium">Tipo<select value={type} onChange={(event) => changeType(event.target.value as FixedType)} className="rounded-lg border p-2 text-sm"><option value="aisle">Pasillo</option><option value="blank">Espacio en blanco</option><option value="special">Área especial</option></select></label><label className="grid gap-1 text-xs font-medium">Nombre<input value={label} onChange={(event) => setLabel(event.target.value)} className="rounded-lg border p-2 text-sm" /></label><label className="grid gap-1 text-xs font-medium">Columna<input type="number" min={0} value={x} onChange={(event) => setX(Number(event.target.value))} className="rounded-lg border p-2 text-sm" /></label><label className="grid gap-1 text-xs font-medium">Fila<input type="number" min={0} value={y} onChange={(event) => setY(Number(event.target.value))} className="rounded-lg border p-2 text-sm" /></label><label className="grid gap-1 text-xs font-medium">Ancho (celdas)<input type="number" min={1} value={width} onChange={(event) => setWidth(Number(event.target.value))} className="rounded-lg border p-2 text-sm" /></label><label className="grid gap-1 text-xs font-medium">Alto (celdas)<input type="number" min={1} value={height} onChange={(event) => setHeight(Number(event.target.value))} className="rounded-lg border p-2 text-sm" /></label></div><button className="mt-3 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-semibold">Añadir al plano</button></form>
+}
+
+function FixedElementEditor({ item, onSave, onDelete }: { item: FixedElement; onSave: (item: FixedElement, kind: FixedType) => void; onDelete: (item: FixedElement) => void }) {
+  const [draft, setDraft] = useState(item); const [kind, setKind] = useState<FixedType>(fixedTypeOf(item))
+  useEffect(() => { setDraft(item); setKind(fixedTypeOf(item)) }, [item])
+  const field = (key: 'x' | 'y' | 'width' | 'height', label: string, min: number) => <label className="grid gap-1 text-xs font-medium">{label}<input type="number" min={min} value={draft[key]} onChange={(event) => setDraft({ ...draft, [key]: Number(event.target.value) })} className="rounded-lg border p-2 text-sm" /></label>
+  return <><h2 className="font-semibold">{item.label}</h2><p className="mt-1 text-xs text-zinc-600">Seleccionado en el plano. Los stands no pueden ocupar estas celdas.</p><div className="mt-4 grid gap-3"><label className="grid gap-1 text-sm">Tipo<select value={kind} onChange={(event) => setKind(event.target.value as FixedType)} className="rounded-lg border p-2"><option value="aisle">Pasillo</option><option value="blank">Espacio en blanco</option><option value="special">Área especial</option></select></label><label className="grid gap-1 text-sm">Nombre<input value={draft.label} onChange={(event) => setDraft({ ...draft, label: event.target.value })} className="rounded-lg border p-2" /></label><div className="grid grid-cols-2 gap-3">{field('x', 'Columna', 0)}{field('y', 'Fila', 0)}{field('width', 'Ancho', 1)}{field('height', 'Alto', 1)}</div></div><button type="button" onClick={() => onSave(draft, kind)} className="mt-4 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">Guardar cambios</button><button type="button" onClick={() => onDelete(item)} className="mt-3 w-full rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700">Eliminar elemento</button><p className="mt-2 text-xs text-zinc-500">Al eliminarlo no se moverán automáticamente los stands.</p></>
 }
 
 export default function StandsAdmin() {
   const { eventId } = useParams()
-  const [name, setName] = useState('')
-  const [org, setOrg] = useState<string | null>(null)
-  const [mapId, setMapId] = useState<string | null>(null)
-  const [stands, setStands] = useState<Stand[]>([])
-  const [mapElements, setMapElements] = useState<MapElement[]>([])
-  const [companies, setCompanies] = useState<Company[]>([])
-  const [assignments, setAssignments] = useState<Assignment[]>([])
-  const [rows, setRows] = useState(4)
-  const [cols, setCols] = useState(6)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [companyId, setCompanyId] = useState('')
-  const [newCompany, setNewCompany] = useState('')
-  const [newContact, setNewContact] = useState('')
-  const [notes, setNotes] = useState('')
-  const [elementType, setElementType] = useState<'zone' | 'aisle'>('aisle')
-  const [elementLabel, setElementLabel] = useState('Pasillo central')
-  const [elementX, setElementX] = useState(0)
-  const [elementY, setElementY] = useState(0)
-  const [elementWidth, setElementWidth] = useState(2)
-  const [elementHeight, setElementHeight] = useState(1)
-  const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-
-  const load = useCallback(async () => {
-    if (!eventId) return
-    setError(null)
-    const { data: map, error: mapError } = await supabase.from('venue_maps').select('id').eq('event_id', eventId).limit(1).maybeSingle()
-    if (mapError) { setError(mapError.message); return }
-    setMapId(map?.id ?? null)
-    if (!map?.id) { setStands([]); setMapElements([]); setAssignments([]); return }
-    const [{ data: elements, error: elementsError }, { data: boothData, error: boothsError }] = await Promise.all([
-      supabase.from('venue_map_elements').select('id,label,status,x,y,width,height,element_type').eq('map_id', map.id).order('y').order('x'),
-      supabase.from('booth_assignments').select('id,element_id,company_id,status,notes').neq('status', 'cancelled'),
-    ])
-    if (elementsError || boothsError) { setError(elementsError?.message ?? boothsError?.message ?? 'No se pudo cargar el plano'); return }
-    const standRows = (elements ?? []).filter((element) => element.element_type === 'stand') as Stand[]
-    const elementIds = new Set(standRows.map((element) => element.id))
-    setStands(standRows)
-    setMapElements((elements ?? []).filter((element) => element.element_type === 'zone' || element.element_type === 'aisle') as MapElement[])
-    setAssignments(((boothData ?? []) as Assignment[]).filter((assignment) => elementIds.has(assignment.element_id)))
-  }, [eventId])
-
-  const loadCompanies = useCallback(async (organizationId: string) => {
-    const { data, error: companyError } = await supabase.from('companies').select('id,name,contact_name,contact_email,kind').eq('organization_id', organizationId).order('name')
-    if (companyError) setError(companyError.message)
-    else setCompanies((data ?? []) as Company[])
-  }, [])
-
-  useEffect(() => {
-    if (!eventId) return
-    supabase.from('events').select('name,organization_id').eq('id', eventId).maybeSingle().then(({ data, error: eventError }) => {
-      if (eventError || !data) { setError(eventError?.message ?? 'Evento no encontrado'); return }
-      setName(data.name)
-      setOrg(data.organization_id)
-      void load()
-      void loadCompanies(data.organization_id)
-    })
-  }, [eventId, load, loadCompanies])
-
-  const assignmentByStand = useMemo(() => new Map(assignments.map((assignment) => [assignment.element_id, assignment])), [assignments])
-  const companyById = useMemo(() => new Map(companies.map((company) => [company.id, company])), [companies])
-  const selected = stands.find((stand) => stand.id === selectedId) ?? null
-  const selectedAssignment = selected ? assignmentByStand.get(selected.id) : undefined
-  const assignedCompany = selectedAssignment ? companyById.get(selectedAssignment.company_id) : undefined
-  const layoutColumns = Math.max(...stands.map((stand) => Number(stand.x) + 1), 1)
-  const counts = useMemo(() => stands.reduce<Record<StandStatus, number>>((total, stand) => ({ ...total, [stand.status]: total[stand.status] + 1 }), { available: 0, reserved: 0, assigned: 0, blocked: 0 }), [stands])
-
-  function selectStand(stand: Stand) {
-    const assignment = assignmentByStand.get(stand.id)
-    setSelectedId(stand.id)
-    setCompanyId(assignment?.company_id ?? '')
-    setNewCompany('')
-    setNewContact('')
-    setNotes(assignment?.notes ?? '')
-  }
-
-  async function generate() {
-    if (!eventId || !org || stands.length) return
-    setBusy(true); setError(null)
-    let id = mapId
-    if (!id) {
-      const { data, error: insertMapError } = await supabase.from('venue_maps').insert({ organization_id: org, event_id: eventId, name: 'Plano de exposición' }).select('id').single()
-      if (insertMapError || !data) { setError(insertMapError?.message ?? 'No se pudo crear el plano'); setBusy(false); return }
-      id = data.id; setMapId(id)
-    }
-    const elements = Array.from({ length: rows * cols }, (_, index) => ({ map_id: id, element_type: 'stand', label: `S${index + 1}`, x: index % cols, y: Math.floor(index / cols), width: 1, height: 1, status: 'available' }))
-    const { error: generateError } = await supabase.from('venue_map_elements').insert(elements)
-    setBusy(false)
-    if (generateError) setError(generateError.message); else void load()
-  }
-
-  async function saveAssignment() {
-    if (!selected || !org) return
-    if (!companyId && !newCompany.trim()) { setError('Selecciona o crea una empresa antes de asignar el stand.'); return }
-    setBusy(true); setError(null)
-    let targetCompanyId = companyId
-    if (!targetCompanyId) {
-      const { data, error: createError } = await supabase.from('companies').insert({ organization_id: org, name: newCompany.trim(), contact_name: newContact.trim() || null, kind: 'exhibitor' }).select('id').single()
-      if (createError || !data) { setError(createError?.message ?? 'No se pudo crear la empresa'); setBusy(false); return }
-      targetCompanyId = data.id
-    }
-    const assignment = assignmentByStand.get(selected.id)
-    const payload = { company_id: targetCompanyId, status: 'confirmed', notes: notes.trim() || null }
-    const { error: assignmentError } = assignment
-      ? await supabase.from('booth_assignments').update(payload).eq('id', assignment.id)
-      : await supabase.from('booth_assignments').insert({ element_id: selected.id, ...payload })
-    if (!assignmentError) {
-      const { error: standError } = await supabase.from('venue_map_elements').update({ status: 'assigned' }).eq('id', selected.id)
-      if (standError) setError(standError.message)
-    } else setError(assignmentError.message)
-    setBusy(false)
-    if (!assignmentError) { await loadCompanies(org); await load(); setSelectedId(null) }
-  }
-
-  async function releaseStand() {
-    if (!selected) return
-    setBusy(true); setError(null)
-    const assignment = assignmentByStand.get(selected.id)
-    const { error: deleteError } = assignment ? await supabase.from('booth_assignments').delete().eq('id', assignment.id) : { error: null }
-    if (!deleteError) {
-      const { error: standError } = await supabase.from('venue_map_elements').update({ status: 'available' }).eq('id', selected.id)
-      if (standError) setError(standError.message)
-    } else setError(deleteError.message)
-    setBusy(false)
-    if (!deleteError) { await load(); setSelectedId(null) }
-  }
-
-  async function addMapElement(event: React.FormEvent) {
-    event.preventDefault()
-    if (!mapId || !elementLabel.trim()) return
-    setBusy(true); setError(null)
-    const { error: insertError } = await supabase.from('venue_map_elements').insert({ map_id: mapId, element_type: elementType, label: elementLabel.trim(), x: elementX, y: elementY, width: elementWidth, height: elementHeight, status: 'blocked' })
-    if (insertError) { setError(insertError.message); setBusy(false); return }
-
-    // Un pasillo inserta espacio real: desplaza los stands posteriores en la
-    // dirección de mayor alcance, evitando que quede superpuesto al plano.
-    if (elementType === 'aisle') {
-      const horizontal = elementWidth >= layoutColumns
-      const affected = stands.filter((stand) => horizontal ? Number(stand.y) >= elementY : Number(stand.x) >= elementX)
-      const updates = affected.map((stand) => supabase.from('venue_map_elements').update(horizontal ? { y: Number(stand.y) + elementHeight } : { x: Number(stand.x) + elementWidth }).eq('id', stand.id))
-      const results = await Promise.all(updates)
-      const moveError = results.find((result) => result.error)?.error
-      if (moveError) setError(`El pasillo fue creado, pero no se pudieron reubicar los stands: ${moveError.message}`)
-    }
-    setBusy(false)
-    setElementLabel(elementType === 'aisle' ? 'Pasillo' : 'Zona')
-    await load()
-  }
-
-  return <div className="min-h-[100dvh] bg-zinc-50 text-zinc-950">
-    <header className="border-b border-zinc-200 bg-white"><div className="mx-auto flex max-w-7xl items-center gap-3 px-5 py-4"><Link to="/admin/eventos" aria-label="Volver a eventos" className="rounded-lg p-2 text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 active:translate-y-px"><ArrowLeft className="h-4 w-4" /></Link><Store className="h-5 w-5 text-emerald-700" /><span className="font-semibold">Plano de exposición</span></div></header>
-    <main className="mx-auto max-w-7xl px-5 py-8">
-      <h1 className="text-2xl font-bold tracking-tight">{name || 'Exposición'}</h1>
-      <p className="mt-1 text-sm text-zinc-600">Selecciona un stand para asignar la empresa. El plano muestra siempre quién ocupa cada ubicación.</p>
-      {error && <p role="alert" className="mt-5 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
-      {!stands.length ? <section className="mt-6 max-w-xl rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm shadow-zinc-200/50"><h2 className="font-semibold">Crear plano inicial</h2><p className="mt-1 text-sm text-zinc-600">Define la cuadrícula base. Luego podrás asignar una empresa a cada stand.</p><div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2"><label className="grid gap-2 text-sm font-medium">Filas<input className="rounded-lg border border-zinc-300 px-3 py-2 text-zinc-950 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" type="number" min={1} max={20} value={rows} onChange={(event) => setRows(Number(event.target.value))} /></label><label className="grid gap-2 text-sm font-medium">Stands por fila<input className="rounded-lg border border-zinc-300 px-3 py-2 text-zinc-950 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" type="number" min={1} max={30} value={cols} onChange={(event) => setCols(Number(event.target.value))} /></label></div><button disabled={busy} onClick={generate} className="mt-6 inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800 active:translate-y-px disabled:opacity-60"><Grid2X2 className="h-4 w-4" />{busy ? 'Generando…' : `Generar ${rows * cols} stands`}</button></section> : <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-200/50"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">Distribución de stands</h2><p className="mt-1 text-sm text-zinc-600">Haz clic en cualquier stand para consultar o cambiar su asignación.</p></div><div className="flex flex-wrap gap-2 text-xs">{(['available', 'reserved', 'assigned', 'blocked'] as StandStatus[]).map((status) => <span key={status} className={`rounded-full border px-2.5 py-1 font-medium ${statusClass[status]}`}>{counts[status]} {statusCopy[status].toLowerCase()}</span>)}</div></div><div className="mt-6 overflow-x-auto pb-2"><div className="grid min-w-[620px] gap-3" style={{ gridTemplateColumns: `repeat(${layoutColumns}, minmax(92px, 1fr))` }}>{mapElements.map((element) => <div key={element.id} className={`flex min-h-12 items-center justify-center rounded-lg border border-dashed p-2 text-center text-xs font-semibold ${element.element_type === 'aisle' ? 'border-zinc-300 bg-zinc-100 text-zinc-500' : 'border-indigo-200 bg-indigo-50 text-indigo-800'}`} style={{ gridColumn: `${Number(element.x) + 1} / span ${Number(element.width)}`, gridRow: `${Number(element.y) + 1} / span ${Number(element.height)}` }}>{element.label}</div>)}{stands.map((stand) => { const assignment = assignmentByStand.get(stand.id); const company = assignment ? companyById.get(assignment.company_id) : undefined; return <button key={stand.id} onClick={() => selectStand(stand)} className={`min-h-28 rounded-xl border-2 p-3 text-left transition active:translate-y-px ${statusClass[stand.status]} ${selected?.id === stand.id ? 'ring-2 ring-emerald-700 ring-offset-2' : ''}`} style={{ gridColumnStart: Number(stand.x) + 1, gridRowStart: Number(stand.y) + 1 }}><span className="block text-xs font-bold tracking-wide">{stand.label}</span><span className="mt-2 block text-sm font-semibold leading-tight">{company?.name ?? statusCopy[stand.status]}</span>{company && <span className="mt-1 block text-xs text-zinc-600">{assignment?.status === 'confirmed' ? 'Confirmada' : 'Reservada'}</span>}</button> })}</div></div><form onSubmit={addMapElement} className="mt-6 border-t border-zinc-200 pt-5"><h3 className="font-semibold">Añadir zona o pasillo</h3><div className="mt-3 grid gap-3 sm:grid-cols-3"><select value={elementType} onChange={(event) => setElementType(event.target.value as 'zone' | 'aisle')} className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"><option value="aisle">Pasillo</option><option value="zone">Zona</option></select><input value={elementLabel} onChange={(event) => setElementLabel(event.target.value)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm" placeholder="Nombre" /><div className="grid grid-cols-2 gap-2"><input type="number" min={0} value={elementX} onChange={(event) => setElementX(Number(event.target.value))} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm" aria-label="Columna" /><input type="number" min={0} value={elementY} onChange={(event) => setElementY(Number(event.target.value))} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm" aria-label="Fila" /></div><div className="grid grid-cols-2 gap-2"><input type="number" min={1} value={elementWidth} onChange={(event) => setElementWidth(Number(event.target.value))} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm" aria-label="Ancho" /><input type="number" min={1} value={elementHeight} onChange={(event) => setElementHeight(Number(event.target.value))} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm" aria-label="Alto" /></div></div><button disabled={busy} className="mt-3 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-100">Añadir al plano</button></form></section>
-        <aside className="h-fit rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-200/50">{!selected ? <div className="py-8 text-center"><MapPin className="mx-auto h-7 w-7 text-zinc-400" /><h2 className="mt-3 font-semibold">Selecciona un stand</h2><p className="mt-1 text-sm text-zinc-600">Aquí verás su empresa, contacto y estado de asignación.</p></div> : <><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Stand {selected.label}</p><h2 className="mt-1 text-lg font-bold">{assignedCompany?.name ?? 'Sin empresa asignada'}</h2></div><button onClick={() => setSelectedId(null)} aria-label="Cerrar detalle" className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950"><X className="h-4 w-4" /></button></div>{assignedCompany && <div className="mt-4 rounded-xl bg-zinc-50 p-3 text-sm"><div className="flex items-center gap-2 font-medium"><Building2 className="h-4 w-4 text-zinc-500" />{assignedCompany.kind === 'sponsor' ? 'Patrocinante' : 'Expositor'}</div>{assignedCompany.contact_name && <p className="mt-2 text-zinc-700">Contacto: {assignedCompany.contact_name}</p>}{assignedCompany.contact_email && <p className="mt-1 text-zinc-700">{assignedCompany.contact_email}</p>}</div>}<div className="mt-5 grid gap-4"><label className="grid gap-2 text-sm font-medium">Empresa registrada<select value={companyId} onChange={(event) => { setCompanyId(event.target.value); setNewCompany('') }} className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-950 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"><option value="">Seleccionar empresa</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}</select></label><div className="border-t border-zinc-200 pt-4"><p className="text-sm font-medium">O crear empresa nueva</p><div className="mt-2 grid gap-3"><input value={newCompany} onChange={(event) => { setNewCompany(event.target.value); setCompanyId('') }} placeholder="Nombre de la empresa" className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-950 outline-none placeholder:text-zinc-500 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" /><input value={newContact} onChange={(event) => setNewContact(event.target.value)} placeholder="Nombre de contacto" className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-950 outline-none placeholder:text-zinc-500 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" /></div></div><label className="grid gap-2 text-sm font-medium">Notas internas<textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} placeholder="Referencia comercial, condiciones o ubicación" className="resize-none rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-950 outline-none placeholder:text-zinc-500 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" /></label></div><div className="mt-5 flex flex-wrap gap-3"><button disabled={busy} onClick={saveAssignment} className="rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800 active:translate-y-px disabled:opacity-60">{busy ? 'Guardando…' : assignedCompany ? 'Actualizar asignación' : 'Asignar empresa'}</button>{(selectedAssignment || selected.status !== 'available') && <button disabled={busy} onClick={releaseStand} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-100 active:translate-y-px disabled:opacity-60">Liberar stand</button>}</div></>}</aside>
-      </div>}
-    </main>
-  </div>
+  const [orgId, setOrgId] = useState<string | null>(null), [name, setName] = useState(''), [mapId, setMapId] = useState<string | null>(null), [stands, setStands] = useState<Stand[]>([]), [fixed, setFixed] = useState<FixedElement[]>([]), [companies, setCompanies] = useState<Company[]>([]), [assignments, setAssignments] = useState<Assignment[]>([]), [selectedStandId, setSelectedStandId] = useState<string | null>(null), [selectedFixedId, setSelectedFixedId] = useState<string | null>(null), [companyId, setCompanyId] = useState(''), [rows, setRows] = useState(4), [columns, setColumns] = useState(6), [error, setError] = useState<string | null>(null)
+  const load = useCallback(async () => { if (!eventId) return; const { data: event } = await supabase.from('events').select('name,organization_id').eq('id', eventId).maybeSingle(); if (!event) return; setName(event.name); setOrgId(event.organization_id); const [{ data: maps }, { data: firms }] = await Promise.all([supabase.from('venue_maps').select('id').eq('event_id', eventId).maybeSingle(), supabase.from('companies').select('id,name').eq('organization_id', event.organization_id).order('name')]); setCompanies((firms ?? []) as Company[]); if (!maps) return; setMapId(maps.id); const { data: elements } = await supabase.from('venue_map_elements').select('id,label,status,x,y,width,height,element_type,metadata').eq('map_id', maps.id); const all = elements ?? []; const standRows = all.filter((item) => item.element_type === 'stand') as Stand[]; setStands(standRows); setFixed(all.filter((item) => item.element_type === 'aisle' || item.element_type === 'zone' || item.element_type === 'stage') as FixedElement[]); const { data: boothData } = await supabase.from('booth_assignments').select('element_id,company_id').neq('status', 'cancelled'); setAssignments(((boothData ?? []) as Assignment[]).filter((item) => standRows.some((stand) => stand.id === item.element_id))) }, [eventId])
+  useEffect(() => { void load() }, [load])
+  const companyMap = useMemo(() => new Map(companies.map((company) => [company.id, company])), [companies]); const assignmentMap = useMemo(() => new Map(assignments.map((assignment) => [assignment.element_id, assignment])), [assignments])
+  async function move(id: string, x: number, y: number) { const stand = stands.find((item) => item.id === id); if (!stand) return; const next = { ...stand, x, y }; if (stands.some((item) => item.id !== id && overlaps(next, item)) || fixed.some((item) => overlaps(next, item))) { setError('Esa posición está ocupada. El stand no fue movido.'); return }; const { error: updateError } = await supabase.from('venue_map_elements').update({ x, y }).eq('id', id); if (updateError) setError(updateError.message); else { setError(null); await load() } }
+  async function add(type: FixedType, label: string, x: number, y: number, width: number, height: number) { if (!mapId) { setError('Crea primero la cuadrícula de stands.'); return }; if (type !== 'aisle' && stands.some((stand) => overlaps({ x, y, width, height }, stand))) { setError('Ese elemento ocuparía un stand. Crea un pasillo para desplazar la cuadrícula o elige un espacio libre.'); return }; const { error: insertError } = await supabase.from('venue_map_elements').insert({ map_id: mapId, element_type: databaseTypeFor(type), label, x, y, width, height, status: 'blocked', metadata: { floorplan_kind: type } }); if (insertError) { setError(insertError.message); return }; if (type === 'aisle') { const totalColumns = Math.max(1, ...stands.map((stand) => stand.x + stand.width)); const horizontal = width >= totalColumns; const affected = stands.filter((stand) => horizontal ? stand.y >= y : stand.x >= x); const results = await Promise.all(affected.map((stand) => supabase.from('venue_map_elements').update(horizontal ? { y: stand.y + height } : { x: stand.x + width }).eq('id', stand.id))); const moveError = results.find((result) => result.error)?.error; if (moveError) { setError(`Pasillo creado, pero no se pudieron mover los stands: ${moveError.message}`); return } }; setError(null); await load() }
+  async function saveFixed(draft: FixedElement, kind: FixedType) { if (!draft.label.trim() || draft.x < 0 || draft.y < 0 || draft.width < 1 || draft.height < 1) { setError('Completa un nombre y dimensiones válidas.'); return }; if (stands.some((stand) => overlaps(draft, stand))) { setError('No se puede guardar: el elemento se superpone con un stand.'); return }; if (fixed.some((item) => item.id !== draft.id && overlaps(draft, item))) { setError('No se puede guardar: el elemento se superpone con otro elemento del plano.'); return }; const { error: updateError } = await supabase.from('venue_map_elements').update({ label: draft.label.trim(), element_type: databaseTypeFor(kind), x: draft.x, y: draft.y, width: draft.width, height: draft.height, metadata: { floorplan_kind: kind } }).eq('id', draft.id); if (updateError) setError(updateError.message); else { setError(null); await load() } }
+  async function removeFixed(item: FixedElement) { if (!window.confirm(`¿Eliminar “${item.label}”? Esta acción no mueve los stands.`)) return; const { error: deleteError } = await supabase.from('venue_map_elements').delete().eq('id', item.id); if (deleteError) setError(deleteError.message); else { setSelectedFixedId(null); setError(null); await load() } }
+  async function generate() { if (!eventId || !orgId) return; const { data: map, error: mapError } = await supabase.from('venue_maps').insert({ organization_id: orgId, event_id: eventId, name: 'Plano de exposición' }).select('id').single(); if (mapError || !map) { setError(mapError?.message ?? 'No se pudo crear el plano.'); return }; const elements = Array.from({ length: rows * columns }, (_, index) => ({ map_id: map.id, element_type: 'stand', label: `S${index + 1}`, x: index % columns, y: Math.floor(index / columns), width: 1, height: 1, status: 'available' })); const { error: insertError } = await supabase.from('venue_map_elements').insert(elements); if (insertError) setError(insertError.message); else await load() }
+  async function assign() { if (!selectedStandId || !companyId) return; const { error: insertError } = await supabase.from('booth_assignments').upsert({ element_id: selectedStandId, company_id: companyId, status: 'confirmed' }, { onConflict: 'element_id' }); if (!insertError) await supabase.from('venue_map_elements').update({ status: 'assigned' }).eq('id', selectedStandId); if (insertError) setError(insertError.message); else { setCompanyId(''); await load() } }
+  async function release() { if (!selectedStandId) return; const assignment = assignmentMap.get(selectedStandId); if (assignment) await supabase.from('booth_assignments').delete().eq('element_id', selectedStandId); await supabase.from('venue_map_elements').update({ status: 'available' }).eq('id', selectedStandId); await load() }
+  const selectedStand = stands.find((stand) => stand.id === selectedStandId); const selectedFixed = fixed.find((item) => item.id === selectedFixedId)
+  const setup = <div className="mt-6 max-w-xl rounded-xl border bg-white p-5"><h2 className="font-semibold">Crear cuadrícula inicial</h2><p className="mt-1 text-sm text-zinc-600">Define la cantidad de stands antes de comenzar a diseñar el plano.</p><div className="mt-4 grid grid-cols-2 gap-3"><label className="grid gap-1 text-sm">Filas<input type="number" min={1} max={30} value={rows} onChange={(event) => setRows(Number(event.target.value))} className="rounded-lg border p-2" /></label><label className="grid gap-1 text-sm">Stands por fila<input type="number" min={1} max={30} value={columns} onChange={(event) => setColumns(Number(event.target.value))} className="rounded-lg border p-2" /></label></div><button onClick={generate} className="mt-4 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white">Crear {rows * columns} stands</button></div>
+  return <div className="min-h-[100dvh] bg-zinc-50"><header className="border-b bg-white"><div className="mx-auto flex max-w-7xl items-center gap-3 px-5 py-4"><Link to="/admin/eventos"><ArrowLeft className="h-4 w-4" /></Link><Store className="h-5 w-5 text-emerald-700" /><span className="font-semibold">Plano de exposición</span></div></header><main className="mx-auto max-w-7xl px-5 py-8"><h1 className="text-2xl font-bold">{name}</h1><p className="mt-1 text-sm text-zinc-600">Arrastra un stand a una celda libre. Selecciona un pasillo, espacio en blanco o área especial para modificarlo.</p>{error && <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-800">{error}</p>}{stands.length ? <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_300px]"><section><div className="mb-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-zinc-600"><span><i className="mr-1 inline-block h-3 w-3 rounded border border-zinc-400 bg-zinc-100 align-[-1px]" />Pasillo</span><span><i className="mr-1 inline-block h-3 w-3 rounded border border-slate-300 bg-slate-100 align-[-1px]" />Espacio en blanco</span><span><i className="mr-1 inline-block h-3 w-3 rounded border border-violet-400 bg-violet-100 align-[-1px]" />Área especial</span></div><FloorplanCanvas stands={stands} fixed={fixed} companies={companyMap} assignments={assignmentMap} selectedStandId={selectedStandId} selectedFixedId={selectedFixedId} onSelectStand={(stand) => { setSelectedStandId(stand.id); setSelectedFixedId(null); setCompanyId(assignmentMap.get(stand.id)?.company_id ?? '') }} onSelectFixed={(item) => { setSelectedFixedId(item.id); setSelectedStandId(null) }} onMove={move} /><FloorplanControls onAdd={add} /></section><aside className="h-fit rounded-xl border bg-white p-4">{selectedFixed ? <FixedElementEditor key={selectedFixed.id} item={selectedFixed} onSave={saveFixed} onDelete={removeFixed} /> : selectedStand ? <><h2 className="font-semibold">Stand {selectedStand.label}</h2><label className="mt-4 grid gap-1 text-sm">Empresa<select value={companyId} onChange={(event) => setCompanyId(event.target.value)} className="rounded-lg border p-2"><option value="">Seleccionar empresa</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}</select></label><button onClick={assign} className="mt-3 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">Guardar asignación</button><button onClick={release} className="ml-2 mt-3 rounded-lg border px-3 py-2 text-sm">Liberar</button></> : <p className="text-sm text-zinc-600">Selecciona un stand para asignar una empresa o un elemento fijo para editarlo.</p>}</aside></div> : setup}</main></div>
 }
