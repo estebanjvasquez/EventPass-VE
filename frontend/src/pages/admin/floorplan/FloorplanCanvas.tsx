@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { DragDropProvider, useDraggable, useDroppable } from '@dnd-kit/react'
 import { intersects, palette } from './model'
 import type { FloorplanElement } from './model'
@@ -12,7 +12,11 @@ function Cell({ x, y, onHover, onLeave, onPlace }: { x: number; y: number; onHov
 }
 
 function DraggableElement({ item, selected, onSelect, onResize }: { item: FloorplanElement; selected: boolean; onSelect: () => void; onResize: (axis: 'x' | 'y', delta: number) => void }) {
-  const { ref, isDragging } = useDraggable({ id: item.id })
+  const { ref: dragRef, isDragging } = useDraggable({ id: item.id })
+  // A full plan has no exposed cells. Making each visible element a drop target lets a
+  // structural item (such as an aisle) be dropped onto an occupied location.
+  const { ref: dropRef } = useDroppable({ id: cellId(item.x, item.y) })
+  const ref = useCallback((node: HTMLButtonElement | null) => { dragRef(node); dropRef(node) }, [dragRef, dropRef])
   return <div className="relative z-10" style={{ gridColumn: `${item.x + 1} / span ${item.width}`, gridRow: `${item.y + 1} / span ${item.height}`, opacity: isDragging ? 0.45 : 1 }}><button ref={ref} type="button" onClick={onSelect} className={`flex h-full w-full items-center justify-center rounded-lg border p-2 text-xs font-semibold ${item.kind === 'stand' ? 'border-emerald-300 bg-emerald-50' : 'border-zinc-400 bg-zinc-100'} ${selected ? 'ring-2 ring-emerald-700 ring-offset-2' : ''}`}>{item.label}</button>{selected && <><button type="button" onClick={() => onResize('x', 1)} className="absolute -right-2 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-emerald-700 text-[10px] text-white shadow" aria-label="Ampliar hacia la derecha">+</button><button type="button" onClick={() => onResize('y', 1)} className="absolute bottom-[-8px] left-1/2 h-4 w-4 -translate-x-1/2 rounded-full bg-emerald-700 text-[10px] text-white shadow" aria-label="Ampliar hacia abajo">+</button><button type="button" onClick={() => onResize('x', -1)} className="absolute -left-2 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white text-[10px] shadow" aria-label="Reducir ancho">−</button><button type="button" onClick={() => onResize('y', -1)} className="absolute left-1/2 top-[-8px] h-4 w-4 -translate-x-1/2 rounded-full bg-white text-[10px] shadow" aria-label="Reducir alto">−</button></>}</div>
 }
 

@@ -11,8 +11,45 @@ export function FloorplanEditor({ initial, columns, rows, onGridChange, onChange
   const [tool, setTool] = useState<Tool | null>(null); const [aisleAxis, setAisleAxis] = useState<'vertical' | 'horizontal'>('vertical'); const [selectedId, setSelectedId] = useState<string | null>(null); const [notice, setNotice] = useState<string | null>(null); const { current, commit, reconcileIds, undo, redo, canUndo, canRedo } = useFloorplanHistory(initial)
   useEffect(() => { onChange?.(current, reconcileIds) }, [current, onChange, reconcileIds])
   function place(nextTool: Tool, x: number, y: number) { const preset = palette.find((item) => item.objectType === nextTool); if (!preset) return; const count = current.filter((item) => item.label === preset.label || item.label.startsWith(`${preset.label} `)).length + 1; if (nextTool === 'aisle') { const vertical = aisleAxis === 'vertical'; const shifted = current.map((item) => vertical ? (item.x >= x ? { ...item, x: item.x + 1 } : item) : (item.y >= y ? { ...item, y: item.y + 1 } : item)); commit([...shifted, { id: `local-${crypto.randomUUID()}`, label: `${preset.label} ${count}`, kind: 'aisle', x: vertical ? x : 0, y: vertical ? 0 : y, width: vertical ? 1 : columns, height: vertical ? rows : 1 }]); onGridChange(vertical ? columns + 1 : columns, vertical ? rows : rows + 1); setNotice(`Pasillo ${vertical ? 'vertical' : 'horizontal'} creado; los elementos posteriores fueron desplazados.`); setTool(null); return }; const kind = nextTool === 'stand' ? 'stand' : nextTool === 'blank' || nextTool === 'special' ? 'zone' : 'object'; commit([...current, { id: `local-${crypto.randomUUID()}`, label: `${preset.label} ${count}`, kind, objectType: nextTool === 'stand' ? undefined : nextTool, x, y, width: preset.width, height: preset.height }]); setTool(null) }
-  function resize(axis: 'x' | 'y', delta: number) { const item = current.find((entry) => entry.id === selectedId); if (!item) return; const next = { ...item, [axis === 'x' ? 'width' : 'height']: (axis === 'x' ? item.width : item.height) + delta }; if (next.width < 1 || next.height < 1 || next.x + next.width > columns || next.y + next.height > rows || current.some((entry) => entry.id !== item.id && intersects(next, entry))) { setNotice('No hay espacio para cambiar ese tamaño.'); return }; setNotice(null); commit(current.map((entry) => entry.id === item.id ? next : entry)) }
-  function move(id: string, x: number, y: number) { const item = current.find((entry) => entry.id === id); if (!item) return; const next = { ...item, x, y }; if (x + item.width > columns || y + item.height > rows || current.some((entry) => entry.id !== id && intersects(next, entry))) { setNotice('No se puede mover: la posición está ocupada o fuera del plano.'); return }; setNotice(null); commit(current.map((entry) => entry.id === id ? next : entry)) }
+  const isVerticalAisle = (item: FloorplanElement) => item.kind === 'aisle' && item.height >= rows && item.width < columns
+  const isHorizontalAisle = (item: FloorplanElement) => item.kind === 'aisle' && item.width >= columns && item.height < rows
+  function resize(axis: 'x' | 'y', delta: number) { const item = current.find((entry) => entry.id === selectedId); if (!item) return
+    const vertical = isVerticalAisle(item); const horizontal = isHorizontalAisle(item)
+    if ((vertical && axis === 'x') || (horizontal && axis === 'y')) {
+      const nextSize = (axis === 'x' ? item.width : item.height) + delta
+      if (nextSize < 1) { setNotice('El pasillo debe conservar al menos una celda.'); return }
+      if (delta < 0) { commit(current.map((entry) => entry.id === item.id ? { ...item, [axis === 'x' ? 'width' : 'height']: nextSize } : entry)); setNotice('Pasillo reducido. El espacio liberado queda disponible para diseñar.'); return }
+      const boundary = axis === 'x' ? item.x + item.width : item.y + item.height
+      const shifted = current.map((entry) => entry.id === item.id ? { ...item, [axis === 'x' ? 'width' : 'height']: nextSize } : axis === 'x' ? (entry.x >= boundary ? { ...entry, x: entry.x + delta } : entry) : (entry.y >= boundary ? { ...entry, y: entry.y + delta } : entry))
+      commit(shifted); onGridChange(axis === 'x' ? columns + delta : columns, axis === 'y' ? rows + delta : rows); setNotice('Pasillo ampliado; el contenido posterior fue desplazado.'); return
+    }
+    const next = { ...item, [axis === 'x' ? 'width' : 'height']: (axis === 'x' ? item.width : item.height) + delta }
+    const collisions = current.filter((entry) => entry.id !== item.id && intersects(next, entry))
+    if (next.width < 1 || next.height < 1 || next.x + next.width > columns || next.y + next.height > rows) { setNotice('No hay espacio dentro del plano para cambiar ese tamaño.'); return }
+    if (collisions.length && !(item.kind === 'stand' && collisions.every((entry) => entry.kind === 'stand' && entry.status === 'available'))) { setNotice('No hay espacio para cambiar ese tamaño.'); return }
+    commit(current.filter((entry) => !collisions.some((collision) => collision.id === entry.id)).map((entry) => entry.id === item.id ? next : entry)); setNotice(collisions.length ? 'Stands disponibles unificados en un solo espacio.' : null)
+  }
+  function moveAisle(item: FloorplanElement, x: number, y: number) { const vertical = isVerticalAisle(item); const horizontal = isHorizontalAisle(item)
+    if (!vertical && !horizontal) { setNotice('Este pasillo no ocupa una franja completa. Ajusta su tamaño primero.'); return }
+    const target = vertical ? x : y; const start = vertical ? item.x : item.y; const size = vertical ? item.width : item.height; const limit = vertical ? columns : rows
+    if (target < 0 || target + size > limit) { setNotice('El pasillo debe quedar dentro del plano.'); return }
+    if (target === start) { setNotice(null); return }
+    const nextAisle = vertical ? { ...item, x: target, y: 0, height: rows } : { ...item, x: 0, y: target, width: columns }
+    if (current.some((entry) => entry.id !== item.id && entry.kind === 'aisle' && intersects(nextAisle, entry))) { setNotice('No se puede cruzar otro pasillo.'); return }
+    const shifted = current.map((entry) => {
+      if (entry.id === item.id) return nextAisle
+      if (vertical) {
+        if (target < start && entry.x >= target && entry.x < start) return { ...entry, x: entry.x + size }
+        if (target > start && entry.x > start && entry.x < target + size) return { ...entry, x: entry.x - size }
+      } else {
+        if (target < start && entry.y >= target && entry.y < start) return { ...entry, y: entry.y + size }
+        if (target > start && entry.y > start && entry.y < target + size) return { ...entry, y: entry.y - size }
+      }
+      return entry
+    })
+    commit(shifted); setNotice(`Pasillo movido; el contenido entre las dos posiciones fue reordenado automáticamente.`)
+  }
+  function move(id: string, x: number, y: number) { const item = current.find((entry) => entry.id === id); if (!item) return; if (item.kind === 'aisle') { moveAisle(item, x, y); return }; const next = { ...item, x, y }; if (x < 0 || y < 0 || x + item.width > columns || y + item.height > rows || current.some((entry) => entry.id !== id && intersects(next, entry))) { setNotice('No se puede mover: la posición está ocupada o fuera del plano.'); return }; setNotice(null); commit(current.map((entry) => entry.id === id ? next : entry)) }
   function remove() { if (!selectedId) return; commit(current.filter((item) => item.id !== selectedId)); setSelectedId(null) }
   function updateSelected(change: Partial<FloorplanElement>) { if (!selectedId) return; commit(current.map((item) => item.id === selectedId ? { ...item, ...change } : item)) }
   const hasOverflow = current.some((item) => item.x + item.width > columns || item.y + item.height > rows)
