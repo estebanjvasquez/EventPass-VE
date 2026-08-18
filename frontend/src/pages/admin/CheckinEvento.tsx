@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Html5Qrcode } from 'html5-qrcode'
 import { ArrowLeft, CheckCircle2, ScanLine, TriangleAlert, XCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { resolveActiveOrg } from '../../lib/activeOrg'
 
 type Outcome = {
   kind: 'success' | 'warning' | 'error'
@@ -18,6 +19,7 @@ type RegRow = {
   attendance_status: string
   events: { name?: string } | { name?: string }[] | null
 }
+type AccessPoint = { id: string; name: string; event_id: string }
 
 const READER_ID = 'checkin-reader'
 
@@ -32,8 +34,20 @@ export default function CheckinEvento() {
   const [count, setCount] = useState(0)
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [manual, setManual] = useState('')
+  const [accessPoints, setAccessPoints] = useState<AccessPoint[]>([])
+  const [accessPointId, setAccessPointId] = useState('')
   const scannerRef = useRef<Html5Qrcode | null>(null)
   const busyRef = useRef(false)
+
+  useEffect(() => {
+    void resolveActiveOrg().then(async (membership) => {
+      if (!membership) return
+      const { data } = await supabase.from('access_points').select('id,name,event_id').eq('organization_id', membership.organization_id).order('name')
+      const points = (data ?? []) as AccessPoint[]
+      setAccessPoints(points)
+      if (points[0]) setAccessPointId(points[0].id)
+    })
+  }, [accessPointId])
 
   const process = useCallback(async (rawToken: string) => {
     const token = rawToken.trim()
@@ -43,6 +57,20 @@ export default function CheckinEvento() {
       scannerRef.current?.pause(true)
     } catch {
       // el escáner puede no estar corriendo (ingreso manual)
+    }
+
+    if (accessPointId) {
+      const { data, error } = await supabase.rpc('validate_program_checkin', { p_credential_token: token, p_access_point_id: accessPointId, p_device_label: navigator.userAgent.slice(0, 120) })
+      const validation = Array.isArray(data) ? data[0] : null
+      if (!error && validation) {
+        if (validation.result === 'allowed') {
+          setCount((current) => current + 1)
+          setOutcome({ kind: 'success', title: `¡Bienvenido, ${validation.participant_name}!`, subtitle: validation.reason })
+        } else {
+          setOutcome({ kind: 'warning', title: validation.result === 'duplicate' ? 'Acceso ya registrado' : 'Acceso no autorizado', subtitle: validation.reason })
+        }
+        return
+      }
     }
 
     const { data, error } = await supabase
@@ -78,7 +106,7 @@ export default function CheckinEvento() {
     }
     setCount((c) => c + 1)
     setOutcome({ kind: 'success', title: `¡Bienvenido, ${reg.first_name}!`, subtitle: `Ingreso registrado${ev ? ` · ${ev}` : ''}` })
-  }, [])
+  }, [accessPointId])
 
   function nextScan() {
     setOutcome(null)
@@ -154,6 +182,8 @@ export default function CheckinEvento() {
         <div className="mt-6 overflow-hidden rounded-2xl border border-zinc-200 bg-black">
           <div id={READER_ID} className="mx-auto w-full [&_video]:w-full" />
         </div>
+
+        {accessPoints.length > 0 && <label className="mt-4 grid gap-1.5 text-sm font-medium text-zinc-800">Punto de acceso<select value={accessPointId} onChange={(event) => setAccessPointId(event.target.value)} className="rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none focus:border-emerald-500">{accessPoints.map((point) => <option key={point.id} value={point.id}>{point.name}</option>)}</select></label>}
 
         {cameraError && (
           <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">

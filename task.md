@@ -26,6 +26,9 @@ registro y planos para el evento del 15 de octubre de 2026 publicada.
   se genera una cuadrícula y se cambia cada stand entre disponible y reservado.
 - Se corrigió el alias `/admin/programs` para redirigir a `/admin/programas`.
 - Se añadió recuperación de contraseña mediante `/recuperar-clave`.
+- Se completó la asignación operativa de stands: el plano permite seleccionar
+  cada stand, crear o elegir una empresa expositora, guardar contacto y notas,
+  y muestra el nombre de la empresa directamente sobre su ubicación.
 
 ## Decisiones y reglas vigentes
 
@@ -49,8 +52,8 @@ registro y planos para el evento del 15 de octubre de 2026 publicada.
 
 ## Pendientes priorizados
 
-1. Completar el editor de exposición: pasillos, dimensiones, zonas y asignación
-   de empresas/patrocinantes a stands.
+1. Completar el editor visual de exposición: pasillos, dimensiones y zonas.
+   La asignación de empresas/patrocinantes a stands ya está disponible.
 2. Completar programa, pases y reglas de acceso por evento/día/sesión/zona.
 3. Implementar operación de check-in móvil e impresión por pase y punto de
    acceso; decidir expresamente el alcance PWA/offline.
@@ -60,8 +63,8 @@ registro y planos para el evento del 15 de octubre de 2026 publicada.
 
 ## Próximo paso recomendado
 
-Diseñar el editor visual completo de la exposición y el flujo de asignación de
-stands a empresas, partiendo de la cuadrícula ya publicada.
+Ampliar el editor visual de exposición con pasillos, dimensiones y zonas,
+partiendo del plano y la asignación de empresas ya disponibles.
 
 ## Verificación de reanudación
 

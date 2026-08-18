@@ -20,6 +20,8 @@ const CheckinEvento = lazy(() => import('./pages/admin/CheckinEvento'))
 const AcreditacionEvento = lazy(() => import('./pages/admin/AcreditacionEvento'))
 const EventosAdmin = lazy(() => import('./pages/admin/EventosAdmin'))
 const ProgramasAdmin = lazy(() => import('./pages/admin/ProgramasAdmin'))
+const ProgramaAccesosAdmin = lazy(() => import('./pages/admin/ProgramaAccesosAdmin'))
+const PuntosAccesoAdmin = lazy(() => import('./pages/admin/PuntosAccesoAdmin'))
 const StandsAdmin = lazy(() => import('./pages/admin/StandsAdmin'))
 const AsientosAdmin = lazy(() => import('./pages/admin/AsientosAdmin'))
 const SuscripcionAdmin = lazy(() => import('./pages/admin/SuscripcionAdmin'))
@@ -64,6 +66,7 @@ function App() {
             </RequireAuth>
           }
         />
+        <Route path="/admin/puntos-acceso" element={<RequireAuth><PuntosAccesoAdmin /></RequireAuth>} />
         <Route
           path="/admin/acreditacion"
           element={
@@ -81,6 +84,7 @@ function App() {
           }
         />
         <Route path="/admin/programas" element={<RequireAuth><ProgramasAdmin /></RequireAuth>} />
+        <Route path="/admin/programas/:programId/accesos" element={<RequireAuth><ProgramaAccesosAdmin /></RequireAuth>} />
         <Route path="/admin/programs" element={<Navigate to="/admin/programas" replace />} />
         <Route path="/admin/stands/:eventId" element={<RequireAuth><StandsAdmin /></RequireAuth>} />
         <Route

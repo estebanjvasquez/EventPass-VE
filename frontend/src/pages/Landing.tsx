@@ -13,7 +13,8 @@ import {
   WifiOff,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { brandColor, brandName, useTenant, type Tenant } from '../lib/tenant'
+import { useTenant } from '../lib/useTenant'
+import { brandColor, brandName, type Tenant } from '../lib/tenantCore'
 
 const features = [
   {

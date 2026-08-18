@@ -5,7 +5,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { ArrowRight, CalendarDays, CheckCircle2, Ticket } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { brandColor, brandName, useTenant } from '../lib/tenant'
+import { useTenant } from '../lib/useTenant'
+import { brandColor, brandName } from '../lib/tenantCore'
 
 type EventRow = {
   id: string

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import { CheckCircle2, Ticket } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { brandColor, brandName, useTenant } from '../lib/tenant'
+import { useTenant } from '../lib/useTenant'
+import { brandColor, brandName } from '../lib/tenantCore'
 
 type Program = { id: string; name: string; description: string | null; venue_name: string | null; starts_at: string | null; registration_config: Record<string, unknown> }
 type Pass = { id: string; name: string; access_mode: 'program' | 'day' | 'session' | 'zone'; capacity: number | null }

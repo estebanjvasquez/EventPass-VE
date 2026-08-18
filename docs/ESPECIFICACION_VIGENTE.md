@@ -33,7 +33,8 @@ rol independiente de plataforma (`platform_admins`).
    su organización. Se valida el slug y se aprovisiona su subdominio.
 2. **Configuración.** Un admin crea/edita/publica eventos, medios de pago y
    planos: asientos para foros y una cuadrícula inicial de stands para
-   exposiciones.
+   exposiciones. Cada stand puede asignarse a una empresa, con contacto y
+   notas internas visibles desde el plano.
 3. **Programa y registro para octubre.** Un programa reúne uno o más eventos
    relacionados (por ejemplo, foro y exposición); el registro público perfila
    al participante y permite emitir pases con acceso por evento, día, sesión o
@@ -131,9 +132,8 @@ Estados relevantes:
 3. Documentar y validar explícitamente el alcance offline/PWA de check-in; no
    hay evidencia de un service worker dedicado en el repositorio actual.
 4. Formalizar el checklist de release del Worker y de migraciones manuales.
-5. Completar el editor visual de exposición: dimensiones, pasillos, zonas y
-   asignación de empresas a stands; hoy solo permite crear una cuadrícula y
-   reservar sus stands.
+5. Completar el editor visual de exposición: dimensiones, pasillos y zonas.
+   El plano ya permite crear una cuadrícula y asignar empresas a sus stands.
 
 ## 10. Criterios de aceptación de esta especificación
 
