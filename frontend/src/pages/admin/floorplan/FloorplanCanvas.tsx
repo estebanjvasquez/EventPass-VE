@@ -1,0 +1,25 @@
+import { useMemo, useState } from 'react'
+import { DragDropProvider, useDraggable, useDroppable } from '@dnd-kit/react'
+import { intersects, palette } from './model'
+import type { FloorplanElement } from './model'
+
+type Tool = typeof palette[number]['objectType']
+const cellId = (x: number, y: number) => `cell:${x}:${y}`
+
+function Cell({ x, y, onHover, onLeave, onPlace }: { x: number; y: number; onHover: () => void; onLeave: () => void; onPlace: () => void }) {
+  const { ref, isDropTarget } = useDroppable({ id: cellId(x, y) })
+  return <button ref={ref} type="button" onMouseEnter={onHover} onMouseLeave={onLeave} onClick={onPlace} className={`border border-zinc-100 ${isDropTarget ? 'bg-emerald-100' : ''}`} style={{ gridColumnStart: x + 1, gridRowStart: y + 1 }} aria-label={`Columna ${x + 1}, fila ${y + 1}`} />
+}
+
+function DraggableElement({ item, selected, onSelect, onResize }: { item: FloorplanElement; selected: boolean; onSelect: () => void; onResize: (axis: 'x' | 'y', delta: number) => void }) {
+  const { ref, isDragging } = useDraggable({ id: item.id })
+  return <div className="relative z-10" style={{ gridColumn: `${item.x + 1} / span ${item.width}`, gridRow: `${item.y + 1} / span ${item.height}`, opacity: isDragging ? 0.45 : 1 }}><button ref={ref} type="button" onClick={onSelect} className={`flex h-full w-full items-center justify-center rounded-lg border p-2 text-xs font-semibold ${item.kind === 'stand' ? 'border-emerald-300 bg-emerald-50' : 'border-zinc-400 bg-zinc-100'} ${selected ? 'ring-2 ring-emerald-700 ring-offset-2' : ''}`}>{item.label}</button>{selected && <><button type="button" onClick={() => onResize('x', 1)} className="absolute -right-2 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-emerald-700 text-[10px] text-white shadow" aria-label="Ampliar hacia la derecha">+</button><button type="button" onClick={() => onResize('y', 1)} className="absolute bottom-[-8px] left-1/2 h-4 w-4 -translate-x-1/2 rounded-full bg-emerald-700 text-[10px] text-white shadow" aria-label="Ampliar hacia abajo">+</button><button type="button" onClick={() => onResize('x', -1)} className="absolute -left-2 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white text-[10px] shadow" aria-label="Reducir ancho">−</button><button type="button" onClick={() => onResize('y', -1)} className="absolute left-1/2 top-[-8px] h-4 w-4 -translate-x-1/2 rounded-full bg-white text-[10px] shadow" aria-label="Reducir alto">−</button></>}</div>
+}
+
+export function FloorplanCanvas({ elements, columns = 18, rows = 12, activeTool, selectedId, onSelect, onResize, onPlace, onMove, onDelete }: { elements: FloorplanElement[]; columns?: number; rows?: number; activeTool: Tool | null; selectedId: string | null; onSelect: (id: string) => void; onResize: (axis: 'x' | 'y', delta: number) => void; onPlace: (tool: Tool, x: number, y: number) => void; onMove: (id: string, x: number, y: number) => void; onDelete: () => void }) {
+  const [hover, setHover] = useState<{ x: number; y: number } | null>(null)
+  const preview = useMemo(() => { const item = palette.find((entry) => entry.objectType === activeTool); return item && hover ? { ...item, ...hover } : null }, [activeTool, hover])
+  const outside = !!preview && (preview.x + preview.width > columns || preview.y + preview.height > rows)
+  const blocked = !!preview && (outside || (activeTool !== 'aisle' && elements.some((item) => intersects(item, preview))))
+  return <DragDropProvider onDragEnd={(event) => { if (event.canceled) return; const id = String(event.operation.source?.id ?? ''); const match = /^cell:(\d+):(\d+)$/.exec(String(event.operation.target?.id ?? '')); if (match) onMove(id, Number(match[1]), Number(match[2])) }}><div className="overflow-auto rounded-xl border bg-white p-2">{selectedId && <div className="mb-2 flex items-center justify-between rounded-lg bg-zinc-50 px-3 py-2 text-xs"><span>Elemento seleccionado: arrástralo o usa los tiradores.</span><button type="button" onClick={onDelete} className="rounded border border-red-200 px-2 py-1 font-semibold text-red-700">Eliminar</button></div>}<div className="grid min-w-[960px] gap-1 rounded-lg bg-zinc-200 p-1" style={{ gridTemplateColumns: `repeat(${columns}, minmax(76px, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(68px, 1fr))` }}>{Array.from({ length: columns * rows }, (_, index) => { const x = index % columns; const y = Math.floor(index / columns); return <Cell key={index} x={x} y={y} onHover={() => setHover({ x, y })} onLeave={() => setHover(null)} onPlace={() => { if (activeTool && !blocked) onPlace(activeTool, x, y) }} /> })}{elements.map((item) => <DraggableElement key={item.id} item={item} selected={selectedId === item.id} onSelect={() => onSelect(item.id)} onResize={onResize} />)}{preview && <div className={`z-20 rounded-lg border-2 border-dashed p-2 text-xs ${blocked ? 'border-red-500 bg-red-100/80' : 'border-emerald-600 bg-emerald-100/80'}`} style={{ gridColumn: `${preview.x + 1} / span ${preview.width}`, gridRow: `${preview.y + 1} / span ${preview.height}` }}>{blocked ? outside ? 'Fuera del plano' : 'Espacio ocupado' : `Colocar ${preview.label}`}</div>}</div></div></DragDropProvider>
+}
