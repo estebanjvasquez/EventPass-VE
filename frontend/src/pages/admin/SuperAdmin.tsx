@@ -368,6 +368,10 @@ function OrgDetail({ org, onError, onChanged }: { org: Org; onError: (m: string)
   const [events, setEvents] = useState<OrgEvent[]>([])
   const [plan, setPlan] = useState(org.plan)
   const [status, setStatus] = useState(org.status)
+  const [name, setName] = useState(org.name)
+  const [slug, setSlug] = useState(org.slug)
+  const [hostname, setHostname] = useState(org.custom_hostname ?? '')
+  const [ownerEmail, setOwnerEmail] = useState('')
   const [saving, setSaving] = useState(false)
   const [domainStatus, setDomainStatus] = useState<string>('...')
   const [activating, setActivating] = useState(false)
@@ -403,6 +407,7 @@ function OrgDetail({ org, onError, onChanged }: { org: Org; onError: (m: string)
   useEffect(() => {
     setPlan(org.plan)
     setStatus(org.status)
+    setName(org.name); setSlug(org.slug); setHostname(org.custom_hostname ?? '')
     Promise.all([
       supabase.rpc('admin_org_members', { p_org: org.id }),
       supabase.rpc('admin_org_events', { p_org: org.id }),
@@ -412,12 +417,15 @@ function OrgDetail({ org, onError, onChanged }: { org: Org; onError: (m: string)
       if (e.error) onError(e.error.message)
       else setEvents((e.data ?? []) as OrgEvent[])
     })
-  }, [org.id, org.plan, org.status, onError])
+  }, [org.id, org.plan, org.status, org.name, org.slug, org.custom_hostname, onError])
 
   async function save() {
     setSaving(true)
-    const { error } = await supabase.rpc('admin_set_organization', {
+    const { error } = await supabase.rpc('admin_update_client', {
       p_org: org.id,
+      p_name: name,
+      p_slug: slugify(slug),
+      p_custom_hostname: hostname,
       p_plan: plan,
       p_status: status,
     })
@@ -426,7 +434,17 @@ function OrgDetail({ org, onError, onChanged }: { org: Org; onError: (m: string)
     else onChanged()
   }
 
-  const dirty = plan !== org.plan || status !== org.status
+  async function addOwner() {
+    const email=ownerEmail.trim().toLowerCase(); if (!email) return
+    const res=await authFetch(`/api/admin/clients/${org.id}/owners`, {method:'POST',body:JSON.stringify({email})})
+    const data=await res.json().catch(()=>({})) as {error?:string}; if (!res.ok) onError(data.error ?? 'No se pudo agregar el propietario.'); else { setOwnerEmail(''); const m=await supabase.rpc('admin_org_members',{p_org:org.id}); if (!m.error) setMembers((m.data??[]) as Member[]) }
+  }
+  async function removeOwner(member: Member) {
+    if (member.role !== 'owner' || !window.confirm(`¿Quitar a ${member.email} como propietario?`)) return
+    const res=await authFetch(`/api/admin/clients/${org.id}/owners/${member.user_id}`,{method:'DELETE'}); const data=await res.json().catch(()=>({})) as {error?:string}
+    if (!res.ok) onError(data.error ?? 'No se pudo quitar el propietario.'); else setMembers(current=>current.filter(item=>item.user_id!==member.user_id))
+  }
+  const dirty = plan !== org.plan || status !== org.status || name !== org.name || slug !== org.slug || hostname !== (org.custom_hostname ?? '')
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-5">
@@ -474,8 +492,13 @@ function OrgDetail({ org, onError, onChanged }: { org: Org; onError: (m: string)
         )}
       </div>
 
-      {/* Gestión de plan y estado */}
-      <div className="mt-4 grid grid-cols-2 gap-3 border-t border-zinc-100 pt-4">
+      {/* Datos editables del cliente */}
+      <div className="mt-4 grid gap-3 border-t border-zinc-100 pt-4">
+        <label className="flex flex-col gap-1.5"><span className="text-xs font-medium text-zinc-700">Nombre</span><input value={name} onChange={e=>setName(e.target.value)} className={inputCls}/></label>
+        <label className="flex flex-col gap-1.5"><span className="text-xs font-medium text-zinc-700">Subdominio</span><input value={slug} onChange={e=>setSlug(slugify(e.target.value))} className={inputCls}/></label>
+        <label className="flex flex-col gap-1.5"><span className="text-xs font-medium text-zinc-700">Dominio propio (opcional)</span><input value={hostname} onChange={e=>setHostname(e.target.value)} className={inputCls} placeholder="eventos.cliente.com"/></label>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-3">
         <label className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-zinc-700">Plan</span>
           <select value={plan} onChange={(e) => setPlan(e.target.value)} className={inputCls}>
@@ -511,11 +534,12 @@ function OrgDetail({ org, onError, onChanged }: { org: Org; onError: (m: string)
           {members.map((m) => (
             <li key={m.user_id} className="flex items-center justify-between text-sm">
               <span className="text-zinc-700">{m.email}</span>
-              <span className="text-xs capitalize text-zinc-500">{m.role}</span>
+              <span className="flex items-center gap-2 text-xs capitalize text-zinc-500">{m.role}{m.role==='owner' && <button type="button" onClick={()=>removeOwner(m)} className="text-red-600 hover:underline">Quitar</button>}</span>
             </li>
           ))}
           {members.length === 0 && <li className="text-sm text-zinc-400">Sin miembros.</li>}
         </ul>
+        <div className="mt-3 flex gap-2"><input value={ownerEmail} onChange={e=>setOwnerEmail(e.target.value)} className={inputCls} placeholder="nuevo.propietario@cliente.com"/><button type="button" onClick={addOwner} className="shrink-0 rounded-lg border border-zinc-300 px-3 text-xs font-semibold">Agregar</button></div>
       </div>
 
       {/* Eventos */}

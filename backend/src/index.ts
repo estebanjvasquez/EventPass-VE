@@ -359,6 +359,25 @@ app.post('/api/admin/clients', async (c) => {
   return c.json({ ok: true, org, admins, domain })
 })
 
+app.post('/api/admin/clients/:orgId/owners', async (c) => {
+  const parsed=z.object({email:z.string().email()}).safeParse(await c.req.json().catch(()=>null)); if (!parsed.success) return c.json({error:'Correo inválido'},400)
+  const supabase=createClient(c.env.SUPABASE_URL,c.env.SUPABASE_SERVICE_ROLE_KEY); const userId=await authUserId(supabase,c.req.header('Authorization')); if (!userId) return c.json({error:'no autorizado'},401)
+  const {data:pa}=await supabase.from('platform_admins').select('user_id').eq('user_id',userId).maybeSingle(); if (!pa) return c.json({error:'no autorizado'},403)
+  const orgId=c.req.param('orgId'); const base=c.env.APP_BASE_URL.replace(/\/$/,''); let uid:string|null=null
+  const invited=await supabase.auth.admin.inviteUserByEmail(parsed.data.email.toLowerCase(),{redirectTo:`${base}/definir-clave`})
+  if (invited.data?.user) uid=invited.data.user.id; else if (invited.error && /registered|exist/i.test(invited.error.message)) { const found=await supabase.rpc('get_user_id_by_email',{p_email:parsed.data.email}); uid=(found.data as string|null)??null } else return c.json({error:invited.error?.message??'No se pudo invitar'},400)
+  if (!uid) return c.json({error:'No se pudo resolver el usuario'},400)
+  const {error}=await supabase.from('memberships').insert({organization_id:orgId,user_id:uid,role:'owner'}); if (error && !/duplicate|unique/i.test(error.message)) return c.json({error:error.message},400)
+  return c.json({ok:true})
+})
+
+app.delete('/api/admin/clients/:orgId/owners/:userId', async (c) => {
+  const supabase=createClient(c.env.SUPABASE_URL,c.env.SUPABASE_SERVICE_ROLE_KEY); const caller=await authUserId(supabase,c.req.header('Authorization')); if (!caller) return c.json({error:'no autorizado'},401)
+  const {data:pa}=await supabase.from('platform_admins').select('user_id').eq('user_id',caller).maybeSingle(); if (!pa) return c.json({error:'no autorizado'},403)
+  const orgId=c.req.param('orgId'), userId=c.req.param('userId'); const {count}=await supabase.from('memberships').select('user_id',{count:'exact',head:true}).eq('organization_id',orgId).eq('role','owner'); if ((count??0)<=1) return c.json({error:'Debe permanecer al menos un propietario'},400)
+  const {error}=await supabase.from('memberships').delete().eq('organization_id',orgId).eq('user_id',userId).eq('role','owner'); if (error) return c.json({error:error.message},400); return c.json({ok:true})
+})
+
 // Disparo manual de las tareas programadas (para pruebas). Protegido por
 // CRON_SECRET; si el secreto no está configurado, el endpoint queda deshabilitado.
 app.post('/api/jobs/run', async (c) => {

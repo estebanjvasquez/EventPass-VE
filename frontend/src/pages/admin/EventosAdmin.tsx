@@ -231,7 +231,7 @@ export default function EventosAdmin() {
                           className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 transition-colors hover:border-zinc-400"
                         >
                           {ev.event_type === 'forum' ? <CalendarDays className="h-3.5 w-3.5" /> : <Armchair className="h-3.5 w-3.5" />}
-                          {ev.event_type === 'exhibition' ? 'Stands' : ev.event_type === 'forum' ? 'Agenda' : 'Asientos'}
+                          {ev.event_type === 'exhibition' ? 'Plano' : ev.event_type === 'forum' ? 'Agenda' : 'Asientos'}
                         </Link>
                         {ev.event_type === 'forum' && <Link to={`/admin/asientos/${ev.id}`} className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 transition-colors hover:border-emerald-400 hover:text-emerald-700"><Armchair className="h-3.5 w-3.5" />Asientos</Link>}
                         <button
