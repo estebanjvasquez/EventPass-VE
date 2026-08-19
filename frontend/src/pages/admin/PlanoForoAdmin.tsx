@@ -16,6 +16,7 @@ export default function PlanoForoAdmin() {
   const [seatsByElement, setSeatsByElement] = useState<Record<string, Seat>>({})
   const [eventName, setEventName] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [seatRows, setSeatRows] = useState(5)
@@ -61,9 +62,9 @@ export default function PlanoForoAdmin() {
   }
   async function addSeats() {
     if (!map) return
-    if (seatX < 0 || seatY < 0 || seatX + seatColumns > columns || seatY + seatRows > rows) { setError('El bloque de sillas queda fuera del plano. Amplía la cuadrícula o ajusta su posición.'); return }
+    if (seatX < 0 || seatY < 0 || seatX >= columns) { setError('La columna inicial queda fuera del plano.'); return }
     setBusy(true); setError(null)
-    const { error } = await supabase.rpc('add_forum_seat_block', { p_map_id: map.id, p_rows: seatRows, p_columns: seatColumns, p_x: seatX, p_y: seatY })
+    const { error } = await supabase.rpc('add_forum_seats_flexible', { p_map_id: map.id, p_rows: seatRows, p_columns: seatColumns, p_x: seatX, p_y: seatY })
     setBusy(false)
     if (error) setError(error.message); else await load()
   }
@@ -114,10 +115,22 @@ export default function PlanoForoAdmin() {
   async function deleteSelected() {
     const source = elements.find(item => item.id === selectedId)
     if (!map || !source) return
-    if (source.kind === 'seat') { setError('Las sillas se conservan para proteger las reservas.'); return }
+    if (source.kind === 'seat') { await deleteSeats([source.id]); return }
     if (!window.confirm(`¿Eliminar ${source.label}?`)) return
     const { error } = await supabase.from('venue_map_elements').delete().eq('id', source.id).eq('map_id', map.id)
     if (error) setError(error.message); else { setSelectedId(null); await load() }
+  }
+  function toggleSeatSelection() {
+    if (!selectedId || !seatsByElement[selectedId]) return
+    setSelectedSeatIds(current => current.includes(selectedId) ? current.filter(id => id !== selectedId) : [...current, selectedId])
+  }
+  async function deleteSeats(elementIds: string[]) {
+    if (!map || !elementIds.length) return
+    const seatIds = elementIds.map(id => seatsByElement[id]?.id).filter(Boolean) as string[]
+    if (!seatIds.length) return
+    if (!window.confirm(`¿Eliminar ${seatIds.length} silla(s) libre(s)? Las reservadas o confirmadas deben liberarse primero.`)) return
+    const { error } = await supabase.rpc('delete_forum_seats', { p_map_id: map.id, p_seat_ids: seatIds })
+    if (error) setError(error.message); else { setSelectedId(null); setSelectedSeatIds([]); await load() }
   }
   async function growGrid(axis: 'columns' | 'rows') {
     if (!map) return
@@ -134,9 +147,9 @@ export default function PlanoForoAdmin() {
       {error && <p className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
       {!map ? <button type="button" disabled={busy} onClick={createPlan} className="mt-6 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{busy ? 'Creando…' : 'Crear plano de foro'}</button> : <>
         <div className="mt-6 grid gap-4 lg:grid-cols-3"><section className="rounded-xl border bg-white p-4"><b className="text-sm">Tamaño del plano</b><p className="mt-1 text-xs text-zinc-500">{columns} columnas × {rows} filas</p><div className="mt-3 flex gap-2"><button type="button" onClick={()=>growGrid('columns')} className={buttonCls}>+ columna</button><button type="button" onClick={()=>growGrid('rows')} className={buttonCls}>+ fila</button></div></section><section className="rounded-xl border bg-white p-4"><b className="text-sm">Añadir sillas</b><div className="mt-3 grid grid-cols-4 gap-2"><NumberInput label="Filas" value={seatRows} set={setSeatRows}/><NumberInput label="Columnas" value={seatColumns} set={setSeatColumns}/><NumberInput label="Columna" value={seatX+1} set={v=>setSeatX(v-1)}/><NumberInput label="Fila" value={seatY+1} set={v=>setSeatY(v-1)}/></div><button type="button" disabled={busy} onClick={addSeats} className={`${buttonCls} mt-3`}><Armchair className="h-4 w-4"/>Añadir {seatRows * seatColumns} sillas</button></section><section className="rounded-xl border bg-white p-4"><b className="text-sm">Añadir pasillo</b><div className="mt-3 grid grid-cols-5 gap-2"><select value={aisleAxis} onChange={e=>setAisleAxis(e.target.value as 'horizontal'|'vertical')} className={fieldCls}><option value="horizontal">Horizontal</option><option value="vertical">Vertical</option></select><NumberInput label="Col." value={aisleX+1} set={v=>setAisleX(v-1)}/><NumberInput label="Fila" value={aisleY+1} set={v=>setAisleY(v-1)}/><NumberInput label="Largo" value={aisleLength} set={setAisleLength}/><NumberInput label="Ancho" value={aisleThickness} set={setAisleThickness}/></div><button type="button" disabled={busy} onClick={addAisle} className={`${buttonCls} mt-3`}>{aisleAxis==='horizontal'?<Rows3 className="h-4 w-4"/>:<Columns3 className="h-4 w-4"/>}Añadir pasillo</button></section></div>
-        {selectedId && <button type="button" onClick={renameSelected} className={`${buttonCls} mt-4`}>Cambiar nombre seleccionado</button>}
+        {selectedId && <div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={renameSelected} className={buttonCls}>Cambiar nombre</button>{seatsByElement[selectedId] && <button type="button" onClick={toggleSeatSelection} className={buttonCls}>{selectedSeatIds.includes(selectedId) ? 'Quitar de selección' : 'Añadir a selección'}</button>}{selectedSeatIds.length > 0 && <button type="button" onClick={()=>deleteSeats(selectedSeatIds)} className="rounded-lg border border-red-300 px-3.5 py-2 text-sm font-semibold text-red-700">Eliminar {selectedSeatIds.length} seleccionada(s)</button>}</div>}
         <div className="mt-5"><FloorplanCanvas elements={elements} columns={columns} rows={rows} activeTool={null} aisleAxis="horizontal" selectedId={selectedId} onSelect={setSelectedId} onAssign={reserve} onClearSelection={() => setSelectedId(null)} onResize={resize} onPlace={() => {}} onMove={move} onDelete={deleteSelected} /></div>
-        <p className="mt-4 text-sm text-zinc-500">Doble clic en un asiento para reservarlo a nombre de una persona o liberarlo. Los reservados se resaltan en ámbar y muestran el nombre; los confirmados no se pueden mover ni liberar.</p>
+        <p className="mt-4 text-sm text-zinc-500">Doble clic en un asiento para reservarlo a nombre de una persona o liberarlo. Para borrar en grupo, selecciona cada silla libre y usa “Añadir a selección”. Los reservados se resaltan en ámbar y muestran el nombre.</p>
       </>}</main></div>
 }
 
