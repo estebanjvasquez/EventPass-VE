@@ -8,6 +8,7 @@ import RequireAuth from './components/RequireAuth'
 const Landing = lazy(() => import('./pages/Landing'))
 const RegistroEvento = lazy(() => import('./pages/RegistroEvento'))
 const RegistroPrograma = lazy(() => import('./pages/RegistroPrograma'))
+const AgendaPublica = lazy(() => import('./pages/AgendaPublica'))
 const CargarComprobante = lazy(() => import('./pages/CargarComprobante'))
 const CredencialEvento = lazy(() => import('./pages/CredencialEvento'))
 const CrearCuenta = lazy(() => import('./pages/CrearCuenta'))
@@ -21,6 +22,7 @@ const AcreditacionEvento = lazy(() => import('./pages/admin/AcreditacionEvento')
 const EventosAdmin = lazy(() => import('./pages/admin/EventosAdmin'))
 const ProgramasAdmin = lazy(() => import('./pages/admin/ProgramasAdmin'))
 const ProgramaAccesosAdmin = lazy(() => import('./pages/admin/ProgramaAccesosAdmin'))
+const AgendaAdmin = lazy(() => import('./pages/admin/AgendaAdmin'))
 const PuntosAccesoAdmin = lazy(() => import('./pages/admin/PuntosAccesoAdmin'))
 const StandsAdmin = lazy(() => import('./pages/admin/StandsAdmin'))
 const ExpositoresAdmin = lazy(() => import('./pages/admin/ExpositoresAdmin'))
@@ -45,6 +47,7 @@ function App() {
         <Route path="/registro" element={<RegistroEvento />} />
         <Route path="/e/:eventId" element={<RegistroEvento />} />
         <Route path="/p/:programId/registro" element={<RegistroPrograma />} />
+        <Route path="/e/:eventId/agenda" element={<AgendaPublica />} />
         <Route path="/comprobante/:token" element={<CargarComprobante />} />
         <Route path="/credencial/:token" element={<CredencialEvento />} />
         <Route path="/crear-cuenta" element={<CrearCuenta />} />
@@ -87,6 +90,7 @@ function App() {
         />
         <Route path="/admin/programas" element={<RequireAuth><ProgramasAdmin /></RequireAuth>} />
         <Route path="/admin/programas/:programId/accesos" element={<RequireAuth><ProgramaAccesosAdmin /></RequireAuth>} />
+        <Route path="/admin/agenda/:eventId" element={<RequireAuth><AgendaAdmin /></RequireAuth>} />
         <Route path="/admin/programs" element={<Navigate to="/admin/programas" replace />} />
         <Route path="/admin/stands/:eventId" element={<RequireAuth><StandsAdmin /></RequireAuth>} />
         <Route path="/admin/expositores/:eventId" element={<RequireAuth><ExpositoresAdmin /></RequireAuth>} />

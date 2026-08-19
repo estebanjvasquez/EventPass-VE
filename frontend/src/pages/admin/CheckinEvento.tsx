@@ -20,6 +20,7 @@ type RegRow = {
   events: { name?: string } | { name?: string }[] | null
 }
 type AccessPoint = { id: string; name: string; event_id: string }
+type CheckinSession = { id: string; name: string; session_type: 'lecture' | 'workshop' | 'break' }
 
 const READER_ID = 'checkin-reader'
 
@@ -36,6 +37,8 @@ export default function CheckinEvento() {
   const [manual, setManual] = useState('')
   const [accessPoints, setAccessPoints] = useState<AccessPoint[]>([])
   const [accessPointId, setAccessPointId] = useState('')
+  const [sessions, setSessions] = useState<CheckinSession[]>([])
+  const [sessionId, setSessionId] = useState('')
   const scannerRef = useRef<Html5Qrcode | null>(null)
   const busyRef = useRef(false)
 
@@ -47,7 +50,17 @@ export default function CheckinEvento() {
       setAccessPoints(points)
       if (points[0]) setAccessPointId(points[0].id)
     })
-  }, [accessPointId])
+  }, [])
+
+  useEffect(() => {
+    const point = accessPoints.find((item) => item.id === accessPointId)
+    if (!point) { setSessions([]); setSessionId(''); return }
+    void supabase.from('event_sessions').select('id,name,session_type').eq('event_id', point.event_id).neq('session_type', 'break').order('starts_at').then(({ data }) => {
+      const rows = (data ?? []) as CheckinSession[]
+      setSessions(rows)
+      setSessionId('')
+    })
+  }, [accessPointId, accessPoints])
 
   const process = useCallback(async (rawToken: string) => {
     const token = rawToken.trim()
@@ -59,6 +72,15 @@ export default function CheckinEvento() {
       // el escáner puede no estar corriendo (ingreso manual)
     }
 
+    if (accessPointId && sessionId) {
+      const { data, error } = await supabase.rpc('validate_session_checkin', { p_credential_token: token, p_access_point_id: accessPointId, p_session_id: sessionId, p_device_label: navigator.userAgent.slice(0, 120) })
+      const validation = Array.isArray(data) ? data[0] : null
+      if (!error && validation) {
+        if (validation.result === 'allowed') { setCount((current) => current + 1); setOutcome({ kind: 'success', title: `¡Bienvenido, ${validation.participant_name}!`, subtitle: validation.reason }); return }
+        setOutcome({ kind: 'warning', title: validation.result === 'duplicate' ? 'Acceso ya registrado' : 'Acceso no autorizado', subtitle: validation.reason }); return
+      }
+      setOutcome({ kind: 'error', title: 'No se pudo validar la sesión', subtitle: error?.message ?? 'La sesión no devolvió una respuesta válida.' }); return
+    }
     if (accessPointId) {
       const { data, error } = await supabase.rpc('validate_program_checkin', { p_credential_token: token, p_access_point_id: accessPointId, p_device_label: navigator.userAgent.slice(0, 120) })
       const validation = Array.isArray(data) ? data[0] : null
@@ -106,7 +128,7 @@ export default function CheckinEvento() {
     }
     setCount((c) => c + 1)
     setOutcome({ kind: 'success', title: `¡Bienvenido, ${reg.first_name}!`, subtitle: `Ingreso registrado${ev ? ` · ${ev}` : ''}` })
-  }, [accessPointId])
+  }, [accessPointId, sessionId])
 
   function nextScan() {
     setOutcome(null)
@@ -184,6 +206,7 @@ export default function CheckinEvento() {
         </div>
 
         {accessPoints.length > 0 && <label className="mt-4 grid gap-1.5 text-sm font-medium text-zinc-800">Punto de acceso<select value={accessPointId} onChange={(event) => setAccessPointId(event.target.value)} className="rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none focus:border-emerald-500">{accessPoints.map((point) => <option key={point.id} value={point.id}>{point.name}</option>)}</select></label>}
+        {sessions.length > 0 && <label className="mt-4 grid gap-1.5 text-sm font-medium text-zinc-800">Validar sesión (opcional)<select value={sessionId} onChange={(event) => setSessionId(event.target.value)} className="rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none focus:border-emerald-500"><option value="">Ingreso general del evento</option>{sessions.map((session) => <option key={session.id} value={session.id}>{session.name}{session.session_type === 'workshop' ? ' · Taller con cupo' : ''}</option>)}</select></label>}
 
         {cameraError && (
           <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Armchair, ArrowLeft, CalendarCog, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Armchair, ArrowLeft, CalendarCog, CalendarDays, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
 import { supabase } from '../../lib/supabase'
 import { resolveActiveOrg } from '../../lib/activeOrg'
@@ -227,12 +227,13 @@ export default function EventosAdmin() {
                           </button>
                         )}
                         <Link
-                          to={ev.event_type === 'exhibition' ? `/admin/stands/${ev.id}` : `/admin/asientos/${ev.id}`}
+                          to={ev.event_type === 'exhibition' ? `/admin/stands/${ev.id}` : ev.event_type === 'forum' ? `/admin/agenda/${ev.id}` : `/admin/asientos/${ev.id}`}
                           className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 transition-colors hover:border-zinc-400"
                         >
-                          <Armchair className="h-3.5 w-3.5" />
-                          {ev.event_type === 'exhibition' ? 'Stands' : 'Asientos'}
+                          {ev.event_type === 'forum' ? <CalendarDays className="h-3.5 w-3.5" /> : <Armchair className="h-3.5 w-3.5" />}
+                          {ev.event_type === 'exhibition' ? 'Stands' : ev.event_type === 'forum' ? 'Agenda' : 'Asientos'}
                         </Link>
+                        {ev.event_type === 'forum' && <Link to={`/admin/asientos/${ev.id}`} className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 transition-colors hover:border-zinc-400"><Armchair className="h-3.5 w-3.5" />Asientos</Link>}
                         <button
                           type="button"
                           onClick={() => setEditing(ev)}
