@@ -17,6 +17,7 @@ export type FloorplanElement = FloorplanRect & {
   rotation?: 0 | 90 | 180 | 270
   color?: string
   doorRole?: 'entry' | 'exit'
+  assignedCompanyName?: string
 }
 
 export const intersects = (a: FloorplanRect, b: FloorplanRect) =>
