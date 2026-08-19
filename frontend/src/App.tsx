@@ -28,7 +28,6 @@ const PuntosAccesoAdmin = lazy(() => import('./pages/admin/PuntosAccesoAdmin'))
 const StandsAdmin = lazy(() => import('./pages/admin/StandsAdmin'))
 const ExpositoresAdmin = lazy(() => import('./pages/admin/ExpositoresAdmin'))
 const OperacionPlanoAdmin = lazy(() => import('./pages/admin/OperacionPlanoAdmin'))
-const AsientosAdmin = lazy(() => import('./pages/admin/AsientosAdmin'))
 const PlanoForoAdmin = lazy(() => import('./pages/admin/PlanoForoAdmin'))
 const SuscripcionAdmin = lazy(() => import('./pages/admin/SuscripcionAdmin'))
 const SuperAdmin = lazy(() => import('./pages/admin/SuperAdmin'))
@@ -102,7 +101,7 @@ function App() {
           path="/admin/asientos/:eventId"
           element={
             <RequireAuth>
-              <AsientosAdmin />
+              <PlanoForoAdmin />
             </RequireAuth>
           }
         />

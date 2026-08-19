@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Armchair, Columns3, Rows3, Presentation } from 'lucide-react'
+import { ArrowLeft, Armchair, Columns3, Rows3 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { FloorplanCanvas } from './floorplan/FloorplanCanvas'
 import { fromVenueElement } from './floorplan/adapter'
@@ -18,6 +18,15 @@ export default function PlanoForoAdmin() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [seatRows, setSeatRows] = useState(5)
+  const [seatColumns, setSeatColumns] = useState(10)
+  const [seatX, setSeatX] = useState(4)
+  const [seatY, setSeatY] = useState(2)
+  const [aisleAxis, setAisleAxis] = useState<'horizontal' | 'vertical'>('horizontal')
+  const [aisleX, setAisleX] = useState(0)
+  const [aisleY, setAisleY] = useState(7)
+  const [aisleLength, setAisleLength] = useState(8)
+  const [aisleThickness, setAisleThickness] = useState(1)
 
   const load = useCallback(async () => {
     if (!eventId) return
@@ -37,7 +46,7 @@ export default function PlanoForoAdmin() {
     setElements((data ?? []).map((row: any) => {
       const item = fromVenueElement(row)
       const seat = index[item.id]
-      return seat ? { ...item, status: seat.status === 'confirmed' ? 'assigned' : seat.status, label: row.label.replace('Asiento ', '') } : item
+      return seat ? { ...item, status: seat.status === 'confirmed' ? 'assigned' : seat.status, label: row.label.replace('Asiento ', ''), assignedCompanyName: seat.reserved_for ?? undefined } : item
     }))
   }, [eventId])
 
@@ -52,20 +61,16 @@ export default function PlanoForoAdmin() {
   }
   async function addSeats() {
     if (!map) return
+    if (seatX < 0 || seatY < 0 || seatX + seatColumns > columns || seatY + seatRows > rows) { setError('El bloque de sillas queda fuera del plano. Amplía la cuadrícula o ajusta su posición.'); return }
     setBusy(true); setError(null)
-    const { error } = await supabase.rpc('add_forum_seat_block', { p_map_id: map.id, p_rows: 5, p_columns: 10, p_x: 4, p_y: 2 })
+    const { error } = await supabase.rpc('add_forum_seat_block', { p_map_id: map.id, p_rows: seatRows, p_columns: seatColumns, p_x: seatX, p_y: seatY })
     setBusy(false)
     if (error) setError(error.message); else await load()
   }
-  async function addAisle(axis: 'horizontal' | 'vertical') {
+  async function addAisle() {
     if (!map) return
-    const max = axis === 'horizontal' ? (map.metadata?.grid_rows ?? 12) : (map.metadata?.grid_columns ?? 18)
-    const value = window.prompt(`Inserta el pasillo ${axis === 'horizontal' ? 'horizontal' : 'vertical'} antes de la fila o columna (1–${max + 1}):`, String(Math.ceil(max / 2) + 1))
-    if (value === null) return
-    const index = Number(value) - 1
-    if (!Number.isInteger(index) || index < 0 || index > max) { setError('Indica una fila o columna válida.'); return }
     setBusy(true); setError(null)
-    const { error } = await supabase.rpc('insert_forum_aisle', { p_map_id: map.id, p_axis: axis, p_index: index })
+    const { error } = await supabase.rpc('add_forum_aisle', { p_map_id: map.id, p_axis: aisleAxis, p_x: aisleX, p_y: aisleY, p_length: aisleLength, p_thickness: aisleThickness })
     setBusy(false)
     if (error) setError(error.message); else await load()
   }
@@ -88,18 +93,53 @@ export default function PlanoForoAdmin() {
     const { error } = await supabase.from('venue_map_elements').update({ x, y }).eq('id', id).eq('map_id', map.id)
     if (error) setError(error.message); else await load()
   }
+  async function resize(axis: 'x' | 'y', delta: number) {
+    const source = elements.find(item => item.id === selectedId)
+    if (!map || !source || source.kind === 'seat') { setError('El tamaño de cada asiento se mantiene fijo para conservar su reserva.'); return }
+    const width = axis === 'x' ? Math.max(1, source.width + delta) : source.width
+    const height = axis === 'y' ? Math.max(1, source.height + delta) : source.height
+    const collision = elements.some(item => item.id !== source.id && item.kind !== 'object' && source.kind !== 'object' && source.x < item.x + item.width && source.x + width > item.x && source.y < item.y + item.height && source.y + height > item.y)
+    if (collision || source.x + width > columns || source.y + height > rows) { setError('No hay espacio libre para ese tamaño.'); return }
+    const { error } = await supabase.from('venue_map_elements').update({ width, height }).eq('id', source.id).eq('map_id', map.id)
+    if (error) setError(error.message); else await load()
+  }
+  async function renameSelected() {
+    const source = elements.find(item => item.id === selectedId)
+    if (!map || !source) return
+    const label = window.prompt('Nombre del elemento:', source.label)
+    if (!label?.trim()) return
+    const { error } = await supabase.from('venue_map_elements').update({ label: source.kind === 'seat' ? `Asiento ${label.trim()}` : label.trim() }).eq('id', source.id).eq('map_id', map.id)
+    if (error) setError(error.message); else await load()
+  }
+  async function deleteSelected() {
+    const source = elements.find(item => item.id === selectedId)
+    if (!map || !source) return
+    if (source.kind === 'seat') { setError('Las sillas se conservan para proteger las reservas.'); return }
+    if (!window.confirm(`¿Eliminar ${source.label}?`)) return
+    const { error } = await supabase.from('venue_map_elements').delete().eq('id', source.id).eq('map_id', map.id)
+    if (error) setError(error.message); else { setSelectedId(null); await load() }
+  }
+  async function growGrid(axis: 'columns' | 'rows') {
+    if (!map) return
+    const key = axis === 'columns' ? 'grid_columns' : 'grid_rows'
+    const next = (map.metadata?.[key] ?? (axis === 'columns' ? 18 : 12)) + 1
+    const { error } = await supabase.from('venue_maps').update({ metadata: { ...(map.metadata ?? {}), [key]: next } }).eq('id', map.id)
+    if (error) setError(error.message); else await load()
+  }
   const columns = map?.metadata?.grid_columns ?? 18
   const rows = map?.metadata?.grid_rows ?? 12
-  const reservedCount = useMemo(() => Object.values(seatsByElement).filter(s => s.status === 'reserved').length, [seatsByElement])
   return <div className="min-h-[100dvh] bg-[#fafafa]">
-    <header className="border-b border-zinc-200 bg-white"><div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4"><Link to={`/admin/asientos/${eventId}`} className="inline-flex items-center gap-2 text-sm font-medium text-zinc-600"><ArrowLeft className="h-4 w-4"/>Asientos</Link><span className="inline-flex items-center gap-2 text-sm font-semibold"><Presentation className="h-4 w-4 text-emerald-600"/>Plano de foro</span></div></header>
-    <main className="mx-auto max-w-7xl px-5 py-7"><h1 className="text-2xl font-bold text-zinc-900">Diseño físico del foro</h1><p className="mt-1 text-sm text-zinc-600">{eventName} · Arrastra asientos y elementos; los pasillos insertados desplazan el plano sin superponerlo.</p>
+    <header className="border-b border-zinc-200 bg-white"><div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4"><Link to="/admin/eventos" className="inline-flex items-center gap-2 text-sm font-medium text-zinc-600"><ArrowLeft className="h-4 w-4"/>Eventos</Link><span className="inline-flex items-center gap-2 text-sm font-semibold"><Armchair className="h-4 w-4 text-emerald-600"/>Asientos</span></div></header>
+    <main className="mx-auto max-w-7xl px-5 py-7"><h1 className="text-2xl font-bold text-zinc-900">Asientos</h1><p className="mt-1 text-sm text-zinc-600">{eventName} · Diseña la sala con libertad: arrastra, redimensiona y nombra los elementos.</p>
       {error && <p className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
       {!map ? <button type="button" disabled={busy} onClick={createPlan} className="mt-6 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{busy ? 'Creando…' : 'Crear plano de foro'}</button> : <>
-        <div className="mt-6 flex flex-wrap gap-3"><button type="button" disabled={busy} onClick={addSeats} className={buttonCls}><Armchair className="h-4 w-4"/>Agregar bloque de 50 asientos</button><button type="button" disabled={busy} onClick={() => addAisle('horizontal')} className={buttonCls}><Rows3 className="h-4 w-4"/>Insertar pasillo horizontal</button><button type="button" disabled={busy} onClick={() => addAisle('vertical')} className={buttonCls}><Columns3 className="h-4 w-4"/>Insertar pasillo vertical</button><span className="ml-auto self-center text-xs text-zinc-500">{Object.keys(seatsByElement).length} asientos · {reservedCount} reservados</span></div>
-        <div className="mt-5"><FloorplanCanvas elements={elements} columns={columns} rows={rows} activeTool={null} aisleAxis="horizontal" selectedId={selectedId} onSelect={setSelectedId} onAssign={reserve} onClearSelection={() => setSelectedId(null)} onResize={() => setError('El tamaño de los asientos está fijado para conservar la numeración.')} onPlace={() => {}} onMove={move} onDelete={() => setError('Los asientos se eliminan desde el mapa de asientos para proteger las reservas.')} /></div>
-        <p className="mt-4 text-sm text-zinc-500">Doble clic en un asiento para reservarlo a nombre de una persona o liberarlo. Las reservas confirmadas no se pueden mover ni liberar.</p>
+        <div className="mt-6 grid gap-4 lg:grid-cols-3"><section className="rounded-xl border bg-white p-4"><b className="text-sm">Tamaño del plano</b><p className="mt-1 text-xs text-zinc-500">{columns} columnas × {rows} filas</p><div className="mt-3 flex gap-2"><button type="button" onClick={()=>growGrid('columns')} className={buttonCls}>+ columna</button><button type="button" onClick={()=>growGrid('rows')} className={buttonCls}>+ fila</button></div></section><section className="rounded-xl border bg-white p-4"><b className="text-sm">Añadir sillas</b><div className="mt-3 grid grid-cols-4 gap-2"><NumberInput label="Filas" value={seatRows} set={setSeatRows}/><NumberInput label="Columnas" value={seatColumns} set={setSeatColumns}/><NumberInput label="Columna" value={seatX+1} set={v=>setSeatX(v-1)}/><NumberInput label="Fila" value={seatY+1} set={v=>setSeatY(v-1)}/></div><button type="button" disabled={busy} onClick={addSeats} className={`${buttonCls} mt-3`}><Armchair className="h-4 w-4"/>Añadir {seatRows * seatColumns} sillas</button></section><section className="rounded-xl border bg-white p-4"><b className="text-sm">Añadir pasillo</b><div className="mt-3 grid grid-cols-5 gap-2"><select value={aisleAxis} onChange={e=>setAisleAxis(e.target.value as 'horizontal'|'vertical')} className={fieldCls}><option value="horizontal">Horizontal</option><option value="vertical">Vertical</option></select><NumberInput label="Col." value={aisleX+1} set={v=>setAisleX(v-1)}/><NumberInput label="Fila" value={aisleY+1} set={v=>setAisleY(v-1)}/><NumberInput label="Largo" value={aisleLength} set={setAisleLength}/><NumberInput label="Ancho" value={aisleThickness} set={setAisleThickness}/></div><button type="button" disabled={busy} onClick={addAisle} className={`${buttonCls} mt-3`}>{aisleAxis==='horizontal'?<Rows3 className="h-4 w-4"/>:<Columns3 className="h-4 w-4"/>}Añadir pasillo</button></section></div>
+        {selectedId && <button type="button" onClick={renameSelected} className={`${buttonCls} mt-4`}>Cambiar nombre seleccionado</button>}
+        <div className="mt-5"><FloorplanCanvas elements={elements} columns={columns} rows={rows} activeTool={null} aisleAxis="horizontal" selectedId={selectedId} onSelect={setSelectedId} onAssign={reserve} onClearSelection={() => setSelectedId(null)} onResize={resize} onPlace={() => {}} onMove={move} onDelete={deleteSelected} /></div>
+        <p className="mt-4 text-sm text-zinc-500">Doble clic en un asiento para reservarlo a nombre de una persona o liberarlo. Los reservados se resaltan en ámbar y muestran el nombre; los confirmados no se pueden mover ni liberar.</p>
       </>}</main></div>
 }
 
 const buttonCls = 'inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3.5 py-2 text-sm font-semibold text-zinc-700 hover:border-emerald-400 disabled:opacity-50'
+const fieldCls = 'rounded-lg border border-zinc-300 px-2 py-2 text-sm'
+function NumberInput({ label, value, set }: { label: string; value: number; set: (value: number) => void }) { return <label className="text-xs text-zinc-600">{label}<input className={`${fieldCls} mt-1 w-full`} type="number" min={1} value={value} onChange={e=>set(Math.max(1, Number(e.target.value)||1))}/></label> }
