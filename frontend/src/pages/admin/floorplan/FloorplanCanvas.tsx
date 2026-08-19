@@ -136,6 +136,7 @@ function DraggableElement({
   selected,
   activeTool,
   onSelect,
+  onToggleSelect,
   onAssign,
   onResize,
   onPlace,
@@ -146,6 +147,7 @@ function DraggableElement({
   selected: boolean;
   activeTool: Tool | null;
   onSelect: () => void;
+  onToggleSelect?: () => void;
   onAssign: () => void;
   onResize: (axis: "x" | "y", delta: number) => void;
   onPlace: (tool: Tool, x: number, y: number) => void;
@@ -167,9 +169,11 @@ function DraggableElement({
         type="button"
         onMouseEnter={onHover}
         onMouseLeave={onLeave}
-        onClick={() =>
-          activeTool ? onPlace(activeTool, item.x, item.y) : onSelect()
-        }
+        onClick={(event) => {
+          if (activeTool) onPlace(activeTool, item.x, item.y);
+          else if ((event.shiftKey || event.ctrlKey || event.metaKey) && onToggleSelect) onToggleSelect();
+          else onSelect();
+        }}
         onDoubleClick={() => {
           if (!activeTool && (item.kind === "stand" || item.kind === "seat")) onAssign();
         }}
@@ -234,7 +238,9 @@ export function FloorplanCanvas({
   activeTool,
   aisleAxis,
   selectedId,
+  selectedIds = [],
   onSelect,
+  onToggleSelect,
   onAssign,
   onClearSelection,
   onResize,
@@ -248,7 +254,9 @@ export function FloorplanCanvas({
   activeTool: Tool | null;
   aisleAxis: "vertical" | "horizontal";
   selectedId: string | null;
+  selectedIds?: string[];
   onSelect: (id: string) => void;
+  onToggleSelect?: (id: string) => void;
   onAssign: (id: string) => void;
   onClearSelection?: () => void;
   onResize: (axis: "x" | "y", delta: number) => void;
@@ -342,9 +350,10 @@ export function FloorplanCanvas({
             <DraggableElement
               key={item.id}
               item={item}
-              selected={selectedId === item.id}
+              selected={selectedId === item.id || selectedIds.includes(item.id)}
               activeTool={activeTool}
               onSelect={() => onSelect(item.id)}
+              onToggleSelect={() => onToggleSelect?.(item.id)}
               onAssign={() => onAssign(item.id)}
               onResize={onResize}
               onPlace={onPlace}
