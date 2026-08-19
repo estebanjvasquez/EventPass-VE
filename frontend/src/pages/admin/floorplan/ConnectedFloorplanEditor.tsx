@@ -1,34 +1,412 @@
-import { useEffect, useRef, useState } from 'react'
-import { FloorplanEditor } from './FloorplanEditor'
-import { fromVenueElement } from './adapter'
-import type { FloorplanElement } from './model'
-import { supabase } from '../../../lib/supabase'
-import { useAutosave } from './useAutosave'
-import { Link } from 'react-router-dom'
+import { useEffect, useRef, useState } from "react";
+import { FloorplanEditor } from "./FloorplanEditor";
+import { fromVenueElement } from "./adapter";
+import type { FloorplanElement } from "./model";
+import { supabase } from "../../../lib/supabase";
+import { useAutosave } from "./useAutosave";
+import { Link } from "react-router-dom";
 
-type Company = { id: string; name: string }
+type Company = { id: string; name: string };
 
-export function ConnectedFloorplanEditor({ mapId, eventId }: { mapId: string; eventId: string }) {
-  const [mode, setMode] = useState<'design' | 'assign'>('design')
-  const [elements, setElements] = useState<FloorplanElement[] | null>(null)
-  const [draft, setDraft] = useState<FloorplanElement[] | null>(null)
-  const [grid, setGrid] = useState({ columns: 18, rows: 12 })
-  const [mapMetadata, setMapMetadata] = useState<Record<string, unknown>>({})
-  const [error, setError] = useState<string | null>(null)
-  const [companies, setCompanies] = useState<Company[]>([])
-  const [assigningStandId, setAssigningStandId] = useState<string | null>(null)
-  const [companyId, setCompanyId] = useState('')
-  const [assigning, setAssigning] = useState(false)
-  const [editorVersion, setEditorVersion] = useState(0)
-  const reconcileRef = useRef<(ids: Record<string, string>) => void>(() => undefined)
-  const persistedIds = useRef(new Set<string>())
-  useEffect(() => { void Promise.all([supabase.from('venue_map_elements').select('id,label,element_type,status,x,y,width,height,metadata').eq('map_id', mapId), supabase.from('venue_maps').select('metadata').eq('id', mapId).single()]).then(([{ data, error: loadError }, { data: map }]) => { if (loadError) setError(loadError.message); else { const loaded = (data ?? []).map(fromVenueElement); const metadata = (map?.metadata ?? {}) as Record<string, unknown> & { grid_columns?: number; grid_rows?: number }; persistedIds.current = new Set(loaded.map((item) => item.id)); setMapMetadata(metadata); setGrid({ columns: metadata.grid_columns ?? 18, rows: metadata.grid_rows ?? 12 }); setElements(loaded); setDraft(loaded) } }) }, [mapId])
-  useEffect(() => { void (async () => { const { data: event, error: eventError } = await supabase.from('events').select('organization_id').eq('id', eventId).maybeSingle(); if (eventError || !event) { if (eventError) setError(eventError.message); return }; const { data, error: companyError } = await supabase.from('companies').select('id,name').eq('organization_id', event.organization_id).order('name'); if (companyError) setError(companyError.message); else setCompanies((data ?? []) as Company[]) })() }, [eventId])
-  useEffect(() => { if (!companies.length) return; void supabase.from('booth_assignments').select('element_id,company_id').neq('status', 'cancelled').then(({ data, error: assignmentError }) => { if (assignmentError) { setError(assignmentError.message); return }; const companyById = new Map(companies.map((company) => [company.id, company.name])); const assigned = new Map((data ?? []).map((assignment) => [assignment.element_id, companyById.get(assignment.company_id)])); const decorate = (items: FloorplanElement[] | null) => items?.map((item) => assigned.has(item.id) ? { ...item, status: 'assigned' as const, assignedCompanyName: assigned.get(item.id) } : item) ?? null; setElements(decorate); setDraft(decorate) }) }, [companies])
-  const autosave = useAutosave(draft, async (next) => { if (!next) return; const nextIds = new Set(next.map((item) => item.id)); const removed = [...persistedIds.current].filter((id) => !nextIds.has(id)); if (removed.length) { const { error: deleteError } = await supabase.from('venue_map_elements').delete().in('id', removed); if (deleteError) throw deleteError; removed.forEach((id) => persistedIds.current.delete(id)) }; const ids: Record<string, string> = {}; const created = next.filter((item) => !persistedIds.current.has(item.id)); for (const item of created) { const { data, error: insertError } = await supabase.from('venue_map_elements').insert({ map_id: mapId, element_type: item.kind === 'stand' ? 'stand' : item.kind === 'aisle' ? 'aisle' : item.objectType === 'access' || item.objectType === 'door' || item.objectType === 'security' ? 'access_point' : 'zone', label: item.label, x: item.x, y: item.y, width: item.width, height: item.height, status: item.kind === 'stand' ? 'available' : 'blocked', metadata: { floorplan_kind: item.kind === 'zone' && item.objectType === 'blank' ? 'blank' : item.kind === 'zone' && item.objectType === 'special' ? 'special' : item.objectType ? 'object' : item.kind, object_type: item.objectType, purpose: item.purpose, rotation: item.rotation, color: item.color, door_role: item.doorRole } }).select('id').single(); if (insertError) throw insertError; ids[item.id] = data.id; persistedIds.current.add(data.id) }; if (Object.keys(ids).length) reconcileRef.current(ids); const updates = next.filter((item) => persistedIds.current.has(item.id)).map((item) => supabase.from('venue_map_elements').update({ label: item.label, x: item.x, y: item.y, width: item.width, height: item.height, metadata: { floorplan_kind: item.kind === 'zone' && item.objectType === 'blank' ? 'blank' : item.kind === 'zone' && item.objectType === 'special' ? 'special' : item.objectType ? 'object' : item.kind, object_type: item.objectType, purpose: item.purpose, rotation: item.rotation, color: item.color, door_role: item.doorRole } }).eq('id', item.id)); const results = await Promise.all(updates); const failed = results.find((result) => result.error)?.error; if (failed) throw failed })
-  if (!elements) return <p className="rounded-xl border bg-white p-4 text-sm text-zinc-600">Cargando plano…</p>
-  async function changeGrid(columns: number, rows: number) { if (!Number.isInteger(columns) || !Number.isInteger(rows) || columns < 1 || rows < 1 || elements?.some((item) => item.x + item.width > columns || item.y + item.height > rows)) { setError('No puedes reducir la cuadrícula sobre elementos existentes.'); return }; setGrid({ columns, rows }); const metadata = { ...mapMetadata, grid_columns: columns, grid_rows: rows }; const { error: gridError } = await supabase.from('venue_maps').update({ metadata }).eq('id', mapId); if (gridError) setError(gridError.message); else { setMapMetadata(metadata); setError(null) } }
-  async function assignCompany() { if (!assigningStandId || !companyId) return; setAssigning(true); setError(null); const selectedCompany = companies.find((company) => company.id === companyId); const { data: assignmentRows, error: assignmentError } = await supabase.from('booth_assignments').upsert({ element_id: assigningStandId, company_id: companyId, status: 'confirmed' }, { onConflict: 'element_id' }).select('element_id'); if (assignmentError || !assignmentRows?.length) { setError(assignmentError?.message ?? 'La asignación no fue confirmada. Verifica los permisos del evento.'); setAssigning(false); return }; const { data: standRows, error: standError } = await supabase.from('venue_map_elements').update({ status: 'assigned' }).eq('id', assigningStandId).select('id,status'); if (standError || !standRows?.length) { setError(standError?.message ?? 'La empresa se guardó, pero el stand no pudo marcarse como asignado.'); setAssigning(false); return }; const decorate = (items: FloorplanElement[] | null) => items?.map((item) => item.id === assigningStandId ? { ...item, status: 'assigned' as const, assignedCompanyName: selectedCompany?.name } : item) ?? null; setElements(decorate); setDraft(decorate); setEditorVersion((current) => current + 1); setAssigningStandId(null); setCompanyId(''); setAssigning(false) }
-  const assigningStand = elements.find((item) => item.id === assigningStandId)
-  return <section>{error && <p className="mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-800">{error}</p>}<div className="mb-4 flex items-center gap-2 rounded-xl border bg-white p-2"><button type="button" onClick={() => setMode('design')} className={`rounded-lg px-3 py-2 text-sm font-semibold ${mode === 'design' ? 'bg-emerald-700 text-white' : ''}`}>Diseñar plano</button><button type="button" onClick={() => setMode('assign')} className={`rounded-lg px-3 py-2 text-sm font-semibold ${mode === 'assign' ? 'bg-emerald-700 text-white' : ''}`}>Asignar empresas</button><span className="ml-auto text-xs text-zinc-500">{autosave === 'saving' ? 'Guardando…' : autosave === 'saved' ? 'Guardado' : autosave === 'error' ? 'Error al guardar' : ''}</span></div>{mode === 'design' ? <FloorplanEditor key={editorVersion} initial={elements} columns={grid.columns} rows={grid.rows} onGridChange={(columns, rows) => void changeGrid(columns, rows)} onAssignStand={(id) => { setAssigningStandId(id); setCompanyId('') }} onChange={(next, reconcile) => { reconcileRef.current = reconcile; setDraft(next) }} /> : <div className="rounded-xl border bg-white p-4 text-sm text-zinc-600"><p>Gestiona empresas, crea expositores nuevos y asigna cada stand desde el módulo comercial.</p><Link to={`/admin/expositores/${eventId}`} className="mt-3 inline-flex rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">Abrir expositores y asignaciones</Link></div>}{assigningStand && <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 p-4"><div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl"><h2 className="text-lg font-bold">Asignar empresa a {assigningStand.label}</h2><p className="mt-1 text-sm text-zinc-600">Selecciona un expositor. Para crear uno nuevo, usa el módulo de expositores.</p><select value={companyId} onChange={(event) => setCompanyId(event.target.value)} className="mt-4 w-full rounded-lg border p-2"><option value="">Selecciona una empresa</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}</select><div className="mt-4 flex justify-end gap-2"><button type="button" onClick={() => setAssigningStandId(null)} className="rounded-lg border px-3 py-2 text-sm">Cancelar</button><button type="button" disabled={!companyId || assigning} onClick={() => void assignCompany()} className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-40">{assigning ? 'Asignando…' : 'Asignar empresa'}</button></div></div></div>}</section>
+export function ConnectedFloorplanEditor({
+  mapId,
+  eventId,
+}: {
+  mapId: string;
+  eventId: string;
+}) {
+  const [mode, setMode] = useState<"design" | "assign">("design");
+  const [elements, setElements] = useState<FloorplanElement[] | null>(null);
+  const [draft, setDraft] = useState<FloorplanElement[] | null>(null);
+  const [grid, setGrid] = useState({ columns: 18, rows: 12 });
+  const [mapMetadata, setMapMetadata] = useState<Record<string, unknown>>({});
+  const [error, setError] = useState<string | null>(null);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [assigningStandId, setAssigningStandId] = useState<string | null>(null);
+  const [companyId, setCompanyId] = useState("");
+  const [assigning, setAssigning] = useState(false);
+  const [editorVersion, setEditorVersion] = useState(0);
+  const reconcileRef = useRef<(ids: Record<string, string>) => void>(
+    () => undefined,
+  );
+  const persistedIds = useRef(new Set<string>());
+  useEffect(() => {
+    void Promise.all([
+      supabase
+        .from("venue_map_elements")
+        .select("id,label,element_type,status,x,y,width,height,metadata")
+        .eq("map_id", mapId),
+      supabase.from("venue_maps").select("metadata").eq("id", mapId).single(),
+    ]).then(([{ data, error: loadError }, { data: map }]) => {
+      if (loadError) setError(loadError.message);
+      else {
+        const loaded = (data ?? []).map(fromVenueElement);
+        const metadata = (map?.metadata ?? {}) as Record<string, unknown> & {
+          grid_columns?: number;
+          grid_rows?: number;
+        };
+        persistedIds.current = new Set(loaded.map((item) => item.id));
+        setMapMetadata(metadata);
+        setGrid({
+          columns: metadata.grid_columns ?? 18,
+          rows: metadata.grid_rows ?? 12,
+        });
+        setElements(loaded);
+        setDraft(loaded);
+      }
+    });
+  }, [mapId]);
+  useEffect(() => {
+    void (async () => {
+      const { data: event, error: eventError } = await supabase
+        .from("events")
+        .select("organization_id")
+        .eq("id", eventId)
+        .maybeSingle();
+      if (eventError || !event) {
+        if (eventError) setError(eventError.message);
+        return;
+      }
+      const { data, error: companyError } = await supabase
+        .from("companies")
+        .select("id,name")
+        .eq("organization_id", event.organization_id)
+        .order("name");
+      if (companyError) setError(companyError.message);
+      else setCompanies((data ?? []) as Company[]);
+    })();
+  }, [eventId]);
+  useEffect(() => {
+    if (!companies.length) return;
+    void supabase
+      .from("booth_assignments")
+      .select("element_id,company_id")
+      .neq("status", "cancelled")
+      .then(({ data, error: assignmentError }) => {
+        if (assignmentError) {
+          setError(assignmentError.message);
+          return;
+        }
+        const companyById = new Map(
+          companies.map((company) => [company.id, company.name]),
+        );
+        const assigned = new Map(
+          (data ?? []).map((assignment) => [
+            assignment.element_id,
+            companyById.get(assignment.company_id),
+          ]),
+        );
+        const decorate = (items: FloorplanElement[] | null) =>
+          items?.map((item) =>
+            assigned.has(item.id)
+              ? {
+                  ...item,
+                  status: "assigned" as const,
+                  assignedCompanyName: assigned.get(item.id),
+                }
+              : item,
+          ) ?? null;
+        setElements(decorate);
+        setDraft(decorate);
+      });
+  }, [companies]);
+  const autosave = useAutosave(draft, async (next) => {
+    if (!next) return;
+    const nextIds = new Set(next.map((item) => item.id));
+    const removed = [...persistedIds.current].filter((id) => !nextIds.has(id));
+    if (removed.length) {
+      const { error: deleteError } = await supabase
+        .from("venue_map_elements")
+        .delete()
+        .in("id", removed);
+      if (deleteError) throw deleteError;
+      removed.forEach((id) => persistedIds.current.delete(id));
+    }
+    const ids: Record<string, string> = {};
+    const created = next.filter((item) => !persistedIds.current.has(item.id));
+    for (const item of created) {
+      const { data, error: insertError } = await supabase
+        .from("venue_map_elements")
+        .insert({
+          map_id: mapId,
+          element_type:
+            item.kind === "stand"
+              ? "stand"
+              : item.kind === "aisle"
+                ? "aisle"
+                : item.objectType === "access" ||
+                    item.objectType === "door" ||
+                    item.objectType === "security"
+                  ? "access_point"
+                  : "zone",
+          label: item.label,
+          x: item.x,
+          y: item.y,
+          width: item.width,
+          height: item.height,
+          status: item.kind === "stand" ? "available" : "blocked",
+          metadata: {
+            floorplan_kind:
+              item.kind === "zone" && item.objectType === "blank"
+                ? "blank"
+                : item.kind === "zone" && item.objectType === "special"
+                  ? "special"
+                  : item.objectType
+                    ? "object"
+                    : item.kind,
+            object_type: item.objectType,
+            purpose: item.purpose,
+            rotation: item.rotation,
+            color: item.color,
+            door_role: item.doorRole,
+            assigned_company_name: item.assignedCompanyName,
+          },
+        })
+        .select("id")
+        .single();
+      if (insertError) throw insertError;
+      ids[item.id] = data.id;
+      persistedIds.current.add(data.id);
+    }
+    if (Object.keys(ids).length) reconcileRef.current(ids);
+    const updates = next
+      .filter((item) => persistedIds.current.has(item.id))
+      .map((item) =>
+        supabase
+          .from("venue_map_elements")
+          .update({
+            label: item.label,
+            x: item.x,
+            y: item.y,
+            width: item.width,
+            height: item.height,
+            metadata: {
+              floorplan_kind:
+                item.kind === "zone" && item.objectType === "blank"
+                  ? "blank"
+                  : item.kind === "zone" && item.objectType === "special"
+                    ? "special"
+                    : item.objectType
+                      ? "object"
+                      : item.kind,
+              object_type: item.objectType,
+              purpose: item.purpose,
+              rotation: item.rotation,
+              color: item.color,
+              door_role: item.doorRole,
+              assigned_company_name: item.assignedCompanyName,
+            },
+          })
+          .eq("id", item.id),
+      );
+    const results = await Promise.all(updates);
+    const failed = results.find((result) => result.error)?.error;
+    if (failed) throw failed;
+  });
+  if (!elements)
+    return (
+      <p className="rounded-xl border bg-white p-4 text-sm text-zinc-600">
+        Cargando plano…
+      </p>
+    );
+  async function changeGrid(columns: number, rows: number) {
+    if (
+      !Number.isInteger(columns) ||
+      !Number.isInteger(rows) ||
+      columns < 1 ||
+      rows < 1 ||
+      elements?.some(
+        (item) => item.x + item.width > columns || item.y + item.height > rows,
+      )
+    ) {
+      setError("No puedes reducir la cuadrícula sobre elementos existentes.");
+      return;
+    }
+    setGrid({ columns, rows });
+    const metadata = { ...mapMetadata, grid_columns: columns, grid_rows: rows };
+    const { error: gridError } = await supabase
+      .from("venue_maps")
+      .update({ metadata })
+      .eq("id", mapId);
+    if (gridError) setError(gridError.message);
+    else {
+      setMapMetadata(metadata);
+      setError(null);
+    }
+  }
+  async function assignCompany() {
+    if (!assigningStandId || !companyId) return;
+    setAssigning(true);
+    setError(null);
+    const selectedCompany = companies.find(
+      (company) => company.id === companyId,
+    );
+    const { data: assignmentRows, error: assignmentError } = await supabase
+      .from("booth_assignments")
+      .upsert(
+        {
+          element_id: assigningStandId,
+          company_id: companyId,
+          status: "confirmed",
+        },
+        { onConflict: "element_id" },
+      )
+      .select("element_id");
+    if (assignmentError || !assignmentRows?.length) {
+      setError(
+        assignmentError?.message ??
+          "La asignación no fue confirmada. Verifica los permisos del evento.",
+      );
+      setAssigning(false);
+      return;
+    }
+    const { data: standRows, error: standError } = await supabase
+      .from("venue_map_elements")
+      .update({ status: "assigned" })
+      .eq("id", assigningStandId)
+      .select("id,status");
+    if (standError || !standRows?.length) {
+      setError(
+        standError?.message ??
+          "La empresa se guardó, pero el stand no pudo marcarse como asignado.",
+      );
+      setAssigning(false);
+      return;
+    }
+    const decorate = (items: FloorplanElement[] | null) =>
+      items?.map((item) =>
+        item.id === assigningStandId
+          ? {
+              ...item,
+              status: "assigned" as const,
+              assignedCompanyName: selectedCompany?.name,
+            }
+          : item,
+      ) ?? null;
+    setElements(decorate);
+    setDraft(decorate);
+    setEditorVersion((current) => current + 1);
+    setAssigningStandId(null);
+    setCompanyId("");
+    setAssigning(false);
+  }
+  async function releaseStand() {
+    if (!assigningStandId) return;
+    setAssigning(true);
+    setError(null);
+    const { error: assignmentError } = await supabase.from("booth_assignments").delete().eq("element_id", assigningStandId);
+    if (assignmentError) { setError(assignmentError.message); setAssigning(false); return; }
+    const { data: standRows, error: standError } = await supabase.from("venue_map_elements").update({ status: "available" }).eq("id", assigningStandId).select("id,status");
+    if (standError || !standRows?.length) { setError(standError?.message ?? "No se pudo liberar el stand."); setAssigning(false); return; }
+    const decorate = (items: FloorplanElement[] | null) => items?.map((item) => item.id === assigningStandId ? { ...item, status: "available" as const, assignedCompanyName: undefined } : item) ?? null;
+    setElements(decorate); setDraft(decorate); setEditorVersion((current) => current + 1); setAssigningStandId(null); setCompanyId(""); setAssigning(false);
+  }
+  const assigningStand = elements.find((item) => item.id === assigningStandId);
+  return (
+    <section>
+      {error && (
+        <p className="mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-800">
+          {error}
+        </p>
+      )}
+      <div className="mb-4 flex items-center gap-2 rounded-xl border bg-white p-2">
+        <button
+          type="button"
+          onClick={() => setMode("design")}
+          className={`rounded-lg px-3 py-2 text-sm font-semibold ${mode === "design" ? "bg-emerald-700 text-white" : ""}`}
+        >
+          Diseñar plano
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode("assign")}
+          className={`rounded-lg px-3 py-2 text-sm font-semibold ${mode === "assign" ? "bg-emerald-700 text-white" : ""}`}
+        >
+          Asignar empresas
+        </button>
+        <span className="ml-auto text-xs text-zinc-500">
+          {autosave === "saving"
+            ? "Guardando…"
+            : autosave === "saved"
+              ? "Guardado"
+              : autosave === "error"
+                ? "Error al guardar"
+                : ""}
+        </span>
+      </div>
+      {mode === "design" ? (
+        <FloorplanEditor
+          key={editorVersion}
+          initial={elements}
+          columns={grid.columns}
+          rows={grid.rows}
+          onGridChange={(columns, rows) => void changeGrid(columns, rows)}
+          onAssignStand={(id) => {
+            setAssigningStandId(id);
+            setCompanyId("");
+          }}
+          onChange={(next, reconcile) => {
+            reconcileRef.current = reconcile;
+            setDraft(next);
+          }}
+        />
+      ) : (
+        <div className="rounded-xl border bg-white p-4 text-sm text-zinc-600">
+          <p>
+            Gestiona empresas, crea expositores nuevos y asigna cada stand desde
+            el módulo comercial.
+          </p>
+          <Link
+            to={`/admin/expositores/${eventId}`}
+            className="mt-3 inline-flex rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white"
+          >
+            Abrir expositores y asignaciones
+          </Link>
+        </div>
+      )}
+      {assigningStand && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
+            <h2 className="text-lg font-bold">
+              Asignar empresa a {assigningStand.label}
+            </h2>
+            <p className="mt-1 text-sm text-zinc-600">
+              Selecciona un expositor. Para crear uno nuevo, usa el módulo de
+              expositores.
+            </p>
+            <select
+              value={companyId}
+              onChange={(event) => setCompanyId(event.target.value)}
+              className="mt-4 w-full rounded-lg border p-2"
+            >
+              <option value="">Selecciona una empresa</option>
+              {companies.map((company) => (
+                <option key={company.id} value={company.id}>
+                  {company.name}
+                </option>
+              ))}
+            </select>
+            <div className="mt-4 flex justify-end gap-2">
+              {assigningStand.status === "assigned" && <button type="button" disabled={assigning} onClick={() => void releaseStand()} className="mr-auto rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 disabled:opacity-40">Liberar stand</button>}
+              <button
+                type="button"
+                onClick={() => setAssigningStandId(null)}
+                className="rounded-lg border px-3 py-2 text-sm"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={!companyId || assigning}
+                onClick={() => void assignCompany()}
+                className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-40"
+              >
+                {assigning ? "Asignando…" : "Asignar empresa"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
 }

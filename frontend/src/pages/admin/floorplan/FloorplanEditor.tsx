@@ -1,88 +1,392 @@
-import { useEffect, useState } from 'react'
-import { FloorplanCanvas } from './FloorplanCanvas'
-import { FloorplanPalette } from './FloorplanPalette'
-import { intersects, palette } from './model'
-import type { FloorplanElement } from './model'
-import { useFloorplanHistory } from './useFloorplanHistory'
+import { useEffect, useState } from "react";
+import { FloorplanCanvas } from "./FloorplanCanvas";
+import { FloorplanPalette } from "./FloorplanPalette";
+import { intersects, palette } from "./model";
+import type { FloorplanElement } from "./model";
+import { useFloorplanHistory } from "./useFloorplanHistory";
 
-type Tool = typeof palette[number]['objectType']
-const overlayTypes = new Set<NonNullable<FloorplanElement['objectType']>>(['plant', 'table', 'sofa', 'door', 'access', 'security', 'flow_arrow', 'flow_route', 'lobby', 'information'])
-const isOverlay = (item: Pick<FloorplanElement, 'objectType'>) => !!item.objectType && overlayTypes.has(item.objectType)
+type Tool = (typeof palette)[number]["objectType"];
+const overlayTypes = new Set<NonNullable<FloorplanElement["objectType"]>>([
+  "plant",
+  "table",
+  "sofa",
+  "door",
+  "access",
+  "security",
+  "flow_arrow",
+  "flow_route",
+  "lobby",
+  "information",
+]);
+const isOverlay = (item: Pick<FloorplanElement, "objectType">) =>
+  !!item.objectType && overlayTypes.has(item.objectType);
 
-export function FloorplanEditor({ initial, columns, rows, onGridChange, onAssignStand, onChange }: { initial: FloorplanElement[]; columns: number; rows: number; onGridChange: (columns: number, rows: number) => void; onAssignStand: (id: string) => void; onChange?: (elements: FloorplanElement[], reconcile: (ids: Record<string, string>) => void) => void }) {
-  const [tool, setTool] = useState<Tool | null>(null)
-  const [aisleAxis, setAisleAxis] = useState<'vertical' | 'horizontal'>('vertical')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
+export function FloorplanEditor({
+  initial,
+  columns,
+  rows,
+  onGridChange,
+  onAssignStand,
+  onChange,
+}: {
+  initial: FloorplanElement[];
+  columns: number;
+  rows: number;
+  onGridChange: (columns: number, rows: number) => void;
+  onAssignStand: (id: string) => void;
+  onChange?: (
+    elements: FloorplanElement[],
+    reconcile: (ids: Record<string, string>) => void,
+  ) => void;
+}) {
+  const [tool, setTool] = useState<Tool | null>(null);
+  const [aisleAxis, setAisleAxis] = useState<"vertical" | "horizontal">(
+    "vertical",
+  );
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   // Los planos de versiones anteriores guardaban pasillos que cubrían una fila o
   // columna completa. Acortarlos no desplaza ni toca otros elementos y los vuelve editables.
   const normalizedInitial = initial.map((item) => {
-    if (item.kind !== 'aisle') return item
-    if (item.width === 1 && item.height >= rows) return { ...item, height: Math.min(3, rows) }
-    if (item.height === 1 && item.width >= columns) return { ...item, width: Math.min(3, columns) }
-    return item
-  })
-  const { current, commit, reconcileIds, undo, redo, canUndo, canRedo } = useFloorplanHistory(normalizedInitial)
+    if (item.kind !== "aisle") return item;
+    if (item.width === 1 && item.height >= rows)
+      return { ...item, height: Math.min(3, rows) };
+    if (item.height === 1 && item.width >= columns)
+      return { ...item, width: Math.min(3, columns) };
+    return item;
+  });
+  const { current, commit, reconcileIds, undo, redo, canUndo, canRedo } =
+    useFloorplanHistory(normalizedInitial);
 
-  useEffect(() => { onChange?.(current, reconcileIds) }, [current, onChange, reconcileIds])
+  useEffect(() => {
+    onChange?.(current, reconcileIds);
+  }, [current, onChange, reconcileIds]);
 
-  function fits(rect: Pick<FloorplanElement, 'x' | 'y' | 'width' | 'height' | 'objectType'>, ignoreId?: string) {
-    if (rect.x < 0 || rect.y < 0 || rect.x + rect.width > columns || rect.y + rect.height > rows) return false
+  function fits(
+    rect: Pick<FloorplanElement, "x" | "y" | "width" | "height" | "objectType">,
+    ignoreId?: string,
+  ) {
+    if (
+      rect.x < 0 ||
+      rect.y < 0 ||
+      rect.x + rect.width > columns ||
+      rect.y + rect.height > rows
+    )
+      return false;
     // Mobiliario, señalética y vegetación viven en una capa visual: pueden colocarse
     // sobre stands, zonas y entre sí, como ocurre en los stencils de planta de Visio.
-    if (isOverlay(rect)) return true
-    return !current.some((item) => item.id !== ignoreId && !isOverlay(item) && intersects(item, rect))
+    if (isOverlay(rect)) return true;
+    return !current.some(
+      (item) =>
+        item.id !== ignoreId && !isOverlay(item) && intersects(item, rect),
+    );
   }
 
   function place(nextTool: Tool, x: number, y: number) {
-    const preset = palette.find((item) => item.objectType === nextTool)
-    if (!preset) return
-    const count = current.filter((item) => item.label === preset.label || item.label.startsWith(`${preset.label} `)).length + 1
-    const isAisle = nextTool === 'aisle'
+    const preset = palette.find((item) => item.objectType === nextTool);
+    if (!preset) return;
+    const count =
+      current.filter(
+        (item) =>
+          item.label === preset.label ||
+          item.label.startsWith(`${preset.label} `),
+      ).length + 1;
+    const isAisle = nextTool === "aisle";
     // Pasillos son elementos locales: una franja inicial de tres celdas que puede
     // redimensionarse. No reservan toda la fila/columna ni desplazan el plano.
     const rect = isAisle
-      ? aisleAxis === 'vertical' ? { x, y, width: 1, height: 3 } : { x, y, width: 3, height: 1 }
-      : { x, y, width: preset.width, height: preset.height }
-    const objectType = nextTool === 'stand' || isAisle ? undefined : nextTool
-    if (!fits({ ...rect, objectType })) { setNotice('No cabe en esa posición. Elige una zona libre o ajusta el tamaño de los elementos cercanos.'); return }
-    const kind = isAisle ? 'aisle' : nextTool === 'stand' ? 'stand' : nextTool === 'blank' || nextTool === 'special' ? 'zone' : 'object'
-    commit([...current, { id: `local-${crypto.randomUUID()}`, label: `${preset.label} ${count}`, kind, objectType, ...rect }])
-    setTool(null)
-    setNotice(isAisle ? 'Pasillo añadido. Puedes arrastrarlo y ajustar sus bordes sin bloquear toda la cuadrícula.' : null)
+      ? aisleAxis === "vertical"
+        ? { x, y, width: 1, height: 3 }
+        : { x, y, width: 3, height: 1 }
+      : { x, y, width: preset.width, height: preset.height };
+    const objectType = nextTool === "stand" || isAisle ? undefined : nextTool;
+    if (!fits({ ...rect, objectType })) {
+      setNotice(
+        "No cabe en esa posición. Elige una zona libre o ajusta el tamaño de los elementos cercanos.",
+      );
+      return;
+    }
+    const kind = isAisle
+      ? "aisle"
+      : nextTool === "stand"
+        ? "stand"
+        : nextTool === "blank" || nextTool === "special"
+          ? "zone"
+          : "object";
+    commit([
+      ...current,
+      {
+        id: `local-${crypto.randomUUID()}`,
+        label: `${preset.label} ${count}`,
+        kind,
+        objectType,
+        ...rect,
+      },
+    ]);
+    setTool(null);
+    setNotice(
+      isAisle
+        ? "Pasillo añadido. Puedes arrastrarlo y ajustar sus bordes sin bloquear toda la cuadrícula."
+        : null,
+    );
   }
 
-  function resize(axis: 'x' | 'y', delta: number) {
-    const item = current.find((entry) => entry.id === selectedId)
-    if (!item) return
-    const dimension = axis === 'x' ? 'width' : 'height'
-    const next = { ...item, [dimension]: item[dimension] + delta }
-    if (next.width < 1 || next.height < 1) { setNotice('El elemento debe conservar al menos una celda.'); return }
-    if (next.x < 0 || next.y < 0 || next.x + next.width > columns || next.y + next.height > rows) { setNotice('No hay espacio dentro del plano para ese tamaño.'); return }
-    const collisions = current.filter((entry) => entry.id !== item.id && !isOverlay(entry) && intersects(next, entry))
-    if (collisions.length && item.kind === 'stand' && collisions.every((entry) => entry.kind === 'stand' && entry.status === 'available')) {
-      commit(current.filter((entry) => !collisions.some((collision) => collision.id === entry.id)).map((entry) => entry.id === item.id ? next : entry))
-      setNotice('Stands disponibles unificados en un solo espacio.')
-      return
+  function resize(axis: "x" | "y", delta: number) {
+    const item = current.find((entry) => entry.id === selectedId);
+    if (!item) return;
+    const dimension = axis === "x" ? "width" : "height";
+    const next = { ...item, [dimension]: item[dimension] + delta };
+    if (next.width < 1 || next.height < 1) {
+      setNotice("El elemento debe conservar al menos una celda.");
+      return;
     }
-    if (collisions.length && !isOverlay(next)) { setNotice('No hay espacio libre para ese tamaño.'); return }
-    commit(current.map((entry) => entry.id === item.id ? next : entry))
-    setNotice(null)
+    if (
+      next.x < 0 ||
+      next.y < 0 ||
+      next.x + next.width > columns ||
+      next.y + next.height > rows
+    ) {
+      setNotice("No hay espacio dentro del plano para ese tamaño.");
+      return;
+    }
+    const collisions = current.filter(
+      (entry) =>
+        entry.id !== item.id && !isOverlay(entry) && intersects(next, entry),
+    );
+    if (
+      collisions.length &&
+      item.kind === "stand" &&
+      collisions.every(
+        (entry) => entry.kind === "stand" && entry.status === "available",
+      )
+    ) {
+      commit(
+        current
+          .filter(
+            (entry) =>
+              !collisions.some((collision) => collision.id === entry.id),
+          )
+          .map((entry) => (entry.id === item.id ? next : entry)),
+      );
+      setNotice("Stands disponibles unificados en un solo espacio.");
+      return;
+    }
+    if (collisions.length && !isOverlay(next)) {
+      setNotice("No hay espacio libre para ese tamaño.");
+      return;
+    }
+    commit(current.map((entry) => (entry.id === item.id ? next : entry)));
+    setNotice(null);
   }
 
   function move(id: string, x: number, y: number) {
-    const item = current.find((entry) => entry.id === id)
-    if (!item) return
-    const next = { ...item, x, y }
-    if (!fits(next, id)) { setNotice('No se puede mover: la posición está ocupada o fuera del plano.'); return }
-    commit(current.map((entry) => entry.id === id ? next : entry))
-    setNotice(null)
+    const item = current.find((entry) => entry.id === id);
+    if (!item) return;
+    const next = { ...item, x, y };
+    if (!fits(next, id)) {
+      setNotice(
+        "No se puede mover: la posición está ocupada o fuera del plano.",
+      );
+      return;
+    }
+    commit(current.map((entry) => (entry.id === id ? next : entry)));
+    setNotice(null);
   }
 
-  function remove() { if (!selectedId) return; commit(current.filter((item) => item.id !== selectedId)); setSelectedId(null); setNotice(null) }
-  function updateSelected(change: Partial<FloorplanElement>) { if (selectedId) commit(current.map((item) => item.id === selectedId ? { ...item, ...change } : item)) }
-  const hasOverflow = current.some((item) => item.x + item.width > columns || item.y + item.height > rows)
-  const selected = current.find((item) => item.id === selectedId)
+  function remove() {
+    if (!selectedId) return;
+    commit(current.filter((item) => item.id !== selectedId));
+    setSelectedId(null);
+    setNotice(null);
+  }
+  function updateSelected(change: Partial<FloorplanElement>) {
+    if (selectedId)
+      commit(
+        current.map((item) =>
+          item.id === selectedId ? { ...item, ...change } : item,
+        ),
+      );
+  }
+  const hasOverflow = current.some(
+    (item) => item.x + item.width > columns || item.y + item.height > rows,
+  );
+  const selected = current.find((item) => item.id === selectedId);
 
-  return <div className="grid gap-4 lg:grid-cols-[180px_1fr]"><FloorplanPalette active={tool} onChoose={setTool} /><section><div className="mb-2 flex flex-wrap items-center gap-2"><button type="button" disabled={!canUndo} onClick={undo} className="rounded border px-2 py-1 text-xs disabled:opacity-40">Deshacer</button><button type="button" disabled={!canRedo} onClick={redo} className="rounded border px-2 py-1 text-xs disabled:opacity-40">Rehacer</button><label className="ml-auto text-xs">Columnas <input type="number" min="1" value={columns} onChange={(event) => onGridChange(Number(event.target.value), rows)} className="ml-1 w-14 rounded border p-1" /></label><label className="text-xs">Filas <input type="number" min="1" value={rows} onChange={(event) => onGridChange(columns, Number(event.target.value))} className="ml-1 w-14 rounded border p-1" /></label></div>{selected && <div className="mb-2 grid gap-2 rounded border bg-white p-3 text-xs sm:grid-cols-2"><label>Nombre<input value={selected.label} onChange={(event) => updateSelected({ label: event.target.value })} className="mt-1 w-full rounded border p-2 text-sm" /></label><label>Objetivo / uso<input value={selected.purpose ?? ''} onChange={(event) => updateSelected({ purpose: event.target.value })} placeholder="Ej. salida de emergencia" className="mt-1 w-full rounded border p-2 text-sm" /></label>{selected.kind === 'aisle' && <label>Color del pasillo<input type="color" value={selected.color ?? '#64748b'} onChange={(event) => updateSelected({ color: event.target.value })} className="mt-1 block h-9 w-full rounded border p-1" /></label>}{selected.objectType === 'door' && <label>Tipo de puerta<select value={selected.doorRole ?? 'entry'} onChange={(event) => updateSelected({ doorRole: event.target.value as 'entry' | 'exit' })} className="mt-1 w-full rounded border p-2 text-sm"><option value="entry">Entrada</option><option value="exit">Salida</option></select></label>}{selected.objectType === 'flow_arrow' && <div className="sm:col-span-2"><span className="font-semibold">Dirección del flujo</span><div className="mt-1 flex gap-1">{([{ label: '→', value: 0 }, { label: '↓', value: 90 }, { label: '←', value: 180 }, { label: '↑', value: 270 }] as const).map((direction) => <button type="button" key={direction.value} onClick={() => updateSelected({ rotation: direction.value })} className={`rounded border px-3 py-1 text-sm ${selected.rotation === direction.value || (!selected.rotation && direction.value === 0) ? 'border-fuchsia-700 bg-fuchsia-100 text-fuchsia-900' : ''}`}>{direction.label}</button>)}</div></div>}</div>}{tool === 'aisle' && <div className="mb-2 flex items-center gap-2 rounded bg-sky-50 p-2 text-xs text-sky-950"><span>Elige orientación y haz clic en una zona libre. El pasillo inicial mide tres celdas.</span><button type="button" onClick={() => setAisleAxis('vertical')} className={`rounded px-2 py-1 ${aisleAxis === 'vertical' ? 'bg-sky-700 text-white' : 'border'}`}>Vertical</button><button type="button" onClick={() => setAisleAxis('horizontal')} className={`rounded px-2 py-1 ${aisleAxis === 'horizontal' ? 'bg-sky-700 text-white' : 'border'}`}>Horizontal</button></div>}{notice && <p className="mb-2 rounded bg-amber-50 p-2 text-xs text-amber-900">{notice}</p>}{hasOverflow && <p className="mb-2 rounded bg-amber-50 p-2 text-xs text-amber-900">Amplía la cuadrícula: contiene elementos fuera de estos límites.</p>}<FloorplanCanvas elements={current} columns={columns} rows={rows} activeTool={tool} aisleAxis={aisleAxis} selectedId={selectedId} onSelect={setSelectedId} onAssign={onAssignStand} onResize={resize} onPlace={place} onMove={move} onDelete={remove} /></section></div>
+  return (
+    <div className="grid gap-4 lg:grid-cols-[180px_1fr]">
+      <FloorplanPalette active={tool} onChoose={setTool} />
+      <section>
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={!canUndo}
+            onClick={undo}
+            className="rounded border px-2 py-1 text-xs disabled:opacity-40"
+          >
+            Deshacer
+          </button>
+          <button
+            type="button"
+            disabled={!canRedo}
+            onClick={redo}
+            className="rounded border px-2 py-1 text-xs disabled:opacity-40"
+          >
+            Rehacer
+          </button>
+          <label className="ml-auto text-xs">
+            Columnas{" "}
+            <input
+              type="number"
+              min="1"
+              value={columns}
+              onChange={(event) =>
+                onGridChange(Number(event.target.value), rows)
+              }
+              className="ml-1 w-14 rounded border p-1"
+            />
+          </label>
+          <label className="text-xs">
+            Filas{" "}
+            <input
+              type="number"
+              min="1"
+              value={rows}
+              onChange={(event) =>
+                onGridChange(columns, Number(event.target.value))
+              }
+              className="ml-1 w-14 rounded border p-1"
+            />
+          </label>
+        </div>
+        {selected && (
+          <div className="mb-2 grid gap-2 rounded border bg-white p-3 text-xs sm:grid-cols-2">
+            <label>
+              Nombre
+              <input
+                value={selected.label}
+                onChange={(event) =>
+                  updateSelected({ label: event.target.value })
+                }
+                className="mt-1 w-full rounded border p-2 text-sm"
+              />
+            </label>
+            <label>
+              Objetivo / uso
+              <input
+                value={selected.purpose ?? ""}
+                onChange={(event) =>
+                  updateSelected({ purpose: event.target.value })
+                }
+                placeholder="Ej. salida de emergencia"
+                className="mt-1 w-full rounded border p-2 text-sm"
+              />
+            </label>
+            {selected.kind === "aisle" && (
+              <label>
+                Color del pasillo
+                <input
+                  type="color"
+                  value={selected.color ?? "#64748b"}
+                  onChange={(event) =>
+                    updateSelected({ color: event.target.value })
+                  }
+                  className="mt-1 block h-9 w-full rounded border p-1"
+                />
+              </label>
+            )}
+            {selected.objectType === "door" && (
+              <label>
+                Tipo de puerta
+                <select
+                  value={selected.doorRole ?? "entry"}
+                  onChange={(event) =>
+                    updateSelected({
+                      doorRole: event.target.value as "entry" | "exit",
+                    })
+                  }
+                  className="mt-1 w-full rounded border p-2 text-sm"
+                >
+                  <option value="entry">Entrada</option>
+                  <option value="exit">Salida</option>
+                </select>
+              </label>
+            )}
+            {(selected.objectType === "flow_arrow" || selected.objectType === "flow_route") && (
+              <div className="sm:col-span-2">
+                <span className="font-semibold">Dirección del flujo</span>
+                <div className="mt-1 flex gap-1">
+                  {(
+                    [
+                      { label: "→", value: 0 },
+                      { label: "↓", value: 90 },
+                      { label: "←", value: 180 },
+                      { label: "↑", value: 270 },
+                    ] as const
+                  ).map((direction) => (
+                    <button
+                      type="button"
+                      key={direction.value}
+                      onClick={() =>
+                        updateSelected({ rotation: direction.value })
+                      }
+                      className={`rounded border px-3 py-1 text-sm ${selected.rotation === direction.value || (!selected.rotation && direction.value === 0) ? "border-fuchsia-700 bg-fuchsia-100 text-fuchsia-900" : ""}`}
+                    >
+                      {direction.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        {tool === "aisle" && (
+          <div className="mb-2 flex items-center gap-2 rounded bg-sky-50 p-2 text-xs text-sky-950">
+            <span>
+              Elige orientación y haz clic en una zona libre. El pasillo inicial
+              mide tres celdas.
+            </span>
+            <button
+              type="button"
+              onClick={() => setAisleAxis("vertical")}
+              className={`rounded px-2 py-1 ${aisleAxis === "vertical" ? "bg-sky-700 text-white" : "border"}`}
+            >
+              Vertical
+            </button>
+            <button
+              type="button"
+              onClick={() => setAisleAxis("horizontal")}
+              className={`rounded px-2 py-1 ${aisleAxis === "horizontal" ? "bg-sky-700 text-white" : "border"}`}
+            >
+              Horizontal
+            </button>
+          </div>
+        )}
+        {notice && (
+          <p className="mb-2 rounded bg-amber-50 p-2 text-xs text-amber-900">
+            {notice}
+          </p>
+        )}
+        {hasOverflow && (
+          <p className="mb-2 rounded bg-amber-50 p-2 text-xs text-amber-900">
+            Amplía la cuadrícula: contiene elementos fuera de estos límites.
+          </p>
+        )}
+        <FloorplanCanvas
+          elements={current}
+          columns={columns}
+          rows={rows}
+          activeTool={tool}
+          aisleAxis={aisleAxis}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          onAssign={onAssignStand}
+          onClearSelection={() => { setSelectedId(null); setTool(null) }}
+          onResize={resize}
+          onPlace={place}
+          onMove={move}
+          onDelete={remove}
+        />
+      </section>
+    </div>
+  );
 }
