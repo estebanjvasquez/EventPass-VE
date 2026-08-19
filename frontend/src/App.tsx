@@ -18,6 +18,7 @@ const RecuperarClave = lazy(() => import('./pages/RecuperarClave'))
 const Login = lazy(() => import('./pages/admin/Login'))
 const AdminPanel = lazy(() => import('./pages/admin/AdminPanel'))
 const CheckinEvento = lazy(() => import('./pages/admin/CheckinEvento'))
+const CheckinReportAdmin = lazy(() => import('./pages/admin/CheckinReportAdmin'))
 const AcreditacionEvento = lazy(() => import('./pages/admin/AcreditacionEvento'))
 const EventosAdmin = lazy(() => import('./pages/admin/EventosAdmin'))
 const ProgramasAdmin = lazy(() => import('./pages/admin/ProgramasAdmin'))
@@ -28,6 +29,7 @@ const StandsAdmin = lazy(() => import('./pages/admin/StandsAdmin'))
 const ExpositoresAdmin = lazy(() => import('./pages/admin/ExpositoresAdmin'))
 const OperacionPlanoAdmin = lazy(() => import('./pages/admin/OperacionPlanoAdmin'))
 const AsientosAdmin = lazy(() => import('./pages/admin/AsientosAdmin'))
+const PlanoForoAdmin = lazy(() => import('./pages/admin/PlanoForoAdmin'))
 const SuscripcionAdmin = lazy(() => import('./pages/admin/SuscripcionAdmin'))
 const SuperAdmin = lazy(() => import('./pages/admin/SuperAdmin'))
 
@@ -72,6 +74,7 @@ function App() {
           }
         />
         <Route path="/admin/puntos-acceso" element={<RequireAuth><PuntosAccesoAdmin /></RequireAuth>} />
+        <Route path="/admin/checkin/control" element={<RequireAuth><CheckinReportAdmin /></RequireAuth>} />
         <Route
           path="/admin/acreditacion"
           element={
@@ -103,6 +106,7 @@ function App() {
             </RequireAuth>
           }
         />
+        <Route path="/admin/foro-plano/:eventId" element={<RequireAuth><PlanoForoAdmin /></RequireAuth>} />
         <Route
           path="/admin/suscripcion"
           element={

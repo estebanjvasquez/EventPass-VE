@@ -326,3 +326,29 @@ La página pública del programa (`/p/:programId/registro` y/o una futura `/p/:p
 ## 9. Precondición operativa (del handoff actual)
 
 `task.md` marca un **bloqueo crítico**: el evento de exposición de prueba dejó de cargar (RLS/organización activa) y muestra "No se pudo cargar el evento". Antes de desplegar la Fase 1, conviene resolver ese diagnóstico para poder validar la agenda con un evento **foro** real bajo sesión autenticada.
+
+---
+
+## 10. Check-in: mejoras a tomar de Eventee
+
+**Contexto:** el recorrido autenticado de Eventee (19-08-2026, `Settings → Features → Check-in`, `People → Attendees/Team`) confirma que su check-in es **más simple** que el de EventPass. EventPass ya supera a Eventee en el **motor**: `credential_token` por participación, escáner web `html5-qrcode` (`CheckinEvento.tsx`), puntos de acceso (`access_points`), check-in por sesión (`validate_session_checkin`), validación de pase/entitlement y bitácora `checkin_records` con anti-duplicado y scopes de staff (`event_staff_scopes`). **No hay que copiar el motor de Eventee.**
+
+Lo único que Eventee resuelve mejor es la **capa de control/reporte para el organizador**. Solo eso se toma:
+
+| # | Mejora de Eventee | Qué falta hoy en EventPass | Dónde encaja |
+|---|---|---|---|
+| 1 | **Filtros rápidos `Checked-in` / `Not checked-in`** en la lista de asistentes, con conteo en vivo (`0 / 500`). | El foco está en el escáner; falta una vista de control post-escaneo filtrable con conteos. | Nueva vista admin sobre `event_participations` + `checkin_records` (agregado por `participation_id`). |
+| 2 | **Check-in manual** desde la fila del asistente (marcar entrada sin escanear QR). | El acceso solo se registra por escaneo. | Botón por fila → inserta en `checkin_records` con `result='validated'` y `scanned_by = auth.uid()` (misma RPC o una `manual_checkin`). |
+| 3 | **Toggle "Check-in" a nivel evento** visible, como estado explícito. | El check-in está siempre activo vía tokens; no hay un interruptor que comunique el estado al organizador. | Flag en `events.config` (p. ej. `checkin_enabled`) mostrado como switch en la ficha del evento. |
+| 4 | **Export** de la lista con estado de check-in (CSV). | — (conviene un export directo para conciliación). | Reutilizar patrón de export existente; incluir columna `checked_in_at` derivada de `checkin_records`. |
+
+### Resultado — mejoras de control de check-in
+
+- Se creó `/admin/checkin/control`: filtros Todos / Ingresaron / Pendientes, conteos vivos, check-in manual desde la fila y exportación CSV con hora de entrada.
+- El escáner enlaza a ese panel y el evento tiene el interruptor visible de check-in en la misma pantalla de control.
+- `manual_program_checkin` y `get_event_checkin_report` mantienen el flujo en RPCs autorizadas por organización.
+- Las migraciones `20260819170000_checkin_reporting_and_manual.sql` y `20260819171000_enforce_checkin_enabled.sql` están aplicadas. El trigger final impide insertar registros de check-in mientras el evento esté desactivado, incluyendo escáner, RPC y operaciones directas.
+
+**Se descarta** de Eventee: estados `App user` / `Anonymous` (EventPass no tiene app móvil propietaria; su escáner web no los necesita) y el rol global `Moderator` (los scopes finos de `event_staff_scopes` ya son superiores).
+
+**Alcance:** son mejoras de **UX/reporte**, no de arquitectura. Ninguna requiere cambiar el motor de validación ni las RPC de seguridad; encajan como una vista de control de asistentes + un par de acciones sobre `checkin_records`. Prioridad sugerida: junto a la operación presencial (Fase 5) o como iteración independiente de la pantalla de asistentes.

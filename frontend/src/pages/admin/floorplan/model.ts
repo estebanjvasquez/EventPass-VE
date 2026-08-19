@@ -10,7 +10,7 @@ export type FloorplanRect = {
 export type FloorplanElement = FloorplanRect & {
   id: string;
   label: string;
-  kind: "stand" | "aisle" | "zone" | "object";
+  kind: "stand" | "seat" | "aisle" | "zone" | "object";
   status?: FloorplanStatus;
   objectType?:
     | "door"

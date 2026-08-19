@@ -187,6 +187,7 @@ export default function CheckinEvento() {
             <ScanLine className="h-4 w-4 text-emerald-600" />
             Check-in
           </span>
+          <Link to="/admin/checkin/control" className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700">Control</Link>
         </div>
       </header>
 

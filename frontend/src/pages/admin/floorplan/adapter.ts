@@ -29,6 +29,8 @@ export function fromVenueElement(row: {
     kind:
       row.element_type === "stand"
         ? "stand"
+        : row.element_type === "seat"
+          ? "seat"
         : row.element_type === "aisle"
           ? "aisle"
           : row.element_type === "zone"

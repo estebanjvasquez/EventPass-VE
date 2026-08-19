@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { Armchair, ArrowLeft, Trash2 } from 'lucide-react'
+import { ArrowLeft, Trash2, Presentation } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import ImpersonationBanner from '../../components/ImpersonationBanner'
 
@@ -10,6 +10,7 @@ type Seat = {
   column_number: number | null
   seat_number: string | null
   price: number | null
+  reserved_for: string | null
   status: 'available' | 'reserved' | 'confirmed'
 }
 
@@ -40,7 +41,7 @@ export default function AsientosAdmin() {
     const [{ data, error }, { data: regs }] = await Promise.all([
       supabase
         .from('seats')
-        .select('id, row_label, column_number, seat_number, price, status')
+        .select('id, row_label, column_number, seat_number, price, status, reserved_for')
         .eq('event_id', eventId)
         .order('row_label', { ascending: true })
         .order('column_number', { ascending: true }),
@@ -64,9 +65,10 @@ export default function AsientosAdmin() {
       setError('Este asiento está ocupado por un registro. Libéralo rechazándolo desde Registros.')
       return
     }
-    const next = seat.status === 'available' ? 'reserved' : 'available'
+    const name = seat.status === 'available' ? window.prompt(`Reservar ${seat.seat_number ?? 'asiento'} a nombre de:`, '') : ''
+    if (seat.status === 'available' && name === null) return
     setTogglingId(seat.id)
-    const { error } = await supabase.from('seats').update({ status: next }).eq('id', seat.id)
+    const { error } = await supabase.rpc('reserve_seat_for_name', { p_seat_id: seat.id, p_name: name ?? '' })
     setTogglingId(null)
     if (error) setError(error.message)
     else await loadSeats()
@@ -159,10 +161,7 @@ export default function AsientosAdmin() {
             <ArrowLeft className="h-4 w-4" />
             Eventos
           </Link>
-          <span className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-900">
-            <Armchair className="h-4 w-4 text-emerald-600" />
-            Asientos
-          </span>
+          <Link to={`/admin/foro-plano/${eventId}`} className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-semibold text-zinc-900"><Presentation className="h-4 w-4 text-emerald-600" />Plano físico</Link>
         </div>
       </header>
 
@@ -239,7 +238,7 @@ export default function AsientosAdmin() {
                             type="button"
                             disabled={togglingId === s.id || locked}
                             onClick={() => toggleSeat(s)}
-                            title={`${s.seat_number ?? ''} · ${s.status}${locked ? ' (ocupado por registro)' : ''}`}
+                            title={`${s.seat_number ?? ''} · ${s.reserved_for ? `Reservado: ${s.reserved_for}` : s.status}${locked ? ' (ocupado por registro)' : ''}`}
                             className={`grid h-7 w-7 place-items-center rounded-md border text-[10px] font-semibold transition-colors ${STATUS_STYLE[s.status]} ${
                               locked ? 'cursor-not-allowed opacity-80' : 'hover:brightness-95'
                             }`}
