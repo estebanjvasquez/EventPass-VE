@@ -1,4 +1,4 @@
-import { Building2, DoorOpen, Flower2, Info, LayoutGrid, ScanLine, SquareDashed, Store, Waypoints } from 'lucide-react'
+import { Armchair, ArrowRight, Building2, CircleDot, DoorOpen, Flower2, Info, LayoutGrid, ScanLine, SquareDashed, Store, Waypoints } from 'lucide-react'
 import { palette } from './model'
 
 type Tool = typeof palette[number]['objectType']
@@ -11,6 +11,9 @@ const icons: Record<Tool, typeof Store> = {
   security: ScanLine,
   column: Building2,
   plant: Flower2,
+  table: CircleDot,
+  sofa: Armchair,
+  flow_arrow: ArrowRight,
   lobby: LayoutGrid,
   information: Info,
   blank: SquareDashed,

@@ -12,8 +12,9 @@ export type FloorplanElement = FloorplanRect & {
   label: string
   kind: 'stand' | 'aisle' | 'zone' | 'object'
   status?: FloorplanStatus
-  objectType?: 'door' | 'access' | 'security' | 'column' | 'plant' | 'lobby' | 'information' | 'blank' | 'special'
+  objectType?: 'door' | 'access' | 'security' | 'column' | 'plant' | 'table' | 'sofa' | 'flow_arrow' | 'lobby' | 'information' | 'blank' | 'special'
   purpose?: string
+  rotation?: 0 | 90 | 180 | 270
 }
 
 export const intersects = (a: FloorplanRect, b: FloorplanRect) =>
@@ -27,6 +28,9 @@ export const palette = [
   { objectType: 'security', label: 'Verificador', width: 1, height: 1 },
   { objectType: 'column', label: 'Columna', width: 1, height: 1 },
   { objectType: 'plant', label: 'Planta', width: 1, height: 1 },
+  { objectType: 'table', label: 'Mesa', width: 2, height: 2 },
+  { objectType: 'sofa', label: 'Sofá', width: 3, height: 1 },
+  { objectType: 'flow_arrow', label: 'Flujo', width: 2, height: 1 },
   { objectType: 'lobby', label: 'Lobby', width: 3, height: 2 },
   { objectType: 'information', label: 'Información', width: 3, height: 1 },
   { objectType: 'blank', label: 'Espacio libre', width: 2, height: 2 },
