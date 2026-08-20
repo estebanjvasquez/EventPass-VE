@@ -7,7 +7,8 @@
 export type EmailSendBinding = {
   send(message: {
     to: string
-    from: string
+    from: string | { email: string; name?: string }
+    replyTo?: string
     subject: string
     html?: string
     text?: string
@@ -33,6 +34,9 @@ const esc = (s: string) =>
   s.replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!,
   )
+
+const sender = (email: string) => ({ email, name: 'EventosFácil' })
+const replyTo = 'soporte@eventosfacil.net'
 
 function paymentMethodsHtml(methods: PaymentMethod[]): string {
   if (methods.length === 0) return ''
@@ -114,7 +118,8 @@ export async function sendUploadLinkEmail(p: UploadLinkParams): Promise<string |
   try {
     await p.email.send({
       to: p.to,
-      from: p.from,
+      from: sender(p.from),
+      replyTo,
       subject: `Completa tu inscripción — ${p.eventName}`,
       html: uploadLinkEmailHtml(p),
       text: uploadLinkEmailText(p),
@@ -185,7 +190,8 @@ export async function sendReminderEmail(p: ReminderParams): Promise<string | nul
   try {
     await p.email.send({
       to: p.to,
-      from: p.from,
+      from: sender(p.from),
+      replyTo,
       subject: `Recordatorio: completa tu pago — ${p.eventName}`,
       html: reminderEmailHtml(p),
       text: reminderEmailText(p),
@@ -265,7 +271,8 @@ export async function sendSlotReleaseEmail(p: SlotReleaseParams): Promise<string
   try {
     await p.email.send({
       to: p.to,
-      from: p.from,
+      from: sender(p.from),
+      replyTo,
       subject: `Plazas liberadas (${p.items.length}) — ${p.orgName}`,
       html: slotReleaseEmailHtml(p),
       text: slotReleaseEmailText(p),
@@ -328,7 +335,8 @@ export async function sendSlotExpiredEmail(p: SlotExpiredParams): Promise<string
   try {
     await p.email.send({
       to: p.to,
-      from: p.from,
+      from: sender(p.from),
+      replyTo,
       subject: `Tu plaza se liberó — ${p.eventName}`,
       html: slotExpiredEmailHtml(p),
       text: slotExpiredEmailText(p),
@@ -397,7 +405,8 @@ export async function sendConfirmationEmail(p: ConfirmationParams): Promise<stri
   try {
     await p.email.send({
       to: p.to,
-      from: p.from,
+      from: sender(p.from),
+      replyTo,
       subject: `Inscripción confirmada — ${p.eventName}`,
       html: confirmationEmailHtml(p),
       text: confirmationEmailText(p),

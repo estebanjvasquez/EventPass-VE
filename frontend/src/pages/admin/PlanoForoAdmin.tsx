@@ -118,7 +118,7 @@ export default function PlanoForoAdmin() {
   async function deleteSelected() {
     const source = elements.find(item => item.id === selectedId)
     if (!map || !source) return
-    if (source.kind === 'seat') { await deleteSeats([source.id]); return }
+    if (source.kind === 'seat') { await deleteSeats(selectedSeatIds.length ? selectedSeatIds : [source.id]); return }
     if (!window.confirm(`¿Eliminar ${source.label}?`)) return
     const { error } = await supabase.from('venue_map_elements').delete().eq('id', source.id).eq('map_id', map.id)
     if (error) setError(error.message); else { setSelectedId(null); await load() }

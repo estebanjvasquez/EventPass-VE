@@ -318,7 +318,7 @@ export function FloorplanCanvas({
               onClick={onDelete}
               className="rounded border border-red-200 px-2 py-1 font-semibold text-red-700"
             >
-              Eliminar
+              {selectedIds.length > 1 ? `Eliminar ${selectedIds.length} seleccionados` : "Eliminar"}
             </button>
           </div>
         )}

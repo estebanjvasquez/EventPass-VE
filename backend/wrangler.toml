@@ -20,7 +20,7 @@ name = "EMAIL"
 SUPABASE_URL = "https://moqywmcbklaeaelttzdm.supabase.co"
 ENVIRONMENT = "production"
 # Remitente (dominio verificado en Cloudflare) y URL pública del frontend.
-EMAIL_FROM = "no-reply@eventosfacil.net"
+EMAIL_FROM = "welcome@eventosfacil.net"
 APP_BASE_URL = "https://eventosfacil.net"
 
 # Aprovisionamiento de subdominios de tenant vía la API de Cloudflare Pages.
