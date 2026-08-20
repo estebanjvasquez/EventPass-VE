@@ -322,13 +322,11 @@ export function FloorplanCanvas({
             </button>
           </div>
         )}
-        <div
-          className="grid min-w-[864px] gap-px rounded-lg bg-zinc-300 p-px"
-          style={{
-            gridTemplateColumns: `repeat(${columns}, minmax(48px, 1fr))`,
-            gridTemplateRows: `repeat(${rows}, minmax(48px, 1fr))`,
-          }}
-        >
+        <div className="grid min-w-[896px] grid-cols-[28px_1fr] grid-rows-[24px_1fr] gap-1">
+          <div />
+          <div className="grid text-center text-[10px] font-semibold text-zinc-500" style={{ gridTemplateColumns: `repeat(${columns}, minmax(48px, 1fr))` }}>{Array.from({ length: columns }, (_, x) => <span key={x}>C{x + 1}</span>)}</div>
+          <div className="grid text-center text-[10px] font-semibold text-zinc-500" style={{ gridTemplateRows: `repeat(${rows}, minmax(48px, 1fr))` }}>{Array.from({ length: rows }, (_, y) => <span key={y}>F{y + 1}</span>)}</div>
+          <div className="grid gap-px rounded-lg bg-zinc-300 p-px" style={{ gridTemplateColumns: `repeat(${columns}, minmax(48px, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(48px, 1fr))` }}>
           {Array.from({ length: columns * rows }, (_, index) => {
             const x = index % columns;
             const y = Math.floor(index / columns);
@@ -376,6 +374,7 @@ export function FloorplanCanvas({
                 : `Insertar ${preview.label}`}
             </div>
           )}
+          </div>
         </div>
       </div>
     </DragDropProvider>
