@@ -97,6 +97,21 @@ export default function EventosAdmin() {
 
   async function changeStatus(ev: EventRow, status: EventStatus) {
     if (!orgId) return
+    if (status === 'published') {
+      if (ev.event_type === 'forum') {
+        const [stageResult, sessionResult] = await Promise.all([
+          supabase.from('event_stages').select('id', { count: 'exact', head: true }).eq('event_id', ev.id),
+          supabase.from('event_sessions').select('id', { count: 'exact', head: true }).eq('event_id', ev.id),
+        ])
+        if (stageResult.error || sessionResult.error) { setError(stageResult.error?.message ?? sessionResult.error?.message ?? 'No se pudo comprobar la preparación del foro.'); return }
+        if (!stageResult.count || !sessionResult.count) { setError('Antes de publicar el foro crea al menos un escenario y una sesión en Agenda.'); return }
+      }
+      if (ev.event_type === 'exhibition') {
+        const { count, error: mapError } = await supabase.from('venue_maps').select('id', { count: 'exact', head: true }).eq('event_id', ev.id)
+        if (mapError) { setError(mapError.message); return }
+        if (!count) { setError('Antes de publicar la exposición crea su Plano y confirma los espacios disponibles.'); return }
+      }
+    }
     const { error } = await supabase.from('events').update({ status }).eq('id', ev.id)
     if (error) setError(error.message)
     else await loadEvents(orgId)
