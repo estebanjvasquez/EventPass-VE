@@ -41,6 +41,7 @@ const READER_ID = 'acred-reader'
 
 export default function AcreditacionEvento() {
   const [orgName, setOrgName] = useState('')
+  const [orgId, setOrgId] = useState<string | null>(null)
   const [events, setEvents] = useState<EventOption[]>([])
   const [eventId, setEventId] = useState<string>('')
   const [query, setQuery] = useState('')
@@ -58,6 +59,7 @@ export default function AcreditacionEvento() {
       const m = await resolveActiveOrg()
       if (!active || !m) return
       setOrgName(m.organizations?.name ?? '')
+      setOrgId(m.organization_id)
       const { data } = await supabase
         .from('events')
         .select('id, name')
@@ -141,7 +143,17 @@ export default function AcreditacionEvento() {
       setError('Este registro no está confirmado; no se puede acreditar aún.')
       return
     }
-    // Marca el ingreso (si no estaba) y luego imprime.
+    const { count: previousPrints, error: historyError } = await supabase
+      .from('badge_print_logs')
+      .select('id', { count: 'exact', head: true })
+      .eq('registration_id', selected.id)
+      .eq('event_id', eventId)
+    if (historyError) { setError(historyError.message); return }
+    const printKind = previousPrints ? 'reprint' : 'initial'
+    const reason = printKind === 'reprint' ? window.prompt('Indica el motivo de la reimpresión')?.trim() : null
+    if (printKind === 'reprint' && !reason) { setError('La reimpresión requiere indicar un motivo.'); return }
+
+    // Marca el ingreso (si no estaba), registra la impresión y luego imprime.
     if (selected.attendance_status !== 'checked_in') {
       const { error } = await supabase
         .from('registrations')
@@ -153,7 +165,16 @@ export default function AcreditacionEvento() {
       }
       setSelected({ ...selected, attendance_status: 'checked_in' })
     }
-    setInfo('Enviado a impresión y check-in registrado.')
+    const { error: logError } = await supabase.from('badge_print_logs').insert({
+      organization_id: orgId,
+      event_id: eventId,
+      registration_id: selected.id,
+      print_kind: printKind,
+      reason,
+      device_label: navigator.userAgent.slice(0, 120),
+    })
+    if (logError) { setError(logError.message); return }
+    setInfo(printKind === 'reprint' ? 'Reimpresión registrada y enviada a la impresora.' : 'Impresión registrada y enviada a la impresora.')
     window.print()
   }
 
