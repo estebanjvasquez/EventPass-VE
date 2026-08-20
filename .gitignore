@@ -33,6 +33,10 @@ coverage/
 *.tmp
 *.temp
 
+# Local project notes and agent instructions
+task.md
+AGENTS.md
+
 # Cloudflare Workers / Wrangler
 .wrangler/
 .dev.vars

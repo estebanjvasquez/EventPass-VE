@@ -210,9 +210,11 @@ export default function CheckinEvento() {
         {sessions.length > 0 && <label className="mt-4 grid gap-1.5 text-sm font-medium text-zinc-800">Validar sesión (opcional)<select value={sessionId} onChange={(event) => setSessionId(event.target.value)} className="rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none focus:border-emerald-500"><option value="">Ingreso general del evento</option>{sessions.map((session) => <option key={session.id} value={session.id}>{session.name}{session.session_type === 'workshop' ? ' · Taller con cupo' : ''}</option>)}</select></label>}
 
         {cameraError && (
-          <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-            {cameraError}
-          </p>
+          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+            <p className="font-semibold">La cámara no está disponible; puedes continuar sin ella.</p>
+            <p className="mt-1">{cameraError}</p>
+            <a href="#ingreso-manual" className="mt-2 inline-flex font-semibold underline underline-offset-2">Ir al ingreso manual</a>
+          </div>
         )}
 
         {outcome && (
@@ -238,9 +240,10 @@ export default function CheckinEvento() {
               setManual('')
             }
           }}
-          className="mt-8"
+          id="ingreso-manual"
+          className="mt-8 scroll-mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4"
         >
-          <label className="text-sm font-medium text-zinc-800">Ingreso manual (código de la credencial)</label>
+          <label className="text-sm font-semibold text-emerald-950">Ingreso manual (código de la credencial)</label>
           <div className="mt-2 flex gap-2">
             <input
               value={manual}

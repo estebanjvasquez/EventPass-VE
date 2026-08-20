@@ -146,6 +146,25 @@ export default function EventosAdmin() {
           Gestionar programas, foro y exposición
         </Link>
 
+        {events.some((event) => event.status === 'draft') && (
+          <section aria-label="Siguientes pasos de eventos en borrador" className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
+            <h2 className="font-semibold text-emerald-950">Continúa la configuración antes de publicar</h2>
+            <p className="mt-1 text-sm text-emerald-900/80">Completa el contenido operativo del borrador y publica únicamente cuando esté listo para recibir registros.</p>
+            <div className="mt-4 space-y-3">
+              {events.filter((event) => event.status === 'draft').map((event) => (
+                <div key={event.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-white p-3">
+                  <div><p className="text-sm font-semibold text-zinc-900">{event.name}</p><p className="text-xs text-zinc-600">Paso 1: {event.event_type === 'forum' ? 'agenda y asientos' : event.event_type === 'exhibition' ? 'plano y empresas expositoras' : 'aforo y configuración operativa'} · Paso 2: publicar</p></div>
+                  <div className="flex flex-wrap gap-2">
+                    <Link to={event.event_type === 'exhibition' ? `/admin/stands/${event.id}` : event.event_type === 'forum' ? `/admin/agenda/${event.id}` : `/admin/asientos/${event.id}`} className="rounded-lg border border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-800">{event.event_type === 'forum' ? 'Configurar agenda' : event.event_type === 'exhibition' ? 'Diseñar plano' : 'Configurar evento'}</Link>
+                    {event.event_type === 'forum' && <Link to={`/admin/asientos/${event.id}`} className="rounded-lg border border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-800">Diseñar asientos</Link>}
+                    <button type="button" onClick={() => changeStatus(event, 'published')} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white">Publicar cuando esté listo</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         {error && (
           <p className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
         )}
@@ -498,7 +517,7 @@ function SubdomainSection({ orgId, onError }: { orgId: string; onError: (m: stri
             disabled={saving || !dirty || !slugValid}
             className="rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 transition-colors hover:border-zinc-400 disabled:opacity-50"
           >
-            {saving ? 'Guardando…' : 'Guardar'}
+            {saving ? 'Guardando subdominio…' : 'Guardar subdominio'}
           </button>
         </div>
 
@@ -663,7 +682,7 @@ function EventForm({
 
       <div className="mt-6 flex gap-2">
         <button type="button" onClick={save} disabled={saving} className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition-transform active:scale-[0.98] disabled:opacity-50">
-          {saving ? 'Guardando…' : 'Guardar'}
+          {saving ? 'Guardando evento…' : 'Guardar evento'}
         </button>
         <button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 bg-white px-5 py-2.5 text-sm font-semibold text-zinc-700 transition-colors hover:border-zinc-400">
           Cancelar
