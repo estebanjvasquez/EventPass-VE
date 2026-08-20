@@ -171,7 +171,7 @@ function DraggableElement({
         onMouseLeave={onLeave}
         onClick={(event) => {
           if (activeTool) onPlace(activeTool, item.x, item.y);
-          else if ((event.shiftKey || event.ctrlKey || event.metaKey) && onToggleSelect) onToggleSelect();
+          else if (event.ctrlKey && onToggleSelect) onToggleSelect();
           else onSelect();
         }}
         onDoubleClick={() => {
