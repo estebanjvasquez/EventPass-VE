@@ -12,7 +12,8 @@ Cubre el ciclo completo de un evento:
 - **Carga y verificación manual de comprobante** de pago (Zelle, Pago Móvil, Binance…). El administrador confirma o rechaza desde el panel.
 - **Recordatorios automáticos** (días 3/7/9) y **liberación de plazas** vencidas, vía cron horario.
 - **Credencial con código QR** al confirmar el pago.
-- **Check-in por QR** el día del evento e **impresión de gafete en el mostrador** (tamaño de credencial seleccionable).
+- **Check-in por QR** el día del evento, ingreso manual, búsqueda operativa e incidencias auditables.
+- **Acreditación e impresión de gafetes** con tamaños configurables; las impresiones iniciales y reimpresiones con motivo quedan auditadas.
 - **Multi-tenant por subdominio** (`<cliente>.eventosfacil.net`) con branding propio, y dominio propio en el plan superior.
 - **Alta self-service** de organizaciones y **consola de superadmin** para gestionar clientes, planes, cobros y equipo (incluida la gestión "como cliente").
 - **Suscripciones con cobro manual**: la organización paga su plan y sube comprobante; el superadmin lo aprueba. Los **límites de plan se aplican en la base de datos**.
@@ -63,6 +64,21 @@ npm run typecheck  # tsc --noEmit
 ```
 
 No hay suite de tests automatizados; los gates de calidad son `tsc` (ambos paquetes) y `oxlint` (frontend).
+
+## Estado operativo actual
+
+- Check-in: QR, ingreso manual, selección de punto/sesión, búsqueda por nombre/correo, filtros, incidencias y exportación CSV.
+- Acreditación: búsqueda por nombre/apellido/cédula, escaneo QR, selección de tamaño y auditoría de impresión/reimpresión.
+- Pendiente para operación de octubre: asignación visual de staff/seguridad por evento y puerta, historial visible de impresiones, pruebas con impresoras reales y modo offline/PWA con cola de sincronización.
+- Último despliegue validado: `https://33ca4632.eventpass-d7d.pages.dev`.
+
+## Fases pendientes de operación onsite
+
+1. **Permisos operativos:** interfaz para asignar miembros a evento, punto de acceso y permisos `checkin.perform`, `badges.print` y `participants.manage`.
+2. **Check-in asistido:** búsqueda por documento, incidencias desde el escáner, reingresos/salidas e incidencias denegadas.
+3. **Acreditación:** historial visible de impresiones, reimpresiones auditadas y plantillas probadas con impresoras térmicas.
+4. **Resiliencia:** PWA/offline, cache de credenciales autorizadas, cola local y sincronización con resolución de conflictos.
+5. **QA presencial:** dispositivos, permisos de cámara, conectividad intermitente, impresora, doble escaneo y recuperación ante errores.
 
 **Configuración:** el frontend usa `frontend/.env` (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_URL`). El Worker usa `backend/wrangler.toml` para variables no secretas y `wrangler secret put` para los secretos (service role de Supabase, token de Cloudflare, etc.).
 
