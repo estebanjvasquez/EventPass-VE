@@ -39,8 +39,15 @@ export default function CheckinEvento() {
   const [accessPointId, setAccessPointId] = useState('')
   const [sessions, setSessions] = useState<CheckinSession[]>([])
   const [sessionId, setSessionId] = useState('')
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine)
   const scannerRef = useRef<Html5Qrcode | null>(null)
   const busyRef = useRef(false)
+
+  useEffect(() => {
+    const online = () => setIsOnline(true); const offline = () => setIsOnline(false)
+    window.addEventListener('online', online); window.addEventListener('offline', offline)
+    return () => { window.removeEventListener('online', online); window.removeEventListener('offline', offline) }
+  }, [])
 
   useEffect(() => {
     void resolveActiveOrg().then(async (membership) => {
@@ -192,6 +199,7 @@ export default function CheckinEvento() {
       </header>
 
       <main className="mx-auto max-w-2xl px-5 py-8">
+        {!isOnline && <div role="status" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"><strong>Sin conexión.</strong> No cierres esta pantalla; recupera la red antes de validar el siguiente pase. Las validaciones no se confirman localmente para evitar duplicados.</div>}
         <div className="flex items-end justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Escanear credenciales</h1>
