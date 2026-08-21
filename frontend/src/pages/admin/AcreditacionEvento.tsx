@@ -20,6 +20,7 @@ type Reg = {
   seats: SeatInfo | SeatInfo[] | null
 }
 type EventOption = { id: string; name: string }
+type PrintLog = { id: string; print_kind: 'initial' | 'reprint'; reason: string | null; created_at: string }
 
 function seatLabel(seats: Reg['seats']): string | null {
   if (!seats) return null
@@ -51,6 +52,7 @@ export default function AcreditacionEvento() {
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
+  const [printLogs, setPrintLogs] = useState<PrintLog[]>([])
   const scannerRef = useRef<Html5Qrcode | null>(null)
 
   useEffect(() => {
@@ -177,6 +179,11 @@ export default function AcreditacionEvento() {
     setInfo(printKind === 'reprint' ? 'Reimpresión registrada y enviada a la impresora.' : 'Impresión registrada y enviada a la impresora.')
     window.print()
   }
+
+  useEffect(() => {
+    if (!selected || !eventId) { setPrintLogs([]); return }
+    void supabase.from('badge_print_logs').select('id,print_kind,reason,created_at').eq('registration_id', selected.id).eq('event_id', eventId).order('created_at', { ascending: false }).then(({ data }) => setPrintLogs((data ?? []) as PrintLog[]))
+  }, [selected, eventId, info])
 
   return (
     <div className="min-h-[100dvh] bg-[#fafafa]">
@@ -310,6 +317,10 @@ export default function AcreditacionEvento() {
               </button>
             </div>
             <p className="mt-3 text-xs text-zinc-500">Al imprimir se registra el ingreso. En el diálogo del navegador elige la impresora.</p>
+            <div className="mt-5 border-t border-zinc-100 pt-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Historial de impresión</h3>
+              {printLogs.length ? <ul className="mt-2 space-y-1 text-xs text-zinc-600">{printLogs.map((log) => <li key={log.id} className="flex justify-between gap-3"><span>{log.print_kind === 'initial' ? 'Inicial' : 'Reimpresión'}{log.reason ? ` · ${log.reason}` : ''}</span><time>{new Date(log.created_at).toLocaleString('es-VE')}</time></li>)}</ul> : <p className="mt-2 text-xs text-zinc-500">Aún no hay impresiones registradas.</p>}
+            </div>
           </div>
         )}
       </main>
