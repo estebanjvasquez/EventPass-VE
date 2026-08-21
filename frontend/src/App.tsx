@@ -25,6 +25,7 @@ const ProgramasAdmin = lazy(() => import('./pages/admin/ProgramasAdmin'))
 const ProgramaAccesosAdmin = lazy(() => import('./pages/admin/ProgramaAccesosAdmin'))
 const AgendaAdmin = lazy(() => import('./pages/admin/AgendaAdmin'))
 const PuntosAccesoAdmin = lazy(() => import('./pages/admin/PuntosAccesoAdmin'))
+const EquipoOperativoAdmin = lazy(() => import('./pages/admin/EquipoOperativoAdmin'))
 const StandsAdmin = lazy(() => import('./pages/admin/StandsAdmin'))
 const ExpositoresAdmin = lazy(() => import('./pages/admin/ExpositoresAdmin'))
 const OperacionPlanoAdmin = lazy(() => import('./pages/admin/OperacionPlanoAdmin'))
@@ -73,6 +74,7 @@ function App() {
           }
         />
         <Route path="/admin/puntos-acceso" element={<RequireAuth><PuntosAccesoAdmin /></RequireAuth>} />
+        <Route path="/admin/equipo-operativo" element={<RequireAuth><EquipoOperativoAdmin /></RequireAuth>} />
         <Route path="/admin/checkin/control" element={<RequireAuth><CheckinReportAdmin /></RequireAuth>} />
         <Route
           path="/admin/acreditacion"

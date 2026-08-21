@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CalendarCog, Check, CreditCard, FileText, IdCard, LogOut, MapPin, RefreshCw, ScanLine, ShieldCheck, Ticket, X } from 'lucide-react'
+import { CalendarCog, Check, CreditCard, FileText, IdCard, LogOut, MapPin, RefreshCw, ScanLine, ShieldCheck, Ticket, Users, X } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
 import { supabase } from '../../lib/supabase'
 import { resolveActiveOrg, type ActiveOrg } from '../../lib/activeOrg'
@@ -244,6 +244,9 @@ export default function AdminPanel() {
             >
               <ScanLine className="h-4 w-4" />
               Check-in
+            </Link>
+            <Link to="/admin/equipo-operativo" className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3.5 py-2 text-sm font-medium text-zinc-700 transition-colors hover:border-zinc-400">
+              <Users className="h-4 w-4" /> Equipo
             </Link>
             <button
               onClick={() => signOut()}
