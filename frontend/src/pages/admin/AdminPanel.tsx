@@ -207,7 +207,7 @@ export default function AdminPanel() {
               <p className="text-xs text-zinc-500">{user?.email}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="admin-desktop-nav flex flex-wrap items-center justify-end gap-2">
             {isPlatformAdmin && (
               <Link
                 to="/superadmin"

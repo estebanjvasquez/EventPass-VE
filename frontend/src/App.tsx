@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import RequireAuth from './components/RequireAuth'
+import MobileAdminMenu from './components/MobileAdminMenu'
 
 // Carga diferida por ruta: cada página es su propio chunk. Así el visitante
 // público no descarga el panel admin ni el escáner QR (html5-qrcode), que solo
@@ -47,6 +48,7 @@ function PageFallback() {
 function App() {
   return (
     <Suspense fallback={<PageFallback />}>
+      <MobileAdminMenu />
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/registro" element={<RegistroEvento />} />

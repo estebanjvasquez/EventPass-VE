@@ -36,6 +36,49 @@ body {
 #badge-print-root {
   display: none;
 }
+
+/* El panel administrativo debe seguir siendo utilizable en teléfonos y tabletas. */
+@media (max-width: 767px) {
+  html,
+  body,
+  #root {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  header > div {
+    flex-wrap: wrap;
+  }
+
+  .admin-desktop-nav {
+    display: none !important;
+  }
+
+  main {
+    min-width: 0;
+  }
+
+  main table {
+    display: block;
+    min-width: 620px;
+    overflow-x: auto;
+  }
+
+  main .overflow-hidden:has(> table) {
+    overflow-x: auto;
+  }
+
+  main input,
+  main select,
+  main textarea {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  main h1 {
+    overflow-wrap: anywhere;
+  }
+}
 @media print {
   #root {
     display: none !important;
