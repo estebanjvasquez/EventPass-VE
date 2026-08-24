@@ -451,3 +451,12 @@ export async function sendPortalInviteEmail(p: PortalInviteParams): Promise<stri
     return err instanceof Error ? err.message : String(err)
   }
 }
+
+type ProviderNoticeParams = { email: EmailSendBinding; from: string; to: string; providerName: string; eventName: string; subject: string; message: string }
+export async function sendProviderNoticeEmail(p: ProviderNoticeParams): Promise<string | null> {
+  try {
+    const html = `<!doctype html><html lang="es"><body style="font-family:Arial,sans-serif;background:#f4f4f5;padding:24px"><div style="max-width:560px;margin:auto;background:#fff;border:1px solid #e4e4e7;border-radius:14px;padding:28px"><p style="color:#059669;font-size:12px;font-weight:bold;text-transform:uppercase">EventosFácil · ${esc(p.eventName)}</p><h1 style="font-size:22px;color:#18181b">${esc(p.subject)}</h1><p style="color:#52525b;line-height:1.6">Hola ${esc(p.providerName)},</p><p style="color:#52525b;line-height:1.6">${esc(p.message)}</p><p style="color:#a1a1aa;font-size:12px">Responde a este correo si necesitas aclaraciones.</p></div></body></html>`
+    await p.email.send({ to: p.to, from: sender(p.from), replyTo, subject: p.subject, html, text: `Hola ${p.providerName},\n\n${p.message}\n\nEvento: ${p.eventName}` })
+    return null
+  } catch (err) { return err instanceof Error ? err.message : String(err) }
+}

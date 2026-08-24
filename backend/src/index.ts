@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { z } from 'zod'
-import { sendUploadLinkEmail, sendConfirmationEmail, sendPortalInviteEmail, type EmailSendBinding } from './email'
+import { sendUploadLinkEmail, sendConfirmationEmail, sendPortalInviteEmail, sendProviderNoticeEmail, type EmailSendBinding } from './email'
 import { runScheduledJobs } from './jobs'
 import { normalizeSlug, provisionDomain, getDomainStatus, type CfEnv } from './tenants'
 
@@ -414,6 +414,37 @@ app.post('/api/exhibitor-portal/invite', async (c) => {
   const mailError = await sendPortalInviteEmail({ email: c.env.EMAIL, from: c.env.EMAIL_FROM, to: email, companyName: company.name, eventName: eventDetails?.name ?? 'tu evento', actionUrl: actionLink, portalUrl })
   if (mailError) return c.json({ error: `La invitación fue creada, pero el correo no pudo enviarse: ${mailError}`, invitation_created: true }, 502)
   return c.json({ ok: true, email, status: 'invited', invitation_created: true })
+})
+
+const providerNoticeSchema = z.object({ provider_id: z.string().uuid(), event_id: z.string().uuid(), type: z.enum(['quote', 'payment']), service_id: z.string().uuid().nullable().optional(), amount: z.number().positive().nullable().optional(), due_date: z.string().nullable().optional(), notes: z.string().max(2000).nullable().optional() })
+app.post('/api/providers/notify', async (c) => {
+  const parsed = providerNoticeSchema.safeParse(await c.req.json().catch(() => null))
+  if (!parsed.success) return c.json({ error: 'Datos de proveedor inválidos' }, 400)
+  const supabase = createClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY)
+  const caller = await authUserId(supabase, c.req.header('Authorization'))
+  if (!caller) return c.json({ error: 'no autorizado' }, 401)
+  const { data: event } = await supabase.from('events').select('id,name,organization_id').eq('id', parsed.data.event_id).maybeSingle()
+  const { data: provider } = await supabase.from('providers').select('id,name,organization_id,contact_email,billing_email').eq('id', parsed.data.provider_id).maybeSingle()
+  if (!event || !provider || event.organization_id !== provider.organization_id) return c.json({ error: 'Evento o proveedor inválido' }, 400)
+  const { data: member } = await supabase.from('memberships').select('role').eq('organization_id', event.organization_id).eq('user_id', caller).maybeSingle()
+  const { data: platform } = await supabase.from('platform_admins').select('user_id').eq('user_id', caller).maybeSingle()
+  if (!platform && (!member || !['owner', 'admin'].includes(member.role))) return c.json({ error: 'No tienes permisos para notificar a este proveedor' }, 403)
+  const { data: primary } = await supabase.from('provider_contacts').select('email').eq('provider_id', provider.id).eq('status', 'active').eq('is_primary', true).maybeSingle()
+  const recipient = primary?.email ?? provider.billing_email ?? provider.contact_email
+  if (!recipient) return c.json({ error: 'El proveedor no tiene correo de contacto' }, 400)
+  let message = ''
+  if (parsed.data.type === 'quote') {
+    const { error } = await supabase.from('event_provider_assignments').insert({ organization_id: event.organization_id, event_id: event.id, provider_id: provider.id, service_id: parsed.data.service_id ?? null, status: 'requested', notes: parsed.data.notes ?? null })
+    if (error && !/duplicate|unique/i.test(error.message)) return c.json({ error: error.message }, 400)
+    message = `El organizador solicita una cotización para el evento "${event.name}".${parsed.data.due_date ? ` Fecha límite: ${parsed.data.due_date}.` : ''} ${parsed.data.notes ?? ''}`
+  } else {
+    const { error } = await supabase.from('provider_payment_notices').insert({ provider_id: provider.id, event_id: event.id, amount: parsed.data.amount ?? null, due_date: parsed.data.due_date ?? null, status: 'sent', sent_at: new Date().toISOString(), notes: parsed.data.notes ?? null })
+    if (error) return c.json({ error: error.message }, 400)
+    message = `Tienes una notificación de pago relacionada con "${event.name}".${parsed.data.amount ? ` Monto: ${parsed.data.amount}.` : ''} ${parsed.data.notes ?? ''}`
+  }
+  const mailError = await sendProviderNoticeEmail({ email: c.env.EMAIL, from: c.env.EMAIL_FROM, to: recipient, providerName: provider.name, eventName: event.name, subject: parsed.data.type === 'quote' ? `Solicitud de cotización — ${event.name}` : `Notificación de pago — ${event.name}`, message })
+  if (mailError) return c.json({ error: `Registro guardado, pero el correo falló: ${mailError}`, saved: true }, 502)
+  return c.json({ ok: true, recipient })
 })
 
 app.delete('/api/admin/clients/:orgId/owners/:userId', async (c) => {
