@@ -4,7 +4,7 @@ alter table public.venue_maps
   add column if not exists current_version integer not null default 1;
 
 create or replace function public.touch_venue_map_updated_at()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql set search_path = public as $$
 begin
   new.updated_at = now();
   return new;
