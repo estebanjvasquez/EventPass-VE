@@ -371,6 +371,41 @@ app.post('/api/admin/clients/:orgId/owners', async (c) => {
   return c.json({ok:true})
 })
 
+const exhibitorInviteSchema = z.object({
+  event_id: z.string().uuid(),
+  company_id: z.string().uuid(),
+  email: z.string().email(),
+  role: z.enum(['owner', 'manager', 'staff']).default('staff'),
+})
+
+app.post('/api/exhibitor-portal/invite', async (c) => {
+  const parsed = exhibitorInviteSchema.safeParse(await c.req.json().catch(() => null))
+  if (!parsed.success) return c.json({ error: 'Datos de invitación inválidos' }, 400)
+  const supabase = createClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY)
+  const caller = await authUserId(supabase, c.req.header('Authorization'))
+  if (!caller) return c.json({ error: 'no autorizado' }, 401)
+  const { data: event } = await supabase.from('events').select('id,organization_id').eq('id', parsed.data.event_id).maybeSingle()
+  const { data: company } = await supabase.from('companies').select('id,kind').eq('id', parsed.data.company_id).maybeSingle()
+  if (!event || !company || !['exhibitor', 'sponsor'].includes(company.kind)) return c.json({ error: 'Empresa o evento inválido' }, 400)
+  const { data: platformAdmin } = await supabase.from('platform_admins').select('user_id').eq('user_id', caller).maybeSingle()
+  const { data: orgMember } = await supabase.from('memberships').select('role').eq('organization_id', event.organization_id).eq('user_id', caller).maybeSingle()
+  const { data: portalMember } = await supabase.from('exhibitor_portal_members').select('role,status').eq('event_id', event.id).eq('company_id', company.id).eq('user_id', caller).maybeSingle()
+  const allowed = Boolean(platformAdmin || (orgMember && ['owner', 'admin'].includes(orgMember.role)) || (portalMember && portalMember.status === 'active' && ['owner', 'manager'].includes(portalMember.role)))
+  if (!allowed) return c.json({ error: 'No tienes permisos para invitar personal' }, 403)
+  const email = parsed.data.email.toLowerCase().trim()
+  const base = c.env.APP_BASE_URL.replace(/\/$/, '')
+  const invitation = await supabase.auth.admin.inviteUserByEmail(email, { redirectTo: `${base}/definir-clave` })
+  let userId = invitation.data?.user?.id ?? null
+  if (!userId && invitation.error && /registered|exist/i.test(invitation.error.message)) {
+    const found = await supabase.rpc('get_user_id_by_email', { p_email: email })
+    userId = (found.data as string | null) ?? null
+  }
+  if (!userId) return c.json({ error: invitation.error?.message ?? 'No se pudo resolver el usuario' }, 400)
+  const { error } = await supabase.from('exhibitor_portal_members').upsert({ event_id: event.id, company_id: company.id, user_id: userId, role: parsed.data.role, status: 'active', accepted_at: new Date().toISOString() }, { onConflict: 'event_id,company_id,user_id' })
+  if (error) return c.json({ error: error.message }, 400)
+  return c.json({ ok: true, email, status: 'invited' })
+})
+
 app.delete('/api/admin/clients/:orgId/owners/:userId', async (c) => {
   const supabase=createClient(c.env.SUPABASE_URL,c.env.SUPABASE_SERVICE_ROLE_KEY); const caller=await authUserId(supabase,c.req.header('Authorization')); if (!caller) return c.json({error:'no autorizado'},401)
   const {data:pa}=await supabase.from('platform_admins').select('user_id').eq('user_id',caller).maybeSingle(); if (!pa) return c.json({error:'no autorizado'},403)

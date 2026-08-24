@@ -71,6 +71,7 @@ export function ConnectedFloorplanEditor({
         .from("companies")
         .select("id,name")
         .eq("organization_id", event.organization_id)
+        .eq("kind", "exhibitor")
         .order("name");
       if (companyError) setError(companyError.message);
       else setCompanies((data ?? []) as Company[]);

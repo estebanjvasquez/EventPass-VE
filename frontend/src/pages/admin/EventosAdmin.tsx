@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Armchair, ArrowLeft, CalendarCog, CalendarDays, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Armchair, ArrowLeft, Building2, CalendarCog, CalendarDays, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
 import { supabase } from '../../lib/supabase'
 import { resolveActiveOrg } from '../../lib/activeOrg'
@@ -171,6 +171,7 @@ export default function EventosAdmin() {
                   <div><p className="text-sm font-semibold text-zinc-900">{event.name}</p><p className="text-xs text-zinc-600">Paso 1: {event.event_type === 'forum' ? 'agenda y asientos' : event.event_type === 'exhibition' ? 'plano y empresas expositoras' : 'aforo y configuración operativa'} · Paso 2: publicar</p></div>
                   <div className="flex flex-wrap gap-2">
                     <Link to={event.event_type === 'exhibition' ? `/admin/stands/${event.id}` : event.event_type === 'forum' ? `/admin/agenda/${event.id}` : `/admin/asientos/${event.id}`} className="rounded-lg border border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-800">{event.event_type === 'forum' ? 'Configurar agenda' : event.event_type === 'exhibition' ? 'Diseñar plano' : 'Configurar evento'}</Link>
+                    {event.event_type === 'exhibition' && <Link to={`/admin/expositores/${event.id}`} className="rounded-lg border border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-800">Administrar expositores</Link>}
                     {event.event_type === 'forum' && <Link to={`/admin/asientos/${event.id}`} className="rounded-lg border border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-800">Diseñar asientos</Link>}
                     <Link to={`/admin/patrocinantes/${event.id}`} className="rounded-lg border border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-800">Patrocinantes</Link><Link to={`/admin/personal/${event.id}`} className="rounded-lg border border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-800">Personal</Link>
                     <button type="button" onClick={() => changeStatus(event, 'published')} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white">Publicar cuando esté listo</button>
@@ -269,6 +270,7 @@ export default function EventosAdmin() {
                           {ev.event_type === 'exhibition' ? 'Plano' : ev.event_type === 'forum' ? 'Agenda' : 'Asientos'}
                         </Link>
                         {ev.event_type === 'forum' && <Link to={`/admin/asientos/${ev.id}`} className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 transition-colors hover:border-emerald-400 hover:text-emerald-700"><Armchair className="h-3.5 w-3.5" />Asientos</Link>}
+                        {ev.event_type === 'exhibition' && <Link to={`/admin/expositores/${ev.id}`} className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 transition-colors hover:border-emerald-400 hover:text-emerald-700"><Building2 className="h-3.5 w-3.5" />Expositores</Link>}
                         <Link to={`/admin/patrocinantes/${ev.id}`} className="inline-flex items-center rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700">Patrocinantes</Link><Link to={`/admin/personal/${ev.id}`} className="inline-flex items-center rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700">Personal</Link>
                         <button
                           type="button"
