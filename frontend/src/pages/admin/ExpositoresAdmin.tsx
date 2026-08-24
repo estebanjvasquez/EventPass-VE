@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Building2, Download, Upload } from 'lucide-react'
+import { ArrowLeft, Building2, Download, FileText, RefreshCw, ShieldAlert, Upload } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/auth'
 
@@ -8,6 +8,11 @@ type Company = { id: string; name: string; contact_name: string | null; contact_
 type Stand = { id: string; label: string; status: string }
 type Assignment = { element_id: string; company_id: string }
 type EventConfig = Record<string, unknown>
+type PortalMember = { id: string; email: string | null; role: string; status: string; created_at: string }
+type PortalTask = { id: string; title: string; description: string | null; due_at: string | null; status: string }
+type PortalPayment = { id: string; amount: number; currency: string; payment_date: string; reference: string | null; status: string; notes: string | null }
+type PortalDocument = { id: string; name: string; kind: string; storage_path: string; created_at: string }
+type PortalAudit = { id: string; action: string; entity_type: string; created_at: string; details: Record<string, unknown> }
 
 export default function ExpositoresAdmin() {
   const { eventId } = useParams()
@@ -27,6 +32,14 @@ export default function ExpositoresAdmin() {
   const [inviting, setInviting] = useState(false)
   const [selectedCompanyId, setSelectedCompanyId] = useState('')
   const [companyDraft, setCompanyDraft] = useState<Partial<Company>>({})
+  const [portalMembers, setPortalMembers] = useState<PortalMember[]>([])
+  const [portalTasks, setPortalTasks] = useState<PortalTask[]>([])
+  const [portalPayments, setPortalPayments] = useState<PortalPayment[]>([])
+  const [portalDocuments, setPortalDocuments] = useState<PortalDocument[]>([])
+  const [portalAudit, setPortalAudit] = useState<PortalAudit[]>([])
+  const [taskTitle, setTaskTitle] = useState('')
+  const [taskDue, setTaskDue] = useState('')
+  const [taskBusy, setTaskBusy] = useState(false)
   const manualPath = typeof eventConfig.exhibitor_manual_path === 'string' ? eventConfig.exhibitor_manual_path : null
 
   const load = useCallback(async () => {
@@ -104,6 +117,74 @@ export default function ExpositoresAdmin() {
   function selectCompany(company: Company) {
     setSelectedCompanyId(company.id)
     setCompanyDraft(company)
+    void loadCompanyAdmin(company.id)
+  }
+
+  async function loadCompanyAdmin(companyId: string) {
+    if (!eventId) return
+    const [memberResult, taskResult, paymentResult, documentResult, auditResult] = await Promise.all([
+      supabase.from('exhibitor_portal_members').select('id,email,role,status,created_at').eq('event_id', eventId).eq('company_id', companyId).order('created_at', { ascending: false }),
+      supabase.from('exhibitor_portal_tasks').select('id,title,description,due_at,status').eq('event_id', eventId).eq('company_id', companyId).order('due_at'),
+      supabase.from('exhibitor_portal_payments').select('id,amount,currency,payment_date,reference,status,notes').eq('event_id', eventId).eq('company_id', companyId).order('payment_date', { ascending: false }),
+      supabase.from('exhibitor_portal_documents').select('id,name,kind,storage_path,created_at').eq('event_id', eventId).eq('company_id', companyId).order('created_at', { ascending: false }),
+      supabase.from('exhibitor_portal_audit').select('id,action,entity_type,created_at,details').eq('event_id', eventId).eq('company_id', companyId).order('created_at', { ascending: false }).limit(20),
+    ])
+    setPortalMembers((memberResult.data ?? []) as PortalMember[])
+    setPortalTasks((taskResult.data ?? []) as PortalTask[])
+    setPortalPayments((paymentResult.data ?? []) as PortalPayment[])
+    setPortalDocuments((documentResult.data ?? []) as PortalDocument[])
+    setPortalAudit((auditResult.data ?? []) as PortalAudit[])
+    const issue = memberResult.error ?? taskResult.error ?? paymentResult.error ?? documentResult.error ?? auditResult.error
+    if (issue) setError(issue.message)
+  }
+
+  async function createTask() {
+    if (!eventId || !selectedCompanyId || !taskTitle.trim()) return
+    setTaskBusy(true)
+    const { error: taskError } = await supabase.from('exhibitor_portal_tasks').insert({ event_id: eventId, company_id: selectedCompanyId, title: taskTitle.trim(), due_at: taskDue || null, created_by: session?.user.id ?? null })
+    if (taskError) setError(taskError.message)
+    else { setTaskTitle(''); setTaskDue(''); await loadCompanyAdmin(selectedCompanyId) }
+    setTaskBusy(false)
+  }
+
+  async function updateTask(task: PortalTask) {
+    const next = task.status === 'completed' ? 'pending' : 'completed'
+    const { error: taskError } = await supabase.from('exhibitor_portal_tasks').update({ status: next, completed_at: next === 'completed' ? new Date().toISOString() : null }).eq('id', task.id)
+    if (taskError) setError(taskError.message); else if (selectedCompanyId) await loadCompanyAdmin(selectedCompanyId)
+  }
+
+  async function updatePayment(payment: PortalPayment, status: string) {
+    const { error: paymentError } = await supabase.from('exhibitor_portal_payments').update({ status }).eq('id', payment.id)
+    if (paymentError) setError(paymentError.message); else if (selectedCompanyId) await loadCompanyAdmin(selectedCompanyId)
+  }
+
+  async function revokeMember(member: PortalMember) {
+    const { error: memberError } = await supabase.from('exhibitor_portal_members').update({ status: 'revoked' }).eq('id', member.id)
+    if (memberError) setError(memberError.message); else if (selectedCompanyId) await loadCompanyAdmin(selectedCompanyId)
+  }
+
+  async function resendMember(member: PortalMember) {
+    if (!eventId || !member.email || !session?.access_token) return
+    const api = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? ''
+    const response = await fetch(`${api}/api/exhibitor-portal/invite`, { method: 'POST', headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ event_id: eventId, company_id: selectedCompanyId, email: member.email, role: member.role }) })
+    const body = await response.json().catch(() => ({})) as { error?: string }
+    if (!response.ok) setError(body.error ?? 'No se pudo reenviar la invitación.')
+    else setNotice(`Invitación reenviada a ${member.email}.`)
+  }
+
+  async function uploadDocument(file: File | undefined) {
+    if (!file || !eventId || !orgId || !selectedCompanyId) return
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+    const path = `${orgId}/${eventId}/${selectedCompanyId}/documents/${Date.now()}-${safeName}`
+    const upload = await supabase.storage.from('agenda-attachments').upload(path, file, { upsert: false })
+    if (upload.error) { setError(upload.error.message); return }
+    const { error: documentError } = await supabase.from('exhibitor_portal_documents').insert({ event_id: eventId, company_id: selectedCompanyId, name: file.name, kind: 'document', storage_path: path })
+    if (documentError) setError(documentError.message); else await loadCompanyAdmin(selectedCompanyId)
+  }
+
+  async function downloadDocument(path: string) {
+    const { data, error: signedError } = await supabase.storage.from('agenda-attachments').createSignedUrl(path, 300)
+    if (signedError) setError(signedError.message); else if (data?.signedUrl) window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
   }
 
   async function saveCompany(event: React.FormEvent) {
@@ -111,7 +192,7 @@ export default function ExpositoresAdmin() {
     if (!selectedCompanyId) return
     const { error: saveError } = await supabase.from('companies').update({ name: companyDraft.name?.trim(), contact_name: companyDraft.contact_name?.trim() || null, contact_email: companyDraft.contact_email?.trim() || null, contact_phone: companyDraft.contact_phone?.trim() || null, legal_name: companyDraft.legal_name?.trim() || null, tax_id: companyDraft.tax_id?.trim() || null, fiscal_address: companyDraft.fiscal_address?.trim() || null, billing_email: companyDraft.billing_email?.trim() || null, billing_phone: companyDraft.billing_phone?.trim() || null, billing_contact: companyDraft.billing_contact?.trim() || null, website: companyDraft.website?.trim() || null, profile_notes: companyDraft.profile_notes?.trim() || null }).eq('id', selectedCompanyId)
     if (saveError) setError(saveError.message)
-    else { setError(null); await load() }
+    else { setError(null); setSelectedCompanyId(''); setCompanyDraft({}); await load() }
   }
 
   const assigned = new Map(assignments.map((item) => [item.company_id, item.element_id]))
@@ -123,7 +204,7 @@ export default function ExpositoresAdmin() {
         <form onSubmit={create} className="rounded-xl border bg-white p-4"><h2 className="font-semibold">Nueva empresa expositora</h2><div className="mt-3 flex gap-2"><input value={name} onChange={(event) => setName(event.target.value)} className="min-w-0 flex-1 rounded-lg border p-2 text-sm" placeholder="Nombre de la empresa" /><button className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">Crear</button></div></form>
         <div className="rounded-xl border bg-white p-4"><h2 className="font-semibold">Manual del expositor</h2><p className="mt-1 text-xs text-zinc-600">PDF privado para que los expositores lo descarguen desde su portal (máximo 10 MB).</p><div className="mt-3 flex flex-wrap items-center gap-2"><label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm"><Upload className="h-4 w-4" />{uploading ? 'Subiendo…' : 'Cargar PDF'}<input type="file" accept="application/pdf" className="hidden" disabled={uploading} onChange={(event) => { void uploadManual(event.target.files?.[0]) }} /></label>{manualPath && <button type="button" onClick={() => { void downloadManual() }} className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"><Download className="h-4 w-4" />Descargar manual</button>}</div></div>
         <form onSubmit={inviteStaff} className="rounded-xl border bg-white p-4"><h2 className="font-semibold">Invitar personal al portal</h2><p className="mt-1 text-xs text-zinc-600">El personal sólo verá la empresa y el evento asignados.</p><div className="mt-3 grid gap-2 sm:grid-cols-2"><select required value={inviteCompany} onChange={(event) => setInviteCompany(event.target.value)} className="rounded-lg border p-2 text-sm"><option value="">Empresa</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}</select><input required type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="correo@empresa.com" className="rounded-lg border p-2 text-sm" /></div><button disabled={inviting} className="mt-3 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">{inviting ? 'Enviando…' : 'Invitar personal'}</button></form>
-        {selectedCompanyId && <form onSubmit={saveCompany} className="rounded-xl border bg-white p-4 md:col-span-2"><h2 className="font-semibold">Datos del expositor</h2><p className="mt-1 text-xs text-zinc-600">El organizador puede corregir aquí la información comercial, fiscal y de facturación.</p><div className="mt-3 grid gap-2 sm:grid-cols-2"><input required value={companyDraft.name ?? ''} onChange={(event) => setCompanyDraft({ ...companyDraft, name: event.target.value })} placeholder="Nombre comercial" className="rounded-lg border p-2 text-sm" /><input value={companyDraft.legal_name ?? ''} onChange={(event) => setCompanyDraft({ ...companyDraft, legal_name: event.target.value })} placeholder="Razón social" className="rounded-lg border p-2 text-sm" /><input value={companyDraft.tax_id ?? ''} onChange={(event) => setCompanyDraft({ ...companyDraft, tax_id: event.target.value })} placeholder="RIF / identificación fiscal" className="rounded-lg border p-2 text-sm" /><input value={companyDraft.contact_name ?? ''} onChange={(event) => setCompanyDraft({ ...companyDraft, contact_name: event.target.value })} placeholder="Contacto principal" className="rounded-lg border p-2 text-sm" /><input type="email" value={companyDraft.contact_email ?? ''} onChange={(event) => setCompanyDraft({ ...companyDraft, contact_email: event.target.value })} placeholder="Correo de contacto" className="rounded-lg border p-2 text-sm" /><input value={companyDraft.contact_phone ?? ''} onChange={(event) => setCompanyDraft({ ...companyDraft, contact_phone: event.target.value })} placeholder="Teléfono" className="rounded-lg border p-2 text-sm" /><input value={companyDraft.billing_contact ?? ''} onChange={(event) => setCompanyDraft({ ...companyDraft, billing_contact: event.target.value })} placeholder="Contacto de facturación" className="rounded-lg border p-2 text-sm" /><input type="email" value={companyDraft.billing_email ?? ''} onChange={(event) => setCompanyDraft({ ...companyDraft, billing_email: event.target.value })} placeholder="Correo de facturación" className="rounded-lg border p-2 text-sm" /><input value={companyDraft.billing_phone ?? ''} onChange={(event) => setCompanyDraft({ ...companyDraft, billing_phone: event.target.value })} placeholder="Teléfono de facturación" className="rounded-lg border p-2 text-sm" /><input value={companyDraft.website ?? ''} onChange={(event) => setCompanyDraft({ ...companyDraft, website: event.target.value })} placeholder="Sitio web" className="rounded-lg border p-2 text-sm" /><textarea value={companyDraft.fiscal_address ?? ''} onChange={(event) => setCompanyDraft({ ...companyDraft, fiscal_address: event.target.value })} placeholder="Dirección fiscal" className="rounded-lg border p-2 text-sm sm:col-span-2" /><textarea value={companyDraft.profile_notes ?? ''} onChange={(event) => setCompanyDraft({ ...companyDraft, profile_notes: event.target.value })} placeholder="Notas del acuerdo o perfil" className="rounded-lg border p-2 text-sm sm:col-span-2" /></div><button className="mt-3 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-semibold text-white">Guardar datos</button></form>}
+        {selectedCompanyId && <form onSubmit={saveCompany} className="rounded-xl border bg-white p-4 md:col-span-2"><h2 className="font-semibold">Datos del expositor</h2><p className="mt-1 text-xs text-zinc-600">El organizador puede corregir aquí la información comercial, fiscal y de facturación.</p><div className="mt-3 grid gap-2 sm:grid-cols-2"><input required value={companyDraft.name ?? ''} onChange={(event) => setCompanyDraft({ ...companyDraft, name: event.target.value })} placeholder="Nombre comercial" className="rounded-lg border p-2 text-sm" /><input value={companyDraft.legal_name ?? ''} onChange={(event) => setCompanyDraft({ ...companyDraft, legal_name: event.target.value })} placeholder="Razón social" className="rounded-lg border p-2 text-sm" /><input value={companyDraft.tax_id ?? ''} onChange={(event) => setCompanyDraft({ ...companyDraft, tax_id: event.target.value })} placeholder="RIF / identificación fiscal" className="rounded-lg border p-2 text-sm" /><input value={companyDraft.contact_name ?? ''} onChange={(event) => setCompanyDraft({ ...companyDraft, contact_name: event.target.value })} placeholder="Contacto principal" className="rounded-lg border p-2 text-sm" /><input type="email" value={companyDraft.contact_email ?? ''} onChange={(event) => setCompanyDraft({ ...companyDraft, contact_email: event.target.value })} placeholder="Correo de contacto" className="rounded-lg border p-2 text-sm" /><input value={companyDraft.contact_phone ?? ''} onChange={(event) => setCompanyDraft({ ...companyDraft, contact_phone: event.target.value })} placeholder="Teléfono" className="rounded-lg border p-2 text-sm" /><input value={companyDraft.billing_contact ?? ''} onChange={(event) => setCompanyDraft({ ...companyDraft, billing_contact: event.target.value })} placeholder="Contacto de facturación" className="rounded-lg border p-2 text-sm" /><input type="email" value={companyDraft.billing_email ?? ''} onChange={(event) => setCompanyDraft({ ...companyDraft, billing_email: event.target.value })} placeholder="Correo de facturación" className="rounded-lg border p-2 text-sm" /><input value={companyDraft.billing_phone ?? ''} onChange={(event) => setCompanyDraft({ ...companyDraft, billing_phone: event.target.value })} placeholder="Teléfono de facturación" className="rounded-lg border p-2 text-sm" /><input value={companyDraft.website ?? ''} onChange={(event) => setCompanyDraft({ ...companyDraft, website: event.target.value })} placeholder="Sitio web" className="rounded-lg border p-2 text-sm" /><textarea value={companyDraft.fiscal_address ?? ''} onChange={(event) => setCompanyDraft({ ...companyDraft, fiscal_address: event.target.value })} placeholder="Dirección fiscal" className="rounded-lg border p-2 text-sm sm:col-span-2" /><textarea value={companyDraft.profile_notes ?? ''} onChange={(event) => setCompanyDraft({ ...companyDraft, profile_notes: event.target.value })} placeholder="Notas del acuerdo o perfil" className="rounded-lg border p-2 text-sm sm:col-span-2" /></div><button className="mt-3 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-semibold text-white">Guardar datos</button><div className="mt-6 grid gap-4 lg:grid-cols-2"><div className="rounded-lg border p-3"><h3 className="font-semibold">Personal e invitaciones</h3><div className="mt-3 space-y-2 text-xs">{portalMembers.map((member) => <div key={member.id} className="flex items-center justify-between gap-2 rounded bg-zinc-50 p-2"><span>{member.email ?? 'Correo pendiente'} · {member.role}</span><span className="flex gap-1"><button type="button" onClick={() => { void resendMember(member) }} title="Reenviar" className="rounded border p-1"><RefreshCw className="h-3.5 w-3.5" /></button>{member.status !== 'revoked' && <button type="button" onClick={() => { void revokeMember(member) }} title="Revocar" className="rounded border border-red-200 p-1 text-red-700"><ShieldAlert className="h-3.5 w-3.5" /></button>}</span></div>)}{!portalMembers.length && <p className="text-zinc-500">No hay personal vinculado.</p>}</div></div><div className="rounded-lg border p-3"><h3 className="font-semibold">Documentos del expositor</h3><label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded border px-2 py-1 text-xs"><Upload className="h-3.5 w-3.5" />Subir documento<input type="file" className="hidden" onChange={(event) => { void uploadDocument(event.target.files?.[0]) }} /></label><div className="mt-2 space-y-1 text-xs">{portalDocuments.map((document) => <button type="button" key={document.id} onClick={() => { void downloadDocument(document.storage_path) }} className="flex w-full items-center gap-2 text-left text-emerald-700"><FileText className="h-3.5 w-3.5" />{document.name}</button>)}</div></div><div className="rounded-lg border p-3"><h3 className="font-semibold">Tareas</h3><div className="mt-2 flex gap-2"><input value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} placeholder="Nueva tarea" className="min-w-0 flex-1 rounded border p-2 text-xs" /><input type="date" value={taskDue} onChange={(event) => setTaskDue(event.target.value)} className="rounded border p-2 text-xs" /><button type="button" disabled={taskBusy} onClick={() => { void createTask() }} className="rounded bg-emerald-700 px-2 text-xs font-semibold text-white">Añadir</button></div><div className="mt-2 space-y-1 text-xs">{portalTasks.map((task) => <div key={task.id} className="flex items-center justify-between rounded bg-zinc-50 p-2"><span className={task.status === 'completed' ? 'line-through text-zinc-400' : ''}>{task.title}</span><button type="button" onClick={() => { void updateTask(task) }} className="text-emerald-700">{task.status === 'completed' ? 'Reabrir' : 'Completar'}</button></div>)}</div></div><div className="rounded-lg border p-3"><h3 className="font-semibold">Pagos</h3><div className="mt-2 space-y-1 text-xs">{portalPayments.map((payment) => <div key={payment.id} className="flex items-center justify-between gap-2 rounded bg-zinc-50 p-2"><span>{payment.amount} {payment.currency} · {payment.reference ?? 'Sin referencia'}</span><select value={payment.status} onChange={(event) => { void updatePayment(payment, event.target.value) }} className="rounded border p-1"><option value="pending">Pendiente</option><option value="confirmed">Confirmado</option><option value="rejected">Rechazado</option></select></div>)}{!portalPayments.length && <p className="text-zinc-500">No hay pagos reportados.</p>}</div></div><div className="rounded-lg border p-3 lg:col-span-2"><h3 className="font-semibold">Auditoría reciente</h3><div className="mt-2 space-y-1 text-xs text-zinc-600">{portalAudit.map((entry) => <p key={entry.id}>{new Date(entry.created_at).toLocaleString()} · {entry.action} · {entry.entity_type}</p>)}{!portalAudit.length && <p>No hay movimientos registrados.</p>}</div></div></div></form>}
       </section>
       <div className="mt-6 overflow-hidden rounded-xl border bg-white"><table className="w-full text-left text-sm"><thead className="bg-zinc-50 text-xs text-zinc-600"><tr><th className="p-3">Empresa</th><th className="p-3">Contacto</th><th className="p-3">Espacio</th><th className="p-3">Portal</th><th className="p-3">Editar</th></tr></thead><tbody>{companies.map((company) => <tr key={company.id} className="border-t"><td className="p-3 font-medium">{company.name}</td><td className="p-3 text-zinc-600">{company.contact_name ?? company.contact_email ?? 'Pendiente'}</td><td className="p-3"><select value={assigned.get(company.id) ?? ''} onChange={(event) => event.target.value && assign(company.id, event.target.value)} className="rounded border p-2 text-sm"><option value="">Sin espacio</option>{stands.filter((stand) => stand.status !== 'assigned' || assigned.get(company.id) === stand.id).map((stand) => <option key={stand.id} value={stand.id}>{stand.label}</option>)}</select></td><td className="p-3"><Link to={`/portal/expositor/${eventId}?companyId=${company.id}`} className="text-xs font-semibold text-emerald-700">Abrir portal</Link></td><td className="p-3"><button type="button" onClick={() => selectCompany(company)} className="text-xs font-semibold text-zinc-700">Editar datos</button></td></tr>)}</tbody></table></div>
     </main>

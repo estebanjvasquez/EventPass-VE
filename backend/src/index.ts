@@ -408,7 +408,7 @@ app.post('/api/exhibitor-portal/invite', async (c) => {
     }
   }
   if (!userId || !actionLink) return c.json({ error: generateError?.message ?? 'No se pudo generar el enlace de invitación' }, 400)
-  const { error } = await supabase.from('exhibitor_portal_members').upsert({ event_id: event.id, company_id: company.id, user_id: userId, role: parsed.data.role, status: 'active', accepted_at: new Date().toISOString() }, { onConflict: 'event_id,company_id,user_id' })
+  const { error } = await supabase.from('exhibitor_portal_members').upsert({ event_id: event.id, company_id: company.id, user_id: userId, email, role: parsed.data.role, status: 'active', accepted_at: new Date().toISOString() }, { onConflict: 'event_id,company_id,user_id' })
   if (error) return c.json({ error: error.message }, 400)
   const portalUrl = `${base}/portal/expositor/${event.id}`
   const mailError = await sendPortalInviteEmail({ email: c.env.EMAIL, from: c.env.EMAIL_FROM, to: email, companyName: company.name, eventName: eventDetails?.name ?? 'tu evento', actionUrl: actionLink, portalUrl })
