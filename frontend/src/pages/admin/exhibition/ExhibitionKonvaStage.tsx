@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Group, Image as KonvaImage, Layer, Line, Rect, Stage, Text, Transformer } from "react-konva";
+import { Arc, Arrow, Circle, Ellipse, Group, Image as KonvaImage, Layer, Line, Rect, Stage, Text, Transformer } from "react-konva";
 import type Konva from "konva";
 
 type Geometry = { x: number; y: number; width: number; height: number; rotation?: number };
@@ -26,6 +26,20 @@ function useImage(url: string | null) {
     return () => { next.onload = null; };
   }, [url]);
   return image;
+}
+
+function ElementSymbol({ item, fill, company }: { item: SceneElement; fill: string; company?: string }) {
+  const kind = kindOf(item);
+  const { width, height } = item.geometry;
+  if (kind === "door") return <Group><Line points={[0, height, width * 0.72, height]} stroke="#475569" strokeWidth={0.08} /><Line points={[0, height, width * 0.72, height * 0.28]} stroke="#475569" strokeWidth={0.08} /><Arc x={0} y={height} innerRadius={width * 0.68} outerRadius={width * 0.72} angle={45} rotation={-45} stroke="#94a3b8" strokeWidth={0.06} /><Text text={String(item.metadata.door_role ?? "ENTRADA").toUpperCase()} x={0} y={height * 0.08} width={width} fontSize={Math.max(0.12, height * 0.45)} align="center" fill="#334155" listening={false} /></Group>;
+  if (kind === "access") return <Group><Rect width={width} height={height} fill={fill} stroke="#2563eb" strokeWidth={0.08} cornerRadius={0.12} /><Arrow points={[width * 0.18, height * 0.5, width * 0.82, height * 0.5]} pointerLength={height * 0.28} pointerWidth={height * 0.28} stroke="#1d4ed8" fill="#1d4ed8" strokeWidth={0.1} /><Text text="ACCESO" x={0} y={height * 0.1} width={width} fontSize={Math.max(0.12, height * 0.25)} align="center" fill="#1e3a8a" listening={false} /></Group>;
+  if (kind === "security") return <Group><Circle x={width / 2} y={height / 2} radius={Math.min(width, height) * 0.38} fill={fill} stroke="#4338ca" strokeWidth={0.1} /><Text text="✓" x={width * 0.25} y={height * 0.2} width={width * 0.5} height={height * 0.6} fontSize={Math.min(width, height) * 0.55} align="center" verticalAlign="middle" fill="#3730a3" listening={false} /><Text text="CTRL" x={0} y={height * 0.78} width={width} fontSize={Math.max(0.12, height * 0.16)} align="center" fill="#3730a3" listening={false} /></Group>;
+  if (kind === "plant") return <Group><Circle x={width / 2} y={height / 2} radius={Math.min(width, height) * 0.26} fill="#86efac" stroke="#15803d" strokeWidth={0.07} /><Circle x={width * 0.32} y={height * 0.35} radius={Math.min(width, height) * 0.2} fill="#4ade80" stroke="#15803d" strokeWidth={0.05} /><Circle x={width * 0.68} y={height * 0.35} radius={Math.min(width, height) * 0.2} fill="#4ade80" stroke="#15803d" strokeWidth={0.05} /><Circle x={width * 0.5} y={height * 0.7} radius={Math.min(width, height) * 0.2} fill="#22c55e" stroke="#15803d" strokeWidth={0.05} /></Group>;
+  if (kind === "table") return <Group><Ellipse x={width / 2} y={height / 2} radiusX={width * 0.28} radiusY={height * 0.28} fill={fill} stroke="#92400e" strokeWidth={0.1} />{[[0.18, 0.5], [0.82, 0.5], [0.5, 0.15], [0.5, 0.85]].map(([x, y], index) => <Circle key={index} x={width * x} y={height * y} radius={Math.min(width, height) * 0.09} fill="#f8fafc" stroke="#92400e" strokeWidth={0.06} />)}</Group>;
+  if (kind === "sofa") return <Group><Rect x={0.08} y={0.08} width={width - 0.16} height={height * 0.28} fill="#c4b5fd" stroke="#5b21b6" strokeWidth={0.08} cornerRadius={0.08} /><Rect x={0.08} y={height * 0.34} width={width - 0.16} height={height * 0.55} fill={fill} stroke="#5b21b6" strokeWidth={0.08} cornerRadius={0.12} /><Line points={[width * 0.28, height * 0.42, width * 0.28, height * 0.8, width * 0.72, height * 0.8, width * 0.72, height * 0.42]} stroke="#7c3aed" strokeWidth={0.05} /></Group>;
+  if (kind === "information") return <Group><Rect x={0.08} y={height * 0.2} width={width - 0.16} height={height * 0.6} fill={fill} stroke="#0369a1" strokeWidth={0.08} cornerRadius={0.08} /><Text text="i" x={0} y={height * 0.25} width={width} fontSize={height * 0.45} fontStyle="bold" align="center" fill="#075985" listening={false} /></Group>;
+  if (kind === "flow_arrow") return <Arrow points={[0.1, height / 2, width - 0.1, height / 2]} pointerLength={height * 0.8} pointerWidth={height * 0.9} stroke={fill} fill={fill} strokeWidth={Math.max(0.05, height * 0.18)} />;
+  return <Group><Rect width={width} height={height} fill={fill} stroke="#64748b" strokeWidth={0.05} cornerRadius={0.08} /><Text text={company ? `${item.label}\n${company}` : item.label} width={width} height={height} align="center" verticalAlign="middle" fontSize={Math.max(0.16, Math.min(0.42, width / 8))} fill="#1e293b" listening={false} /></Group>;
 }
 
 export function ExhibitionKonvaStage({
@@ -78,12 +92,14 @@ export function ExhibitionKonvaStage({
     const scaleX = node.scaleX();
     const scaleY = node.scaleY();
     node.scale({ x: 1, y: 1 });
+    const nextWidth = Math.max(0.2, snapValue(item.geometry.width * scaleX));
+    const nextHeight = Math.max(0.2, snapValue(item.geometry.height * scaleY));
     const geometry = {
       ...item.geometry,
-      x: Math.max(0, Math.min(columns - item.geometry.width, snapValue(node.x()))),
-      y: Math.max(0, Math.min(rows - item.geometry.height, snapValue(node.y()))),
-      width: Math.max(0.2, snapValue(item.geometry.width * scaleX)),
-      height: Math.max(0.2, snapValue(item.geometry.height * scaleY)),
+      x: Math.max(0, Math.min(columns - nextWidth, snapValue(node.x()))),
+      y: Math.max(0, Math.min(rows - nextHeight, snapValue(node.y()))),
+      width: nextWidth,
+      height: nextHeight,
       rotation: node.rotation(),
     };
     onTransform(item.id, geometry);
@@ -106,15 +122,15 @@ export function ExhibitionKonvaStage({
         {showGrid && Array.from({ length: rows }, (_, y) => <Text key={`y-${y}`} text={String(y + 1)} x={0.05} y={y + 0.32} fontSize={0.28} fill="#64748b" listening={false} />)}
         {sorted.map((item) => {
           const kind = kindOf(item);
-          const selected = selectedIds.includes(item.id);
+          const isSelected = selectedIds.includes(item.id);
           const fill = String(item.style.fill ?? defaultColor[kind]);
           const company = assignments.get(item.id);
           return <Group key={item.id} ref={(node) => { if (node) nodeRefs.current.set(item.id, node); else nodeRefs.current.delete(item.id); }} x={item.geometry.x} y={item.geometry.y} rotation={item.geometry.rotation ?? 0} draggable={!item.locked} onMouseDown={(event) => { event.cancelBubble = true; onSelect(item, event.evt.ctrlKey || event.evt.metaKey); }} onTouchStart={(event) => { event.cancelBubble = true; onSelect(item, false); }} onDragEnd={(event) => moveItem(item, event)} onTransformEnd={(event) => transformItem(item, event)}>
-            <Rect width={item.geometry.width} height={item.geometry.height} fill={fill} stroke={selected ? "#047857" : "#64748b"} strokeWidth={selected ? 0.12 : 0.04} cornerRadius={0.12} opacity={item.locked ? 0.7 : 1} />
-            <Text text={company ? `${item.label}\n${company}` : item.label} width={item.geometry.width} height={item.geometry.height} align="center" verticalAlign="middle" fontSize={Math.max(0.18, Math.min(0.42, item.geometry.width / 8))} fill="#1e293b" listening={false} />
+            <ElementSymbol item={item} fill={fill} company={company} />
+            {isSelected && <Rect width={item.geometry.width} height={item.geometry.height} stroke="#047857" strokeWidth={0.12} cornerRadius={0.12} listening={false} />}
           </Group>;
         })}
-        <Transformer ref={transformerRef} rotateEnabled enabledAnchors={["top-left", "top-right", "bottom-left", "bottom-right"]} boundBoxFunc={(oldBox, newBox) => newBox.width < 0.2 || newBox.height < 0.2 ? oldBox : newBox} />
+        <Transformer ref={transformerRef} rotateEnabled keepRatio={false} enabledAnchors={["top-left", "top-right", "bottom-left", "bottom-right"]} boundBoxFunc={(oldBox, newBox) => newBox.width < 0.2 || newBox.height < 0.2 ? oldBox : newBox} />
         </Group>
       </Layer>
     </Stage>
