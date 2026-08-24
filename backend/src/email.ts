@@ -416,3 +416,38 @@ export async function sendConfirmationEmail(p: ConfirmationParams): Promise<stri
     return err instanceof Error ? err.message : String(err)
   }
 }
+
+type PortalInviteParams = {
+  email: EmailSendBinding
+  from: string
+  to: string
+  companyName: string
+  eventName: string
+  actionUrl: string
+  portalUrl: string
+}
+
+export function portalInviteEmailHtml(p: PortalInviteParams): string {
+  return `<!doctype html><html lang="es"><body style="margin:0;background:#f4f4f5;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif"><div style="max-width:560px;margin:0 auto;padding:32px 20px"><div style="background:#fff;border:1px solid #e4e4e7;border-radius:16px;padding:32px"><p style="font-size:13px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#059669;margin:0">Portal de expositores</p><h1 style="font-size:24px;color:#18181b;margin:8px 0 0">Invitación para ${esc(p.companyName)}</h1><p style="font-size:15px;line-height:1.6;color:#52525b;margin:16px 0 0">Te invitamos a gestionar la participación de <strong>${esc(p.companyName)}</strong> en ${esc(p.eventName)}. Define tu contraseña para acceder al portal.</p><p style="margin:24px 0"><a href="${esc(p.actionUrl)}" style="display:inline-block;background:#059669;color:#fff;font-size:14px;font-weight:600;text-decoration:none;padding:12px 24px;border-radius:8px">Definir contraseña y entrar</a></p><p style="font-size:12px;color:#71717a;line-height:1.5">Después de definir tu contraseña podrás acceder al portal desde:<br><a href="${esc(p.portalUrl)}">${esc(p.portalUrl)}</a></p><p style="font-size:12px;color:#a1a1aa;margin:24px 0 0;word-break:break-all">Si el botón no funciona, copia este enlace:<br>${esc(p.actionUrl)}</p></div><p style="text-align:center;font-size:12px;color:#a1a1aa;margin:16px 0 0">EventosFácil</p></div></body></html>`
+}
+
+export function portalInviteEmailText(p: PortalInviteParams): string {
+  return `Invitación al portal de ${p.companyName}
+
+Te invitamos a gestionar la participación de ${p.companyName} en ${p.eventName}.
+Define tu contraseña aquí:
+${p.actionUrl}
+
+Portal: ${p.portalUrl}
+
+— EventosFácil`
+}
+
+export async function sendPortalInviteEmail(p: PortalInviteParams): Promise<string | null> {
+  try {
+    await p.email.send({ to: p.to, from: sender(p.from), replyTo, subject: `Invitación al portal — ${p.companyName}`, html: portalInviteEmailHtml(p), text: portalInviteEmailText(p) })
+    return null
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err)
+  }
+}

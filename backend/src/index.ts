@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { z } from 'zod'
-import { sendUploadLinkEmail, sendConfirmationEmail, type EmailSendBinding } from './email'
+import { sendUploadLinkEmail, sendConfirmationEmail, sendPortalInviteEmail, type EmailSendBinding } from './email'
 import { runScheduledJobs } from './jobs'
 import { normalizeSlug, provisionDomain, getDomainStatus, type CfEnv } from './tenants'
 
@@ -385,7 +385,7 @@ app.post('/api/exhibitor-portal/invite', async (c) => {
   const caller = await authUserId(supabase, c.req.header('Authorization'))
   if (!caller) return c.json({ error: 'no autorizado' }, 401)
   const { data: event } = await supabase.from('events').select('id,organization_id').eq('id', parsed.data.event_id).maybeSingle()
-  const { data: company } = await supabase.from('companies').select('id,kind').eq('id', parsed.data.company_id).maybeSingle()
+  const { data: company } = await supabase.from('companies').select('id,name,kind').eq('id', parsed.data.company_id).maybeSingle()
   if (!event || !company || !['exhibitor', 'sponsor'].includes(company.kind)) return c.json({ error: 'Empresa o evento inválido' }, 400)
   const { data: platformAdmin } = await supabase.from('platform_admins').select('user_id').eq('user_id', caller).maybeSingle()
   const { data: orgMember } = await supabase.from('memberships').select('role').eq('organization_id', event.organization_id).eq('user_id', caller).maybeSingle()
@@ -394,16 +394,26 @@ app.post('/api/exhibitor-portal/invite', async (c) => {
   if (!allowed) return c.json({ error: 'No tienes permisos para invitar personal' }, 403)
   const email = parsed.data.email.toLowerCase().trim()
   const base = c.env.APP_BASE_URL.replace(/\/$/, '')
-  const invitation = await supabase.auth.admin.inviteUserByEmail(email, { redirectTo: `${base}/definir-clave` })
-  let userId = invitation.data?.user?.id ?? null
-  if (!userId && invitation.error && /registered|exist/i.test(invitation.error.message)) {
+  const { data: eventDetails } = await supabase.from('events').select('name').eq('id', event.id).maybeSingle()
+  const { data: generated, error: generateError } = await supabase.auth.admin.generateLink({ type: 'invite', email, options: { redirectTo: `${base}/definir-clave?next=/portal/expositor/${event.id}` } })
+  let userId = generated?.user?.id ?? null
+  let actionLink = generated?.properties?.action_link ?? null
+  if (!userId && generateError && /registered|exist|already/i.test(generateError.message)) {
     const found = await supabase.rpc('get_user_id_by_email', { p_email: email })
     userId = (found.data as string | null) ?? null
+    if (userId) {
+      const recovery = await supabase.auth.admin.generateLink({ type: 'recovery', email, options: { redirectTo: `${base}/definir-clave?next=/portal/expositor/${event.id}` } })
+      actionLink = recovery.data?.properties?.action_link ?? null
+      if (recovery.error) return c.json({ error: recovery.error.message }, 400)
+    }
   }
-  if (!userId) return c.json({ error: invitation.error?.message ?? 'No se pudo resolver el usuario' }, 400)
+  if (!userId || !actionLink) return c.json({ error: generateError?.message ?? 'No se pudo generar el enlace de invitación' }, 400)
   const { error } = await supabase.from('exhibitor_portal_members').upsert({ event_id: event.id, company_id: company.id, user_id: userId, role: parsed.data.role, status: 'active', accepted_at: new Date().toISOString() }, { onConflict: 'event_id,company_id,user_id' })
   if (error) return c.json({ error: error.message }, 400)
-  return c.json({ ok: true, email, status: 'invited' })
+  const portalUrl = `${base}/portal/expositor/${event.id}`
+  const mailError = await sendPortalInviteEmail({ email: c.env.EMAIL, from: c.env.EMAIL_FROM, to: email, companyName: company.name, eventName: eventDetails?.name ?? 'tu evento', actionUrl: actionLink, portalUrl })
+  if (mailError) return c.json({ error: `La invitación fue creada, pero el correo no pudo enviarse: ${mailError}`, invitation_created: true }, 502)
+  return c.json({ ok: true, email, status: 'invited', invitation_created: true })
 })
 
 app.delete('/api/admin/clients/:orgId/owners/:userId', async (c) => {

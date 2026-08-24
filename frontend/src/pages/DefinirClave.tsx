@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { KeyRound, Ticket } from 'lucide-react'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
@@ -9,6 +9,7 @@ import { supabase } from '../lib/supabase'
 export default function DefinirClave() {
   const { session, loading } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -21,7 +22,8 @@ export default function DefinirClave() {
     const { error } = await supabase.auth.updateUser({ password })
     setBusy(false)
     if (error) return setError(error.message)
-    navigate('/admin', { replace: true })
+    const next = new URLSearchParams(location.search).get('next')
+    navigate(next && next.startsWith('/') ? next : '/admin', { replace: true })
   }
 
   if (loading)

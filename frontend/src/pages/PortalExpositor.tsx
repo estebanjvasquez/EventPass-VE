@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { Download, FileText, LogOut, Upload, Users } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -12,6 +12,7 @@ type Staff = { id: string; role: string; status: string; user_id: string }
 
 export default function PortalExpositor() {
   const { eventId } = useParams()
+  const [searchParams] = useSearchParams()
   const { user, signOut } = useAuth()
   const [event, setEvent] = useState<EventRow | null>(null)
   const [membership, setMembership] = useState<Membership | null>(null)
@@ -30,9 +31,19 @@ export default function PortalExpositor() {
     const { data: eventData, error: eventError } = await supabase.from('events').select('id,organization_id,name,description,config').eq('id', eventId).maybeSingle()
     if (eventError || !eventData) { setMessage(eventError?.message ?? 'Evento no encontrado.'); return }
     setEvent(eventData as EventRow)
-    const { data: member, error: memberError } = await supabase.from('exhibitor_portal_members').select('id,company_id,role,status,company:companies(name,contact_email)').eq('event_id', eventId).eq('user_id', user.id).eq('status', 'active').maybeSingle()
-    if (memberError || !member) { setMessage(memberError?.message ?? 'Tu usuario no tiene acceso a este portal.'); return }
-    setMembership(member as unknown as Membership)
+    const { data: isPlatformAdmin } = await supabase.rpc('is_platform_admin')
+    const requestedCompanyId = searchParams.get('companyId')
+    let member: Membership | null = null
+    if (isPlatformAdmin && requestedCompanyId) {
+      const { data: company, error: companyError } = await supabase.from('companies').select('id,name,contact_email').eq('id', requestedCompanyId).maybeSingle()
+      if (companyError || !company) { setMessage(companyError?.message ?? 'Expositor no encontrado.'); return }
+      member = { id: 'platform-preview', company_id: company.id, role: 'owner', status: 'active', company: { name: company.name, contact_email: company.contact_email } }
+    } else {
+      const { data: portalMember, error: memberError } = await supabase.from('exhibitor_portal_members').select('id,company_id,role,status,company:companies(name,contact_email)').eq('event_id', eventId).eq('user_id', user.id).eq('status', 'active').maybeSingle()
+      if (memberError || !portalMember) { setMessage(memberError?.message ?? 'Tu usuario no tiene acceso a este portal.'); return }
+      member = portalMember as unknown as Membership
+    }
+    setMembership(member)
     const companyId = member.company_id
     const [taskResult, paymentResult, staffResult] = await Promise.all([
       supabase.from('exhibitor_portal_tasks').select('id,title,description,due_at,status').eq('event_id', eventId).eq('company_id', companyId).order('due_at'),
@@ -43,7 +54,7 @@ export default function PortalExpositor() {
     setTasks((taskResult.data ?? []) as Task[])
     setPayments((paymentResult.data ?? []) as Payment[])
     setStaff((staffResult.data ?? []) as Staff[])
-  }, [eventId, user])
+  }, [eventId, searchParams, user])
 
   useEffect(() => { void load() }, [load])
 
