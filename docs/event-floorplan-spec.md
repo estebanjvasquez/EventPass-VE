@@ -490,3 +490,21 @@ segundo motor de renderizado.
    límites de seguridad.
 6. Ejecutar Playwright en escritorio, touch y tablet; verificar que el canvas sólo
    contiene una escena Konva y que no persiste estado efímero.
+
+### 15.4 Estado de implementación P0/P1 — 24 de agosto de 2026
+
+- P0 implementado en `ExhibitionCanvasEditor`: historial local de 40 estados,
+  deshacer/rehacer, guardado manual y versiones persistidas en
+  `venue_map_versions`, con restauración de snapshots completos.
+- P0 implementado: blueprint persistido en `agenda-attachments`, visibilidad,
+  opacidad y bloqueo lógico sin modificar los elementos interactivos. PDF se
+  rasteriza con PDF.js y DXF 2D compatible se previsualiza con `dxf-parser`.
+- P1 implementado: biblioteca visual ampliada (lobby, espacio libre y símbolos),
+  dibujo de áreas irregulares por vértices, redimensionamiento rectangular
+  independiente y cotas métricas del elemento seleccionado.
+- P1 pendiente: unión/intersección booleana con `polygon-clipping`, validación
+  geométrica de solapamientos, calibración de escala sobre el blueprint y
+  conversión CAD avanzada por capas. Esas partes permanecen deliberadamente
+  desactivadas hasta incorporar pruebas geométricas.
+- La migración `20260824240000_exhibition_canvas_versions.sql` debe ejecutarse
+  manualmente en Supabase antes de usar el historial persistido.
