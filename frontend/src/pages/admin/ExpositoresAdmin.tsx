@@ -20,6 +20,7 @@ export default function ExpositoresAdmin() {
   const [eventConfig, setEventConfig] = useState<EventConfig>({})
   const [name, setName] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [inviteCompany, setInviteCompany] = useState('')
   const [inviteEmail, setInviteEmail] = useState('')
@@ -91,12 +92,12 @@ export default function ExpositoresAdmin() {
   async function inviteStaff(event: React.FormEvent) {
     event.preventDefault()
     if (!eventId || !inviteCompany || !inviteEmail || !session?.access_token) return
-    setInviting(true); setError(null)
+    setInviting(true); setError(null); setNotice(null)
     const api = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? ''
     const response = await fetch(`${api}/api/exhibitor-portal/invite`, { method: 'POST', headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ event_id: eventId, company_id: inviteCompany, email: inviteEmail, role: 'staff' }) })
     const body = await response.json().catch(() => ({})) as { error?: string }
     if (!response.ok) setError(body.error ?? 'No se pudo enviar la invitación.')
-    else { setInviteEmail(''); setError('Invitación enviada. El usuario podrá entrar al portal con el enlace recibido.') }
+    else { setInviteEmail(''); setNotice('Invitación enviada por correo. El usuario recibirá un enlace para definir su contraseña y entrar al portal.') }
     setInviting(false)
   }
 
@@ -117,7 +118,7 @@ export default function ExpositoresAdmin() {
   return <div className="min-h-[100dvh] bg-zinc-50">
     <header className="border-b bg-white"><div className="mx-auto flex max-w-5xl items-center gap-3 px-5 py-4"><Link to={`/admin/stands/${eventId}`} aria-label="Volver al plano"><ArrowLeft className="h-4 w-4" /></Link><Building2 className="h-5 w-5 text-emerald-700" /><span className="font-semibold">Expositores y plano</span></div></header>
     <main className="mx-auto max-w-5xl px-5 py-8"><h1 className="text-2xl font-bold">Expositores{eventName ? ` · ${eventName}` : ''}</h1><p className="mt-1 text-sm text-zinc-600">Gestiona empresas y asigna uno o varios espacios desde una vista comercial separada del diseño.</p>
-      {error && <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-800">{error}</p>}
+      {error && <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-800">{error}</p>}{notice && <p className="mt-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</p>}
       <section className="mt-5 grid gap-4 md:grid-cols-2">
         <form onSubmit={create} className="rounded-xl border bg-white p-4"><h2 className="font-semibold">Nueva empresa expositora</h2><div className="mt-3 flex gap-2"><input value={name} onChange={(event) => setName(event.target.value)} className="min-w-0 flex-1 rounded-lg border p-2 text-sm" placeholder="Nombre de la empresa" /><button className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">Crear</button></div></form>
         <div className="rounded-xl border bg-white p-4"><h2 className="font-semibold">Manual del expositor</h2><p className="mt-1 text-xs text-zinc-600">PDF privado para que los expositores lo descarguen desde su portal (máximo 10 MB).</p><div className="mt-3 flex flex-wrap items-center gap-2"><label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm"><Upload className="h-4 w-4" />{uploading ? 'Subiendo…' : 'Cargar PDF'}<input type="file" accept="application/pdf" className="hidden" disabled={uploading} onChange={(event) => { void uploadManual(event.target.files?.[0]) }} /></label>{manualPath && <button type="button" onClick={() => { void downloadManual() }} className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"><Download className="h-4 w-4" />Descargar manual</button>}</div></div>
