@@ -117,6 +117,20 @@ export default function EventosAdmin() {
     else await loadEvents(orgId)
   }
 
+  async function deleteEvent(ev: EventRow) {
+    if (!orgId) return
+    const confirmed = window.confirm(`¿Eliminar el evento “${ev.name}”? Se eliminarán también su agenda, plano, asientos y configuraciones relacionadas.`)
+    if (!confirmed) return
+    setError(null)
+    const { error: deleteError } = await supabase.from('events').delete().eq('id', ev.id).eq('organization_id', orgId)
+    if (deleteError) {
+      setError(`No se pudo eliminar el evento: ${deleteError.message}`)
+      return
+    }
+    setEditing((current) => current === ev ? null : current)
+    setEvents((current) => current.filter((item) => item.id !== ev.id))
+  }
+
   return (
     <div className="min-h-[100dvh] bg-[#fafafa]">
       <ImpersonationBanner />
@@ -259,6 +273,16 @@ export default function EventosAdmin() {
                         >
                           <Pencil className="h-3.5 w-3.5" />
                           Editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void deleteEvent(ev)}
+                          aria-label={`Eliminar ${ev.name}`}
+                          title="Eliminar evento"
+                          className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 transition-colors hover:bg-red-50"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Eliminar
                         </button>
                       </div>
                     </td>
