@@ -11,7 +11,7 @@ Esta guía permite validar el recorrido completo del plano, desde la edición CA
 5. El listado conserva los botones rápidos de **Editar**, **Publicar/Cerrar** y acceso directo al Plano.
 6. Para probar la vista pública, usar **Publicar plano** y luego **Vista pública**. Las rutas directas son `/admin/plano-publicar/{eventId}` y `/expo/{eventId}/plano`.
 
-En cualquier módulo abierto desde el evento debe aparecer la píldora fija **← Administrar evento** en la esquina superior izquierda. Úsala para volver al centro del evento sin pasar por la página principal del usuario.
+En cualquier módulo abierto desde el evento debe aparecer en su encabezado la casa verde (o el color de branding) con el texto **Admin del evento**. Úsala para volver al centro del evento sin pasar por la página principal del usuario; no debe existir un botón flotante que se sobreponga al contenido.
 5. Tener al menos dos empresas expositoras creadas en el módulo **Expositores**.
 6. Si se prueban archivos, usar un PNG/JPG, un PDF y un DXF pequeño como planos de referencia.
 

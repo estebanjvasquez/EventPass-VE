@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Building2, Download, FileText, RefreshCw, ShieldAlert, Upload } from 'lucide-react'
+import { Building2, Download, FileText, Home, RefreshCw, ShieldAlert, Upload } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/auth'
 
@@ -197,7 +197,7 @@ export default function ExpositoresAdmin() {
 
   const assigned = new Map(assignments.map((item) => [item.company_id, item.element_id]))
   return <div className="min-h-[100dvh] bg-zinc-50">
-    <header className="border-b bg-white"><div className="mx-auto flex max-w-5xl items-center gap-3 px-5 py-4"><Link to={`/admin/stands/${eventId}`} aria-label="Volver al plano"><ArrowLeft className="h-4 w-4" /></Link><Building2 className="h-5 w-5 text-emerald-700" /><span className="font-semibold">Expositores y plano</span></div></header>
+    <header className="border-b bg-white"><div className="mx-auto flex max-w-5xl items-center gap-3 px-5 py-4"><Link to={`/admin/eventos/${eventId}/administrar`} aria-label="Volver a administrar evento" className="inline-flex items-center gap-2 font-semibold text-emerald-700"><Home className="h-4 w-4" />Admin del evento</Link><Building2 className="h-5 w-5 text-emerald-700" /><span className="font-semibold">Expositores y plano</span></div></header>
     <main className="mx-auto max-w-5xl px-5 py-8"><h1 className="text-2xl font-bold">Expositores{eventName ? ` · ${eventName}` : ''}</h1><p className="mt-1 text-sm text-zinc-600">Gestiona empresas y asigna uno o varios espacios desde una vista comercial separada del diseño.</p>
       {error && <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-800">{error}</p>}{notice && <p className="mt-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</p>}
       <section className="mt-5 grid gap-4 md:grid-cols-2">

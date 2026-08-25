@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
-  ArrowLeft,
+  Home,
   CalendarDays,
   Clock3,
   Coffee,
@@ -190,7 +190,7 @@ export default function AgendaAdmin() {
 }
 
 function PageFrame({ title, eventId, children }: { title: string; eventId?: string; children: React.ReactNode }) {
-  return <div className="min-h-[100dvh] bg-zinc-50"><header className="border-b border-zinc-200 bg-white"><div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4"><Link to="/admin/eventos" className="inline-flex items-center gap-2 text-sm font-medium text-zinc-600 hover:text-zinc-900"><ArrowLeft className="h-4 w-4" />Eventos</Link><div className="flex items-center gap-3"><span className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-900"><CalendarDays className="h-4 w-4 text-emerald-600" />{title}</span>{eventId && <Link to={`/admin/asientos/${eventId}`} className="hidden rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 sm:inline-flex">Asientos</Link>}</div></div></header><main className="mx-auto max-w-7xl px-5 py-8">{children}</main></div>
+  return <div className="min-h-[100dvh] bg-zinc-50"><header className="border-b border-zinc-200 bg-white"><div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4"><Link to={`/admin/eventos/${eventId}/administrar`} aria-label="Volver a administrar evento" className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700"><Home className="h-4 w-4" />Admin del evento</Link><div className="flex items-center gap-3"><span className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-900"><CalendarDays className="h-4 w-4 text-emerald-600" />{title}</span>{eventId && <Link to={`/admin/asientos/${eventId}`} className="hidden rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 sm:inline-flex">Asientos</Link>}</div></div></header><main className="mx-auto max-w-7xl px-5 py-8">{children}</main></div>
 }
 function TabButton({ active, icon, children, onClick }: { active: boolean; icon: React.ReactNode; children: React.ReactNode; onClick: () => void }) { return <button type="button" onClick={onClick} className={`inline-flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold ${active ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-zinc-500 hover:text-zinc-800'}`}>{icon}{children}</button> }
 

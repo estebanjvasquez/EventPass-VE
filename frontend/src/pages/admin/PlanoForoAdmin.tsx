@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Armchair, Columns3, Rows3 } from 'lucide-react'
+import { Armchair, Columns3, Home, Rows3 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { FloorplanCanvas } from './floorplan/FloorplanCanvas'
 import { fromVenueElement } from './floorplan/adapter'
@@ -164,7 +164,7 @@ export default function PlanoForoAdmin() {
   const columns = map?.metadata?.grid_columns ?? 18
   const rows = map?.metadata?.grid_rows ?? 12
   return <div className="min-h-[100dvh] bg-[#fafafa]">
-    <header className="border-b border-zinc-200 bg-white"><div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4"><Link to="/admin/eventos" className="inline-flex items-center gap-2 text-sm font-medium text-zinc-600"><ArrowLeft className="h-4 w-4"/>Eventos</Link><span className="inline-flex items-center gap-2 text-sm font-semibold"><Armchair className="h-4 w-4 text-emerald-600"/>Asientos</span></div></header>
+    <header className="border-b border-zinc-200 bg-white"><div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4"><Link to={`/admin/eventos/${eventId}/administrar`} aria-label="Volver a administrar evento" className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700"><Home className="h-4 w-4"/>Admin del evento</Link><span className="inline-flex items-center gap-2 text-sm font-semibold"><Armchair className="h-4 w-4 text-emerald-600"/>Asientos</span></div></header>
     <main className="mx-auto max-w-7xl px-5 py-7"><h1 className="text-2xl font-bold text-zinc-900">Asientos</h1><p className="mt-1 text-sm text-zinc-600">{eventName} · Diseña la sala con libertad: arrastra, redimensiona y nombra los elementos.</p>
       {error && <p className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
       {!map ? <button type="button" disabled={busy} onClick={createPlan} className="mt-6 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{busy ? 'Creando…' : 'Crear plano de foro'}</button> : <>
