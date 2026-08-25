@@ -183,7 +183,7 @@ export default function AgendaAdmin() {
     {tab === 'speakers' && <SpeakersView speakers={speakers} onNew={() => setSpeakerEditor('new')} onEdit={setSpeakerEditor} onDelete={deleteSpeaker} />}
     {tab === 'content' && <AgendaContentAdmin event={event} sessions={sessions} speakers={speakers} onRefresh={load} />}
     {tab === 'operations' && <AgendaOperationsAdmin event={event} sessions={sessions} />}
-    {stageEditor && <StageModal stage={stageEditor === 'new' ? null : stageEditor} event={event} nextOrder={stages.length} onClose={() => setStageEditor(null)} onSaved={async () => { setStageEditor(null); await load() }} />}
+    {stageEditor && <FriendlyStageModal stage={stageEditor === 'new' ? null : stageEditor} event={event} nextOrder={stages.length} onClose={() => setStageEditor(null)} onSaved={async () => { setStageEditor(null); await load() }} />}
     {sessionEditor && <SessionModal session={sessionEditor === 'new' ? null : sessionEditor} event={event} stages={stages} speakers={speakers} assigned={sessionEditor === 'new' ? [] : speakerIds[sessionEditor.id] ?? []} assignedModerators={sessionEditor === 'new' ? [] : moderatorIds[sessionEditor.id] ?? []} eventSponsors={eventSponsors} assignedSponsors={sessionEditor === 'new' ? [] : sessionSponsorIds[sessionEditor.id] ?? []} allSessions={sessions} onClose={() => setSessionEditor(null)} onSaved={async () => { setSessionEditor(null); await load() }} />}
     {speakerEditor && <SpeakerModal speaker={speakerEditor === 'new' ? null : speakerEditor} event={event} nextOrder={speakers.length} onClose={() => setSpeakerEditor(null)} onSaved={async () => { setSpeakerEditor(null); await load() }} />}
   </PageFrame>
@@ -213,6 +213,30 @@ function Empty({ title, text, action, onAction }: { title: string; text: string;
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) { return <div className="fixed inset-0 z-50 overflow-y-auto bg-zinc-950/40 p-4" role="presentation"><div role="dialog" aria-modal="true" aria-labelledby="agenda-modal-title" className="mx-auto my-8 w-full max-w-2xl rounded-2xl bg-white shadow-xl"><header className="flex items-center justify-between border-b border-zinc-100 px-5 py-4"><h2 id="agenda-modal-title" className="text-lg font-bold text-zinc-900">{title}</h2><button type="button" onClick={onClose} aria-label="Cerrar" className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100"><X className="h-5 w-5" /></button></header>{children}</div></div> }
 
 function StageModal({ stage, event, nextOrder, onClose, onSaved }: { stage: Stage | null; event: EventData; nextOrder: number; onClose: () => void; onSaved: () => Promise<void> }) { const [name, setName] = useState(stage?.name ?? ''); const [streamUrl, setStreamUrl] = useState(stage?.stream_url ?? ''); const [restricted, setRestricted] = useState(stage?.limit_video_access ?? false); const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null); const nameInput = useRef<HTMLInputElement>(null); useEffect(() => { const frame = requestAnimationFrame(() => nameInput.current?.focus()); return () => cancelAnimationFrame(frame) }, []); async function save(eventForm: React.FormEvent) { eventForm.preventDefault(); if (!name.trim()) { setError('Indica el nombre del escenario.'); return }; setBusy(true); const payload = { organization_id: event.organization_id, event_id: event.id, name: name.trim(), stream_url: streamUrl.trim() || null, limit_video_access: restricted, sort_order: stage?.sort_order ?? nextOrder }; const result = stage ? await supabase.from('event_stages').update(payload).eq('id', stage.id) : await supabase.from('event_stages').insert(payload); setBusy(false); if (result.error) setError(result.error.message); else await onSaved() } return <Modal title={stage ? 'Editar escenario' : 'Nuevo escenario'} onClose={onClose}><form onSubmit={save} className="space-y-4 p-5"><div><label htmlFor="stage-name" className={label}>Nombre *</label><input ref={nameInput} id="stage-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Ej.: Auditorio principal" className={input} /></div><div><label htmlFor="stage-stream-url" className={label}>URL de transmisión (opcional)</label><input id="stage-stream-url" type="url" value={streamUrl} onChange={(event) => setStreamUrl(event.target.value)} placeholder="https://…" className={input} /></div><label className="flex items-center gap-2 text-sm text-zinc-700"><input type="checkbox" checked={restricted} onChange={(event) => setRestricted(event.target.checked)} />Limitar el video a asistentes autorizados</label>{error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}<ModalActions onClose={onClose} busy={busy} label="Guardar escenario" /></form></Modal> }
+
+function FriendlyStageModal({ stage, event, nextOrder, onClose, onSaved }: { stage: Stage | null; event: EventData; nextOrder: number; onClose: () => void; onSaved: () => Promise<void> }) {
+  const [name, setName] = useState(stage?.name ?? '')
+  const [streamUrl, setStreamUrl] = useState(stage?.stream_url ?? '')
+  const [restricted, setRestricted] = useState(stage?.limit_video_access ?? false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const nameInput = useRef<HTMLInputElement>(null)
+  useEffect(() => { const frame = requestAnimationFrame(() => nameInput.current?.focus()); return () => cancelAnimationFrame(frame) }, [])
+  async function save(formEvent: React.FormEvent) {
+    formEvent.preventDefault()
+    if (!name.trim()) { setError('Indica el nombre del escenario.'); return }
+    setBusy(true)
+    const payload = { organization_id: event.organization_id, event_id: event.id, name: name.trim(), stream_url: streamUrl.trim() || null, limit_video_access: restricted, sort_order: stage?.sort_order ?? nextOrder }
+    const result = stage ? await supabase.from('event_stages').update(payload).eq('id', stage.id) : await supabase.from('event_stages').insert(payload)
+    setBusy(false)
+    if (result.error) setError(result.error.code === '23505' ? 'Ya existe un escenario con ese nombre en este evento.' : result.error.message)
+    else await onSaved()
+  }
+  return <Modal title={stage ? 'Editar escenario' : 'Nuevo escenario'} onClose={onClose}><form onSubmit={save} className="space-y-4 p-5"><div><label htmlFor="friendly-stage-name" className={label}>Nombre del escenario *</label><input ref={nameInput} id="friendly-stage-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Ej.: Auditorio principal" className={input} /></div><div><label htmlFor="friendly-stage-stream" className={label}>URL de transmisión (opcional)</label><input id="friendly-stage-stream" type="url" value={streamUrl} onChange={(event) => setStreamUrl(event.target.value)} placeholder="https://…" className={input} /></div><label className="flex items-center gap-2 text-sm text-zinc-700"><input type="checkbox" checked={restricted} onChange={(event) => setRestricted(event.target.checked)} />Limitar el video a asistentes autorizados</label>{error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}<ModalActions onClose={onClose} busy={busy} label="Guardar escenario" /></form></Modal>
+}
+
+// Conserva la implementación legacy durante la transición de agenda.
+void StageModal
 
 function SessionModalLegacy({ session, event, stages, speakers, assigned, assignedModerators, allSessions, onClose, onSaved }: { session: Session | null; event: EventData; stages: Stage[]; speakers: Speaker[]; assigned: string[]; assignedModerators: string[]; allSessions: Session[]; onClose: () => void; onSaved: () => Promise<void> }) {
   const initialStart = session?.starts_at ?? event.start_date

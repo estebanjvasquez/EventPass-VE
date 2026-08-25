@@ -77,7 +77,12 @@ export default function ExpositoresAdmin() {
     const { error: assignmentError } = await supabase.from('booth_assignments').upsert({ element_id: standId, company_id: companyId, status: 'confirmed' }, { onConflict: 'element_id' })
     if (!assignmentError) await supabase.from('venue_map_elements').update({ status: 'assigned' }).eq('id', standId)
     if (assignmentError) setError(assignmentError.message)
-    else await load()
+    else {
+      setAssignments((current) => [...current.filter((item) => item.company_id !== companyId && item.element_id !== standId), { element_id: standId, company_id: companyId }])
+      setStands((current) => current.map((stand) => stand.id === standId ? { ...stand, status: 'assigned' } : stand))
+      setNotice('Stand asignado y guardado.')
+      window.setTimeout(() => { void load() }, 1800)
+    }
   }
 
   async function uploadManual(file: File | undefined) {

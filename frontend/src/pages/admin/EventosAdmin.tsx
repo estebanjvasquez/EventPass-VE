@@ -178,9 +178,12 @@ export default function EventosAdmin() {
             userId={user?.id ?? null}
             event={editing === 'new' ? null : editing}
             onClose={() => setEditing(null)}
-            onSaved={async () => {
+            onSaved={async (saved) => {
               setEditing(null)
-              await loadEvents(orgId)
+              if (saved) {
+                setEvents((current) => [saved, ...current.filter((item) => item.id !== saved.id)])
+                window.setTimeout(() => { void loadEvents(orgId) }, 2000)
+              } else await loadEvents(orgId)
             }}
           />
         )}
@@ -577,7 +580,7 @@ function EventForm({
   userId: string | null
   event: EventRow | null
   onClose: () => void
-  onSaved: () => void
+  onSaved: (saved?: EventRow) => void | Promise<void>
 }) {
   const [form, setForm] = useState({
     name: event?.name ?? '',
@@ -615,19 +618,19 @@ function EventForm({
       payment_timeout_days: Number(form.payment_timeout_days) || 10,
       total_slots: Number(form.total_slots) || 0,
     }
-    const { error } = event
-      ? await supabase.from('events').update(payload).eq('id', event.id)
-      : await supabase.from('events').insert({ ...payload, organization_id: orgId, created_by: userId })
+    const result = event
+      ? await supabase.from('events').update(payload).eq('id', event.id).select('id, name, description, event_type, status, start_date, end_date, registration_deadline, payment_timeout_days, total_slots').single()
+      : await supabase.from('events').insert({ ...payload, organization_id: orgId, created_by: userId }).select('id, name, description, event_type, status, start_date, end_date, registration_deadline, payment_timeout_days, total_slots').single()
     setSaving(false)
-    if (error) setFormError(error.message)
-    else onSaved()
+    if (result.error || !result.data) setFormError(result.error?.message ?? 'No se pudo guardar el evento.')
+    else onSaved(result.data as EventRow)
   }
 
   return (
     <div className="mt-6 rounded-2xl border border-zinc-200 bg-white p-6">
       <h2 className="text-lg font-semibold text-zinc-900">{event ? 'Editar evento' : 'Nuevo evento'}</h2>
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
-        <Field label="Nombre" className="sm:col-span-2">
+        <Field label="Nombre del evento" className="sm:col-span-2">
           <input value={form.name} onChange={(e) => set('name', e.target.value)} className={inputCls} />
         </Field>
         <Field label="Descripción" className="sm:col-span-2">

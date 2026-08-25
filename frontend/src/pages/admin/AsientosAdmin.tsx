@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Trash2, Presentation } from 'lucide-react'
+import { Home, Trash2, Presentation } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import ImpersonationBanner from '../../components/ImpersonationBanner'
 
@@ -157,9 +157,9 @@ export default function AsientosAdmin() {
       <ImpersonationBanner />
       <header className="border-b border-zinc-200 bg-white">
         <div className="mx-auto flex max-w-4xl items-center justify-between px-5 py-4">
-          <Link to="/admin/eventos" className="inline-flex items-center gap-2 text-sm font-medium text-zinc-600 hover:text-zinc-900">
-            <ArrowLeft className="h-4 w-4" />
-            Eventos
+          <Link to={`/admin/eventos/${eventId}/administrar`} aria-label="Volver a administrar evento" className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700 hover:text-emerald-800">
+            <Home className="h-4 w-4" />
+            Admin del evento
           </Link>
           <Link to={`/admin/foro-plano/${eventId}`} className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-semibold text-zinc-900"><Presentation className="h-4 w-4 text-emerald-600" />Plano físico</Link>
         </div>
@@ -179,6 +179,11 @@ export default function AsientosAdmin() {
             <p className="mt-1 text-sm text-zinc-600">
               Crea una cuadrícula de filas (A, B, C…) × asientos por fila.
             </p>
+            <ol className="mt-3 list-decimal space-y-1 pl-5 text-xs text-zinc-600">
+              <li>Define cuántas filas y asientos tendrá cada fila.</li>
+              <li>Genera el plano y luego reserva asientos por nombre desde el mapa.</li>
+              <li>Para pasillos o formas irregulares, abre el Plano físico y ajusta cada elemento.</li>
+            </ol>
             <div className="mt-4 grid gap-4 sm:grid-cols-3">
               <label className="flex flex-col gap-2">
                 <span className="text-sm font-medium text-zinc-800">Filas</span>
