@@ -5,7 +5,8 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 
 type EventRow = { id: string; organization_id: string; name: string; description: string | null; config: Record<string, unknown> | null }
-type Membership = { id: string; company_id: string; role: string; status: string; company: { name: string; contact_email: string | null; public_logo_url?: string | null; public_description?: string | null; public_category?: string | null; public_social_links?: Record<string, string> | null; public_contact_email?: string | null; public_contact_phone?: string | null; public_profile_status?: string | null } | null }
+type CompanyProfile = { name: string; contact_email: string | null; public_logo_url?: string | null; public_description?: string | null; public_category?: string | null; public_social_links?: Record<string, string> | null; public_contact_email?: string | null; public_contact_phone?: string | null; public_profile_status?: string | null }
+type Membership = { id: string; company_id: string; role: string; status: string; company: CompanyProfile | null }
 type Task = { id: string; title: string; description: string | null; due_at: string | null; status: string }
 type Payment = { id: string; amount: number; currency: string; payment_date: string; reference: string | null; status: string; receipt_path: string | null }
 type Staff = { id: string; role: string; status: string; user_id: string }
@@ -17,6 +18,7 @@ export default function PortalExpositor() {
   const { user, signOut } = useAuth()
   const [event, setEvent] = useState<EventRow | null>(null)
   const [membership, setMembership] = useState<Membership | null>(null)
+  const [platformPreview, setPlatformPreview] = useState(false)
   const [tasks, setTasks] = useState<Task[]>([])
   const [payments, setPayments] = useState<Payment[]>([])
   const [staff, setStaff] = useState<Staff[]>([])
@@ -37,10 +39,11 @@ export default function PortalExpositor() {
     const { data: isPlatformAdmin } = await supabase.rpc('is_platform_admin')
     const requestedCompanyId = searchParams.get('companyId')
     let member: Membership | null = null
+    setPlatformPreview(Boolean(isPlatformAdmin && requestedCompanyId))
     if (isPlatformAdmin && requestedCompanyId) {
       const { data: company, error: companyError } = await supabase.from('companies').select('id,name,contact_email,public_logo_url,public_description,public_category,public_social_links,public_contact_email,public_contact_phone,public_profile_status').eq('id', requestedCompanyId).maybeSingle()
       if (companyError || !company) { setMessage(companyError?.message ?? 'Expositor no encontrado.'); return }
-      member = { id: 'platform-preview', company_id: company.id, role: 'owner', status: 'active', company: { name: company.name, contact_email: company.contact_email } }
+      member = { id: 'platform-preview', company_id: company.id, role: 'owner', status: 'active', company: company as CompanyProfile }
     } else {
       const { data: portalMember, error: memberError } = await supabase.from('exhibitor_portal_members').select('id,company_id,role,status,company:companies(name,contact_email,public_logo_url,public_description,public_category,public_social_links,public_contact_email,public_contact_phone,public_profile_status)').eq('event_id', eventId).eq('user_id', user.id).eq('status', 'active').maybeSingle()
       if (memberError || !portalMember) { setMessage(memberError?.message ?? 'Tu usuario no tiene acceso a este portal.'); return }
@@ -96,8 +99,9 @@ export default function PortalExpositor() {
     eventSubmit.preventDefault()
     if (!eventId || !membership) return
     setBusy(true); setMessage(null)
-    const { error } = await supabase.rpc('submit_exhibitor_public_profile', { p_event_id: eventId, p_company_id: membership.company_id, p_logo_url: profile.logo_url, p_description: profile.description, p_category: profile.category, p_social_links: { website: profile.website, linkedin: profile.linkedin, instagram: profile.instagram }, p_contact_email: profile.contact_email, p_contact_phone: profile.contact_phone })
-    if (error) setMessage(error.message); else { setProfileStatus('pending'); setMessage('Perfil enviado para aprobación del organizador.') }
+    const rpcName = platformPreview ? 'admin_submit_exhibitor_public_profile' : 'submit_exhibitor_public_profile'
+    const { error } = await supabase.rpc(rpcName, { p_event_id: eventId, p_company_id: membership.company_id, p_logo_url: profile.logo_url, p_description: profile.description, p_category: profile.category, p_social_links: { website: profile.website, linkedin: profile.linkedin, instagram: profile.instagram }, p_contact_email: profile.contact_email, p_contact_phone: profile.contact_phone })
+    if (error) setMessage(error.message); else { setProfileStatus(platformPreview ? 'approved' : 'pending'); setMessage(platformPreview ? 'Perfil actualizado y aprobado para el plano público.' : 'Perfil enviado para aprobación del organizador.') }
     setBusy(false)
   }
 
