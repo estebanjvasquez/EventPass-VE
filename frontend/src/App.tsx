@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import RequireAuth from './components/RequireAuth'
 import MobileAdminMenu from './components/MobileAdminMenu'
 
@@ -51,10 +51,18 @@ function PageFallback() {
   )
 }
 
+function EventContextNavigation() {
+  const location = useLocation()
+  const match = location.pathname.match(/^\/admin\/(?:stands|expositores|operacion-plano|plano-comercial|plano-publicar|patrocinantes|personal|agenda|asientos|foro-plano)\/([^/]+)/)
+  if (!match) return null
+  return <div className="fixed left-4 top-4 z-[100] sm:left-6"><Link className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-3 py-2 text-xs font-semibold text-slate-700 shadow-lg backdrop-blur hover:border-emerald-400 hover:text-emerald-700" to={`/admin/eventos/${match[1]}/administrar`} aria-label="Volver a administrar evento">← Administrar evento</Link></div>
+}
+
 function App() {
   return (
     <Suspense fallback={<PageFallback />}>
       <MobileAdminMenu />
+      <EventContextNavigation />
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/registro" element={<RegistroEvento />} />
