@@ -6,9 +6,10 @@ Esta guía permite validar el recorrido completo del plano, desde la edición CA
 
 1. Iniciar sesión con una cuenta de organizador o superadmin.
 2. Entrar en **Eventos** desde el menú principal y crear un evento de tipo **Exposición** en estado borrador.
-3. En la tarjeta del evento usar los accesos visibles **Plano**, **Expositores**, **Paquetes y extras**, **Publicar plano** y **Vista pública**.
-4. Crear o abrir el **Plano** desde el botón **Plano**.
-5. Para probar la vista pública, usar **Publicar plano** y luego **Vista pública**. Las rutas directas son `/admin/plano-publicar/{eventId}` y `/expo/{eventId}/plano`.
+3. En la tarjeta del evento pulsar **Administrar evento** para abrir el nuevo centro visual del evento.
+4. Desde ese centro usar los módulos **Plano**, **Expositores**, **Paquetes y extras**, **Publicar plano**, **Vista pública**, **Operación**, **Patrocinantes**, **Personal** y, según el tipo, **Agenda** o **Asientos**.
+5. El listado conserva los botones rápidos de **Editar**, **Publicar/Cerrar** y acceso directo al Plano.
+6. Para probar la vista pública, usar **Publicar plano** y luego **Vista pública**. Las rutas directas son `/admin/plano-publicar/{eventId}` y `/expo/{eventId}/plano`.
 5. Tener al menos dos empresas expositoras creadas en el módulo **Expositores**.
 6. Si se prueban archivos, usar un PNG/JPG, un PDF y un DXF pequeño como planos de referencia.
 

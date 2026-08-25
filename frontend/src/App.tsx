@@ -22,6 +22,7 @@ const CheckinEvento = lazy(() => import('./pages/admin/CheckinEvento'))
 const CheckinReportAdmin = lazy(() => import('./pages/admin/CheckinReportAdmin'))
 const AcreditacionEvento = lazy(() => import('./pages/admin/AcreditacionEvento'))
 const EventosAdmin = lazy(() => import('./pages/admin/EventosAdmin'))
+const EventoAdministracion = lazy(() => import('./pages/admin/EventoAdministracion'))
 const ProgramasAdmin = lazy(() => import('./pages/admin/ProgramasAdmin'))
 const ProgramaAccesosAdmin = lazy(() => import('./pages/admin/ProgramaAccesosAdmin'))
 const AgendaAdmin = lazy(() => import('./pages/admin/AgendaAdmin'))
@@ -124,6 +125,7 @@ function App() {
             </RequireAuth>
           }
         />
+        <Route path="/admin/eventos/:eventId/administrar" element={<RequireAuth><EventoAdministracion /></RequireAuth>} />
         <Route path="/admin/foro-plano/:eventId" element={<RequireAuth><PlanoForoAdmin /></RequireAuth>} />
         <Route path="/admin/plano-comercial/:eventId" element={<RequireAuth><PlanoComercialAdmin /></RequireAuth>} />
         <Route path="/admin/plano-publicar/:eventId" element={<RequireAuth><PlanoPublicarAdmin /></RequireAuth>} />
