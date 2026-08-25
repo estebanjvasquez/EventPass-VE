@@ -175,7 +175,7 @@ export default function EventosAdmin() {
               {events.filter((event) => event.status === 'draft').map((event) => (
                 <div key={event.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-white p-3">
                   <div><p className="text-sm font-semibold text-zinc-900">{event.name}</p><p className="text-xs text-zinc-600">Paso 1: {event.event_type === 'forum' ? 'agenda y asientos' : event.event_type === 'exhibition' ? 'plano y empresas expositoras' : 'aforo y configuración operativa'} · Paso 2: publicar</p></div>
-                  <div className="flex flex-wrap gap-2"><Link to={`/admin/eventos/${event.id}/administrar`} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white">Administrar evento</Link><button type="button" onClick={() => changeStatus(event, 'published')} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white">Publicar cuando esté listo</button></div>
+                  <div className="flex flex-wrap gap-2"><Link to={`/admin/eventos/${event.id}/administrar`} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white">Administrar evento</Link><button type="button" onClick={() => changeStatus(event, 'published')} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white">Publicar cuando esté listo</button><button type="button" onClick={() => void deleteEvent(event)} aria-label={`Eliminar ${event.name}`} className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"><Trash2 className="h-3.5 w-3.5" />Eliminar</button></div>
                 </div>
               ))}
             </div>
