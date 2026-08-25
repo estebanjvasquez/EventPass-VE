@@ -130,8 +130,8 @@ export function ExhibitionKonvaStage({
         {sorted.map((item) => {
           const kind = kindOf(item);
           const isSelected = selectedIds.includes(item.id);
-          const fill = String(item.style.fill ?? defaultColor[kind]);
           const company = assignments.get(item.id);
+          const fill = readOnly && kind === "stand" ? (company ? "#bae6fd" : "#d1fae5") : String(item.style.fill ?? defaultColor[kind]);
           return <Group key={item.id} ref={(node) => { if (node) nodeRefs.current.set(item.id, node); else nodeRefs.current.delete(item.id); }} x={item.geometry.x} y={item.geometry.y} rotation={item.geometry.rotation ?? 0} draggable={!readOnly && !item.locked} onMouseDown={(event) => { event.cancelBubble = true; onSelect(item, event.evt.ctrlKey || event.evt.metaKey); }} onTouchStart={(event) => { event.cancelBubble = true; onSelect(item, false); }} onDragEnd={(event) => { if (!readOnly) moveItem(item, event) }} onTransformEnd={(event) => { if (!readOnly) transformItem(item, event) }}>
             <ElementSymbol item={item} fill={fill} company={company} />
             {isSelected && <Rect width={item.geometry.width} height={item.geometry.height} stroke="#047857" strokeWidth={0.12} cornerRadius={0.12} listening={false} />}
