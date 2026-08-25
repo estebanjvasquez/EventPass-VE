@@ -30,12 +30,15 @@ const EquipoOperativoAdmin = lazy(() => import('./pages/admin/EquipoOperativoAdm
 const StandsAdmin = lazy(() => import('./pages/admin/StandsAdmin'))
 const ExpositoresAdmin = lazy(() => import('./pages/admin/ExpositoresAdmin'))
 const PortalExpositor = lazy(() => import('./pages/PortalExpositor'))
+const PlanoPublico = lazy(() => import('./pages/PlanoPublico'))
 const PatrocinantesAdmin = lazy(() => import('./pages/admin/PatrocinantesAdmin'))
 const PatrocinantesGestionAdmin = lazy(() => import('./pages/admin/PatrocinantesGestionAdmin'))
 const ProveedoresAdmin = lazy(() => import('./pages/admin/ProveedoresAdmin'))
 const PersonalEventoAdmin = lazy(() => import('./pages/admin/PersonalEventoAdmin'))
 const OperacionPlanoAdmin = lazy(() => import('./pages/admin/OperacionPlanoAdmin'))
 const PlanoForoAdmin = lazy(() => import('./pages/admin/PlanoForoAdmin'))
+const PlanoComercialAdmin = lazy(() => import('./pages/admin/PlanoComercialAdmin'))
+const PlanoPublicarAdmin = lazy(() => import('./pages/admin/PlanoPublicarAdmin'))
 const SuscripcionAdmin = lazy(() => import('./pages/admin/SuscripcionAdmin'))
 const SuperAdmin = lazy(() => import('./pages/admin/SuperAdmin'))
 
@@ -106,6 +109,7 @@ function App() {
         <Route path="/admin/stands/:eventId" element={<RequireAuth><StandsAdmin /></RequireAuth>} />
         <Route path="/admin/expositores/:eventId" element={<RequireAuth><ExpositoresAdmin /></RequireAuth>} />
         <Route path="/portal/expositor/:eventId" element={<RequireAuth><PortalExpositor /></RequireAuth>} />
+        <Route path="/expo/:eventId/plano" element={<PlanoPublico />} />
         <Route path="/admin/patrocinantes/:eventId" element={<RequireAuth><PatrocinantesAdmin /></RequireAuth>} />
         <Route path="/admin/patrocinantes" element={<RequireAuth><PatrocinantesGestionAdmin /></RequireAuth>} />
         <Route path="/admin/proveedores" element={<RequireAuth><ProveedoresAdmin /></RequireAuth>} />
@@ -121,6 +125,8 @@ function App() {
           }
         />
         <Route path="/admin/foro-plano/:eventId" element={<RequireAuth><PlanoForoAdmin /></RequireAuth>} />
+        <Route path="/admin/plano-comercial/:eventId" element={<RequireAuth><PlanoComercialAdmin /></RequireAuth>} />
+        <Route path="/admin/plano-publicar/:eventId" element={<RequireAuth><PlanoPublicarAdmin /></RequireAuth>} />
         <Route
           path="/admin/suscripcion"
           element={
