@@ -3,7 +3,7 @@ import { Arc, Arrow, Circle, Ellipse, Group, Image as KonvaImage, Layer, Line, R
 import type Konva from "konva";
 
 type Geometry = { x: number; y: number; width: number; height: number; rotation?: number; shape?: "rect" | "polygon"; points?: number[] };
-type SceneElement = { id: string; label: string; element_type?: string; status?: string; geometry: Geometry; layer: string; z_index: number; locked: boolean; visible: boolean; style: Record<string, unknown>; metadata: Record<string, unknown> };
+export type SceneElement = { id: string; label: string; element_type?: string; status?: string; geometry: Geometry; layer: string; z_index: number; locked: boolean; visible: boolean; style: Record<string, unknown>; metadata: Record<string, unknown>; booth_type?: string | null; tags?: string[] };
 type Kind = "stand" | "aisle" | "door" | "access" | "security" | "column" | "plant" | "table" | "sofa" | "information" | "flow_arrow" | "special" | "polygon" | "lobby" | "blank";
 
 const defaultColor: Record<Kind, string> = {
@@ -47,11 +47,11 @@ function ElementSymbol({ item, fill, company }: { item: SceneElement; fill: stri
 }
 
 export function ExhibitionKonvaStage({
-  columns, rows, elements, assignments, selectedIds, showGrid, showDimensions, snap, backgroundUrl, opacity, tool, polygonDraft,
+  columns, rows, elements, assignments, selectedIds, showGrid, showDimensions, snap, backgroundUrl, opacity, tool, polygonDraft, readOnly = false,
   onSelect, onClear, onPlace, onPolygonPoint, onPolygonFinish, onMove, onTransform,
 }: {
   columns: number; rows: number; elements: SceneElement[]; assignments: Map<string, string>; selectedIds: string[];
-  showGrid: boolean; showDimensions: boolean; snap: boolean; backgroundUrl: string | null; opacity: number; tool: Kind | null; polygonDraft: number[];
+  showGrid: boolean; showDimensions: boolean; snap: boolean; backgroundUrl: string | null; opacity: number; tool: Kind | null; polygonDraft: number[]; readOnly?: boolean;
   onSelect: (item: SceneElement, additive: boolean) => void; onClear: () => void; onPlace: (x: number, y: number) => void;
   onPolygonPoint: (x: number, y: number) => void; onPolygonFinish: () => void;
   onMove: (id: string, x: number, y: number) => void; onTransform: (id: string, geometry: Geometry) => void;
@@ -132,13 +132,13 @@ export function ExhibitionKonvaStage({
           const isSelected = selectedIds.includes(item.id);
           const fill = String(item.style.fill ?? defaultColor[kind]);
           const company = assignments.get(item.id);
-          return <Group key={item.id} ref={(node) => { if (node) nodeRefs.current.set(item.id, node); else nodeRefs.current.delete(item.id); }} x={item.geometry.x} y={item.geometry.y} rotation={item.geometry.rotation ?? 0} draggable={!item.locked} onMouseDown={(event) => { event.cancelBubble = true; onSelect(item, event.evt.ctrlKey || event.evt.metaKey); }} onTouchStart={(event) => { event.cancelBubble = true; onSelect(item, false); }} onDragEnd={(event) => moveItem(item, event)} onTransformEnd={(event) => transformItem(item, event)}>
+          return <Group key={item.id} ref={(node) => { if (node) nodeRefs.current.set(item.id, node); else nodeRefs.current.delete(item.id); }} x={item.geometry.x} y={item.geometry.y} rotation={item.geometry.rotation ?? 0} draggable={!readOnly && !item.locked} onMouseDown={(event) => { event.cancelBubble = true; onSelect(item, event.evt.ctrlKey || event.evt.metaKey); }} onTouchStart={(event) => { event.cancelBubble = true; onSelect(item, false); }} onDragEnd={(event) => { if (!readOnly) moveItem(item, event) }} onTransformEnd={(event) => { if (!readOnly) transformItem(item, event) }}>
             <ElementSymbol item={item} fill={fill} company={company} />
             {isSelected && <Rect width={item.geometry.width} height={item.geometry.height} stroke="#047857" strokeWidth={0.12} cornerRadius={0.12} listening={false} />}
             {isSelected && showDimensions && <Group listening={false}><Text text={`${item.geometry.width.toFixed(1)} m`} x={0} y={item.geometry.height + 0.12} width={item.geometry.width} fontSize={0.24} fill="#047857" align="center" /><Text text={`${item.geometry.height.toFixed(1)} m`} x={item.geometry.width + 0.12} y={item.geometry.height / 2} fontSize={0.24} fill="#047857" rotation={90} /></Group>}
           </Group>;
         })}
-        <Transformer ref={transformerRef} rotateEnabled keepRatio={false} enabledAnchors={["top-left", "top-right", "bottom-left", "bottom-right"]} boundBoxFunc={(oldBox, newBox) => newBox.width < 0.2 || newBox.height < 0.2 ? oldBox : newBox} />
+        {!readOnly && <Transformer ref={transformerRef} rotateEnabled keepRatio={false} enabledAnchors={["top-left", "top-right", "bottom-left", "bottom-right"]} boundBoxFunc={(oldBox, newBox) => newBox.width < 0.2 || newBox.height < 0.2 ? oldBox : newBox} />}
         </Group>
       </Layer>
     </Stage>
