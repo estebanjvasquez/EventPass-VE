@@ -416,6 +416,41 @@ app.post('/api/exhibitor-portal/invite', async (c) => {
   return c.json({ ok: true, email, status: 'invited', invitation_created: true })
 })
 
+const operationalStaffInviteSchema = z.object({ event_id: z.string().uuid(), email: z.string().email() })
+app.post('/api/operational-staff/invite', async (c) => {
+  const parsed = operationalStaffInviteSchema.safeParse(await c.req.json().catch(() => null))
+  if (!parsed.success) return c.json({ error: 'Correo o evento inválido' }, 400)
+  const supabase = createClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY)
+  const caller = await authUserId(supabase, c.req.header('Authorization'))
+  if (!caller) return c.json({ error: 'no autorizado' }, 401)
+  const { data: event } = await supabase.from('events').select('id,organization_id,name').eq('id', parsed.data.event_id).maybeSingle()
+  if (!event) return c.json({ error: 'Evento no encontrado' }, 404)
+  const { data: platform } = await supabase.from('platform_admins').select('user_id').eq('user_id', caller).maybeSingle()
+  const { data: member } = await supabase.from('memberships').select('role').eq('organization_id', event.organization_id).eq('user_id', caller).maybeSingle()
+  if (!platform && (!member || !['owner', 'admin'].includes(member.role))) return c.json({ error: 'No tienes permisos para invitar personal operativo' }, 403)
+  const email = parsed.data.email.toLowerCase().trim()
+  const base = c.env.APP_BASE_URL.replace(/\/$/, '')
+  const generated = await supabase.auth.admin.generateLink({ type: 'invite', email, options: { redirectTo: `${base}/definir-clave?next=/admin/equipo-operativo` } })
+  let userId = generated.data?.user?.id ?? null
+  let actionLink = generated.data?.properties?.action_link ?? null
+  if (!userId && generated.error && /registered|exist|already/i.test(generated.error.message)) {
+    const found = await supabase.rpc('get_user_id_by_email', { p_email: email })
+    userId = (found.data as string | null) ?? null
+    if (userId) {
+      const recovery = await supabase.auth.admin.generateLink({ type: 'recovery', email, options: { redirectTo: `${base}/definir-clave?next=/admin/equipo-operativo` } })
+      actionLink = recovery.data?.properties?.action_link ?? null
+      if (recovery.error) return c.json({ error: recovery.error.message }, 400)
+    }
+  }
+  if (!userId) return c.json({ error: generated.error?.message ?? 'No se pudo crear la cuenta operativa' }, 400)
+  const { error: membershipError } = await supabase.from('memberships').upsert({ organization_id: event.organization_id, user_id: userId, role: 'staff' }, { onConflict: 'organization_id,user_id' })
+  if (membershipError) return c.json({ error: membershipError.message }, 400)
+  if (!actionLink) return c.json({ ok: true, email, status: 'linked', invitation_created: false })
+  const mailError = await sendPortalInviteEmail({ email: c.env.EMAIL, from: c.env.EMAIL_FROM, to: email, companyName: 'Equipo operativo', eventName: event.name, actionUrl: actionLink, portalUrl: `${base}/admin/equipo-operativo` })
+  if (mailError) return c.json({ error: `La cuenta fue habilitada, pero el correo falló: ${mailError}`, linked: true }, 502)
+  return c.json({ ok: true, email, status: 'invited', invitation_created: true })
+})
+
 const providerNoticeSchema = z.object({ provider_id: z.string().uuid(), event_id: z.string().uuid(), type: z.enum(['quote', 'payment']), service_id: z.string().uuid().nullable().optional(), amount: z.number().positive().nullable().optional(), due_date: z.string().nullable().optional(), notes: z.string().max(2000).nullable().optional() })
 app.post('/api/providers/notify', async (c) => {
   const parsed = providerNoticeSchema.safeParse(await c.req.json().catch(() => null))
