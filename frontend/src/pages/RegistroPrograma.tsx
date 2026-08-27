@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { CheckCircle2, Ticket } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useTenant } from '../lib/useTenant'
@@ -22,6 +23,8 @@ export default function RegistroPrograma() {
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [credentialToken, setCredentialToken] = useState<string | null>(null)
+  const [participationStatus, setParticipationStatus] = useState<string | null>(null)
   const [form, setForm] = useState({ first_name: '', last_name: '', email: '', phone: '', cedula: '', company: '', job_title: '', city: '', country: 'Venezuela', participation_type: 'attendee', pass_id: '', event_id: '' })
 
   useEffect(() => {
@@ -55,7 +58,7 @@ export default function RegistroPrograma() {
     e.preventDefault()
     if (!programId || !form.pass_id || !form.first_name.trim() || !form.email.trim()) return
     setSaving(true); setError(null)
-    const { error: rpcError } = await supabase.rpc('register_program_participant', {
+    const { data, error: rpcError } = await supabase.rpc('register_program_participant', {
       p_program_id: programId, p_event_id: form.event_id || null, p_pass_id: form.pass_id,
       p_first_name: form.first_name, p_last_name: form.last_name, p_email: form.email, p_phone: form.phone,
       p_cedula: form.cedula || null, p_company: form.company || null, p_job_title: form.job_title || null,
@@ -64,7 +67,14 @@ export default function RegistroPrograma() {
     })
     setSaving(false)
     if (rpcError) setError(rpcError.message)
-    else setDone(true)
+    else {
+      const result = Array.isArray(data) ? data[0] as { participation_id: string; credential_token: string; participation_status: string } | undefined : undefined
+      setCredentialToken(result?.credential_token ?? null)
+      setParticipationStatus(result?.participation_status ?? null)
+      const apiUrl = import.meta.env.VITE_API_URL
+      if (apiUrl && result?.participation_id) void fetch(`${apiUrl}/api/program-participations/notify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ participation_id: result.participation_id }) }).catch(() => undefined)
+      setDone(true)
+    }
   }
 
   if (tenantLoading || loading) return <div className="grid min-h-[100dvh] place-items-center text-sm text-zinc-500">Cargando…</div>
@@ -78,7 +88,7 @@ export default function RegistroPrograma() {
       <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-900">{program.name}</h1>
       {program.description && <p className="mt-3 text-zinc-600">{program.description}</p>}
       <p className="mt-3 text-sm text-zinc-500">{program.venue_name ?? 'Sede por confirmar'}{program.starts_at ? ` · ${new Date(program.starts_at).toLocaleDateString('es-VE', { day: 'numeric', month: 'long', year: 'numeric' })}` : ''}</p>
-      {done ? <div className="mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center text-emerald-800"><CheckCircle2 className="mx-auto h-10 w-10" /><h2 className="mt-3 text-xl font-bold">Registro recibido</h2><p className="mt-2 text-sm">Te enviaremos la confirmación y tu credencial cuando corresponda.</p></div> :
+      {done ? <div className="mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center text-emerald-800"><CheckCircle2 className="mx-auto h-10 w-10" /><h2 className="mt-3 text-xl font-bold">{participationStatus === 'approved' ? 'Registro confirmado' : 'Registro recibido'}</h2><p className="mt-2 text-sm">{participationStatus === 'approved' ? 'Tu credencial ya está disponible y también la recibirás por correo.' : 'El organizador revisará tu solicitud y te notificará cuando sea aprobada.'}</p>{participationStatus === 'approved' && credentialToken && <Link to={`/credencial/${credentialToken}`} className="mt-4 inline-flex rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white">Ver mi credencial</Link>}</div> :
         <form className="mt-8 grid gap-4 sm:grid-cols-2" onSubmit={submit}>
           <Field label="Perfil"><select value={form.participation_type} onChange={(e) => change('participation_type', e.target.value)}>{profiles.map((p) => <option key={p} value={p}>{PROFILE_LABEL[p]}</option>)}</select></Field>
           <Field label="Acceso"><select value={form.pass_id} onChange={(e) => change('pass_id', e.target.value)}>{passes.map((p) => <option key={p.id} value={p.id}>{p.name} · {ACCESS_LABEL[p.access_mode]}</option>)}</select></Field>

@@ -11,6 +11,7 @@ import ImpersonationBanner from '../../components/ImpersonationBanner'
 type SeatInfo = { seat_number: string | null; row_label: string | null; column_number: number | null }
 type Reg = {
   id: string
+  record_type: 'registration' | 'participation'
   first_name: string
   last_name: string | null
   cedula: string | null
@@ -18,6 +19,7 @@ type Reg = {
   attendance_status: string
   credential_token: string
   seats: SeatInfo | SeatInfo[] | null
+  seat_label?: string | null
 }
 type EventOption = { id: string; name: string }
 type PrintLog = { id: string; print_kind: 'initial' | 'reprint'; reason: string | null; created_at: string }
@@ -28,6 +30,8 @@ function seatLabel(seats: Reg['seats']): string | null {
   if (!s) return null
   return s.seat_number ?? ([s.row_label, s.column_number].filter((x) => x != null).join('') || null)
 }
+
+const isConfirmed = (reg: Reg) => reg.status === 'confirmed' || reg.status === 'approved'
 
 // Formatos de gafete (mm). El navegador permite elegir la impresora al imprimir.
 const SIZES = {
@@ -87,30 +91,22 @@ export default function AcreditacionEvento() {
     setInfo(null)
     if (!eventId || query.trim().length < 2) return
     const q = query.trim().replace(/[%,]/g, '')
-    const { data, error } = await supabase
-      .from('registrations')
-      .select('id, first_name, last_name, cedula, status, attendance_status, credential_token, seats(seat_number, row_label, column_number)')
-      .eq('event_id', eventId)
-      .or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,cedula.ilike.%${q}%`)
-      .limit(20)
+    const { data, error } = await supabase.rpc('search_event_badges', { p_event_id: eventId, p_query: q })
     if (error) setError(error.message)
-    else setResults((data ?? []) as Reg[])
+    else setResults(((data ?? []) as Reg[]).map((item) => ({ ...item, seats: null })))
   }
 
   const pickByToken = useCallback(async (token: string) => {
     const t = token.trim()
     if (!t) return
-    const { data } = await supabase
-      .from('registrations')
-      .select('id, first_name, last_name, cedula, status, attendance_status, credential_token, seats(seat_number, row_label, column_number)')
-      .eq('credential_token', t)
-      .maybeSingle()
-    if (!data) {
+    const { data } = await supabase.rpc('get_event_badge_by_token', { p_token: t })
+    const badge = Array.isArray(data) ? data[0] as Reg | undefined : undefined
+    if (!badge) {
       setError('Código no válido para tu organización.')
       return
     }
     setResults([])
-    setSelected(data as Reg)
+    setSelected({ ...badge, seats: null })
   }, [])
 
   // Escáner opcional (bajo demanda).
@@ -141,48 +137,39 @@ export default function AcreditacionEvento() {
   async function printBadge() {
     if (!selected) return
     setError(null)
-    if (selected.status !== 'confirmed') {
+    if (!isConfirmed(selected)) {
       setError('Este registro no está confirmado; no se puede acreditar aún.')
       return
     }
     const { count: previousPrints, error: historyError } = await supabase
       .from('badge_print_logs')
       .select('id', { count: 'exact', head: true })
-      .eq('registration_id', selected.id)
+      .eq(selected.record_type === 'participation' ? 'participation_id' : 'registration_id', selected.id)
       .eq('event_id', eventId)
     if (historyError) { setError(historyError.message); return }
     const printKind = previousPrints ? 'reprint' : 'initial'
     const reason = printKind === 'reprint' ? window.prompt('Indica el motivo de la reimpresión')?.trim() : null
     if (printKind === 'reprint' && !reason) { setError('La reimpresión requiere indicar un motivo.'); return }
 
-    // Marca el ingreso (si no estaba), registra la impresión y luego imprime.
-    if (selected.attendance_status !== 'checked_in') {
-      const { error } = await supabase
-        .from('registrations')
-        .update({ attendance_status: 'checked_in' })
-        .eq('id', selected.id)
-      if (error) {
-        setError(error.message)
-        return
-      }
-      setSelected({ ...selected, attendance_status: 'checked_in' })
-    }
+    // Imprimir y registrar la entrada son operaciones independientes. El
+    // check-in solo se confirma desde el escáner o el control de accesos.
     const { error: logError } = await supabase.from('badge_print_logs').insert({
       organization_id: orgId,
       event_id: eventId,
-      registration_id: selected.id,
+      registration_id: selected.record_type === 'registration' ? selected.id : null,
+      participation_id: selected.record_type === 'participation' ? selected.id : null,
       print_kind: printKind,
       reason,
       device_label: navigator.userAgent.slice(0, 120),
     })
     if (logError) { setError(logError.message); return }
-    setInfo(printKind === 'reprint' ? 'Reimpresión registrada y enviada a la impresora.' : 'Impresión registrada y enviada a la impresora.')
+    setInfo(printKind === 'reprint' ? 'Reimpresión registrada. Confirma el resultado en el diálogo de impresión.' : 'Impresión registrada. Confirma el resultado en el diálogo de impresión.')
     window.print()
   }
 
   useEffect(() => {
     if (!selected || !eventId) { setPrintLogs([]); return }
-    void supabase.from('badge_print_logs').select('id,print_kind,reason,created_at').eq('registration_id', selected.id).eq('event_id', eventId).order('created_at', { ascending: false }).then(({ data }) => setPrintLogs((data ?? []) as PrintLog[]))
+    void supabase.from('badge_print_logs').select('id,print_kind,reason,created_at').eq(selected.record_type === 'participation' ? 'participation_id' : 'registration_id', selected.id).eq('event_id', eventId).order('created_at', { ascending: false }).then(({ data }) => setPrintLogs((data ?? []) as PrintLog[]))
   }, [selected, eventId, info])
 
   return (
@@ -265,8 +252,8 @@ export default function AcreditacionEvento() {
                     <span className="font-medium text-zinc-900">{r.first_name} {r.last_name ?? ''}</span>
                     {r.cedula && <span className="ml-2 text-xs text-zinc-500">{r.cedula}</span>}
                   </span>
-                  <span className={`text-xs font-medium ${r.status === 'confirmed' ? 'text-emerald-700' : 'text-amber-700'}`}>
-                    {r.status === 'confirmed' ? (r.attendance_status === 'checked_in' ? 'Ingresó' : 'Confirmado') : 'Sin confirmar'}
+                  <span className={`text-xs font-medium ${isConfirmed(r) ? 'text-emerald-700' : 'text-amber-700'}`}>
+                    {isConfirmed(r) ? (r.attendance_status === 'checked_in' ? 'Ingresó' : 'Confirmado') : 'Sin confirmar'}
                   </span>
                 </button>
               </li>
@@ -284,8 +271,8 @@ export default function AcreditacionEvento() {
                   {selected.cedula ?? 'Sin cédula'}
                   {seatLabel(selected.seats) && <> · Asiento <strong>{seatLabel(selected.seats)}</strong></>}
                 </p>
-                <p className={`mt-1 text-xs font-medium ${selected.status === 'confirmed' ? 'text-emerald-700' : 'text-amber-700'}`}>
-                  {selected.status === 'confirmed'
+                <p className={`mt-1 text-xs font-medium ${isConfirmed(selected) ? 'text-emerald-700' : 'text-amber-700'}`}>
+                  {isConfirmed(selected)
                     ? selected.attendance_status === 'checked_in' ? 'Confirmado · ya ingresó' : 'Confirmado'
                     : 'Pago sin confirmar'}
                 </p>
@@ -309,7 +296,7 @@ export default function AcreditacionEvento() {
               <button
                 type="button"
                 onClick={printBadge}
-                disabled={selected.status !== 'confirmed'}
+                disabled={!isConfirmed(selected)}
                 className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition-transform active:scale-[0.98] disabled:opacity-50"
               >
                 <Printer className="h-4 w-4" />
@@ -336,7 +323,7 @@ export default function AcreditacionEvento() {
 function BadgePrint({ reg, eventName, orgName, sizeKey }: { reg: Reg; eventName: string; orgName: string; sizeKey: SizeKey }) {
   const size = SIZES[sizeKey]
   const landscape = size.w > size.h
-  const seat = seatLabel(reg.seats)
+  const seat = reg.seat_label ?? seatLabel(reg.seats)
   const qr = Math.round(Math.min(size.w, size.h) * (landscape ? 0.72 : 0.5) * 3.78)
 
   return createPortal(

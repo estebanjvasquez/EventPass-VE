@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -14,6 +14,7 @@ type EventRow = {
   name: string
   description: string | null
   start_date: string | null
+  config: Record<string, unknown>
   organizations: { name: string | null } | null
 }
 
@@ -46,6 +47,8 @@ export default function RegistroEvento() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
+  const [credentialToken, setCredentialToken] = useState<string | null>(null)
+  const [paymentRequired, setPaymentRequired] = useState(false)
 
   const {
     register,
@@ -61,7 +64,7 @@ export default function RegistroEvento() {
       setLoadError(null)
       let query = supabase
         .from('events')
-        .select('id, organization_id, name, description, start_date, organizations(name)')
+        .select('id, organization_id, name, description, start_date, config, organizations(name)')
         .eq('status', 'published')
       // Aísla por organización cuando se resuelve un tenant por subdominio.
       if (tenant) query = query.eq('organization_id', tenant.id)
@@ -77,7 +80,7 @@ export default function RegistroEvento() {
       }
       const ev = data as unknown as EventRow | null
       setEvent(ev)
-      if (ev) {
+      if (ev?.config?.public_seat_selection_enabled === true && ev.config?.seat_assignment_mode === 'attendee') {
         const { data: seatData } = await supabase
           .from('seats')
           .select('id, row_label, column_number, seat_number, price, status')
@@ -108,31 +111,21 @@ export default function RegistroEvento() {
     if (!event) return
     setSubmitError(null)
 
-    const hasSeats = seats.length > 0
+    const hasSeats = event.config?.public_seat_selection_enabled === true && event.config?.seat_assignment_mode === 'attendee' && seats.length > 0
     if (hasSeats && !selectedSeat) {
       setSubmitError('Selecciona un asiento disponible.')
       return
     }
 
-    const { error } = hasSeats
-      ? await supabase.rpc('register_with_seat', {
-          p_event_id: event.id,
-          p_seat_id: selectedSeat,
-          p_first_name: values.first_name,
-          p_last_name: values.last_name || '',
-          p_email: values.email,
-          p_phone: values.phone,
-          p_cedula: values.cedula || '',
-        })
-      : await supabase.from('registrations').insert({
-          organization_id: event.organization_id,
-          event_id: event.id,
-          first_name: values.first_name,
-          last_name: values.last_name || null,
-          email: values.email,
-          phone: values.phone,
-          cedula: values.cedula || null,
-        })
+    const { data, error } = await supabase.rpc('register_event_participant', {
+      p_event_id: event.id,
+      p_seat_id: hasSeats ? selectedSeat : null,
+      p_first_name: values.first_name,
+      p_last_name: values.last_name || '',
+      p_email: values.email,
+      p_phone: values.phone,
+      p_cedula: values.cedula || '',
+    })
     if (error) {
       if (error.code === '23505') {
         setSubmitError('Ya existe un registro con ese correo para este evento.')
@@ -147,15 +140,19 @@ export default function RegistroEvento() {
       return
     }
 
-    // Dispara el correo con el enlace de carga de comprobante (Worker en
-    // Cloudflare). Best-effort: un fallo de correo no bloquea el registro.
+    const registration = Array.isArray(data) ? data[0] as { registration_id: string; credential_token: string; payment_required: boolean } | undefined : undefined
+    setCredentialToken(registration?.credential_token ?? null)
+    setPaymentRequired(registration?.payment_required === true)
+
+    // El correo depende de la modalidad. En eventos gratuitos se envía la
+    // credencial; en eventos pagos, las instrucciones para el comprobante.
     const apiUrl = import.meta.env.VITE_API_URL
-    if (apiUrl) {
+    if (apiUrl && registration) {
       try {
-        await fetch(`${apiUrl}/api/registrations/notify`, {
+        await fetch(`${apiUrl}${registration.payment_required ? '/api/registrations/notify' : '/api/registrations/confirm-notify'}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ event_id: event.id, email: values.email }),
+          body: JSON.stringify(registration.payment_required ? { event_id: event.id, email: values.email } : { registration_id: registration.registration_id }),
         })
       } catch {
         // El correo también puede reintentarse desde el panel admin.
@@ -210,7 +207,11 @@ export default function RegistroEvento() {
           />
         )}
 
-        {!loading && event && !done && (
+        {!loading && event && !done && event.config?.registration_mode === 'invitation' && (
+          <Notice title="Registro por invitación" body="Este evento no admite registros públicos. Solicita tu invitación al organizador." />
+        )}
+
+        {!loading && event && !done && event.config?.registration_mode !== 'invitation' && (
           <div className="animate-float-up">
             <p className="text-sm font-medium uppercase tracking-wider text-emerald-600">
               {event.organizations?.name ?? 'Registro'}
@@ -231,6 +232,7 @@ export default function RegistroEvento() {
             {event.description && (
               <p className="mt-4 max-w-xl leading-relaxed text-zinc-600">{event.description}</p>
             )}
+            {event.config?.public_floorplan_visible === true && <Link to={`/expo/${event.id}/plano`} target="_blank" className="mt-5 inline-flex text-sm font-semibold text-emerald-700 underline underline-offset-4">Consultar plano público del evento</Link>}
 
             <form onSubmit={handleSubmit(onSubmit)} className="mt-10 grid gap-5 sm:grid-cols-2">
               <FieldText label="Nombre" error={errors.first_name?.message} {...register('first_name')} />
@@ -260,11 +262,11 @@ export default function RegistroEvento() {
                   style={color ? { backgroundColor: color } : undefined}
                   className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition-transform active:scale-[0.98] disabled:opacity-60"
                 >
-                  {isSubmitting ? 'Enviando…' : 'Reservar mi plaza'}
+                  {isSubmitting ? 'Enviando…' : event.config?.registration_mode === 'free' ? 'Confirmar mi registro' : 'Reservar mi plaza'}
                   {!isSubmitting && <ArrowRight className="h-4 w-4" />}
                 </button>
                 <p className="mt-3 text-xs text-zinc-500">
-                  Recibirás un correo con los datos de pago y el plazo para completar tu registro.
+                  {event.config?.registration_mode === 'free' ? 'Tu registro quedará confirmado inmediatamente y recibirás tu credencial.' : 'Recibirás un correo con los datos de pago y el plazo para completar tu registro.'}
                 </p>
               </div>
             </form>
@@ -276,11 +278,11 @@ export default function RegistroEvento() {
             <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-emerald-50 text-emerald-600">
               <CheckCircle2 className="h-8 w-8" />
             </span>
-            <h2 className="mt-5 text-2xl font-bold text-zinc-900">¡Plaza reservada!</h2>
+            <h2 className="mt-5 text-2xl font-bold text-zinc-900">{paymentRequired ? '¡Plaza reservada!' : '¡Registro confirmado!'}</h2>
             <p className="mx-auto mt-3 max-w-md text-zinc-600">
-              Te enviaremos un correo con los métodos de pago y el enlace para
-              cargar tu comprobante. Tu plaza queda reservada mientras completas el pago.
+              {paymentRequired ? 'Te enviaremos un correo con los métodos de pago y el enlace para cargar tu comprobante. Tu plaza queda reservada mientras completas el pago.' : 'Tu acceso está confirmado. Puedes abrir ahora tu credencial y presentarla en el ingreso.'}
             </p>
+            {!paymentRequired && credentialToken && <Link to={`/credencial/${credentialToken}`} className="mt-5 inline-flex rounded-lg bg-emerald-600 px-5 py-3 text-sm font-semibold text-white">Ver mi credencial</Link>}
           </div>
         )}
       </main>

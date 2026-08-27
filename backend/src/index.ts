@@ -156,6 +156,43 @@ app.post('/api/registrations/confirm-notify', async (c) => {
   return c.json({ ok: true })
 })
 
+const participationNotifySchema = z.object({ participation_id: z.string().uuid() })
+
+app.post('/api/program-participations/notify', async (c) => {
+  const parsed = participationNotifySchema.safeParse(await c.req.json().catch(() => null))
+  if (!parsed.success) return c.json({ error: 'Datos inválidos' }, 400)
+  const supabase = createClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY)
+  const { data, error } = await supabase
+    .from('event_participations')
+    .select('id,status,credential_token,people(first_name,email),event_programs(name,organization_id)')
+    .eq('id', parsed.data.participation_id)
+    .maybeSingle()
+  if (error || !data || data.status !== 'approved') return c.json({ ok: true })
+  const personRaw = Array.isArray(data.people) ? data.people[0] : data.people
+  const programRaw = Array.isArray(data.event_programs) ? data.event_programs[0] : data.event_programs
+  const person = personRaw as { first_name?: string; email?: string } | null
+  const program = programRaw as { name?: string; organization_id?: string } | null
+  if (!person?.email || !program?.organization_id) return c.json({ ok: true })
+  const base = c.env.APP_BASE_URL.replace(/\/$/, '')
+  const sendError = await sendConfirmationEmail({
+    email: c.env.EMAIL,
+    from: c.env.EMAIL_FROM,
+    to: person.email,
+    firstName: person.first_name ?? 'Participante',
+    eventName: program.name ?? 'Tu evento',
+    credentialUrl: `${base}/credencial/${data.credential_token}`,
+  })
+  await supabase.from('email_log').insert({
+    organization_id: program.organization_id,
+    registration_id: null,
+    email_type: 'program_credential',
+    status: sendError ? 'failed' : 'sent',
+    sent_at: sendError ? null : new Date().toISOString(),
+  })
+  if (sendError) return c.json({ ok: false }, 502)
+  return c.json({ ok: true })
+})
+
 // ---------------------------------------------------------------------------
 // Aprovisionamiento de subdominio de tenant.
 // El admin de una organización activa su subdominio <slug>.eventosfacil.net.

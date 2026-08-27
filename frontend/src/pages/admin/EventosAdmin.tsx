@@ -20,7 +20,11 @@ type EventRow = {
   registration_deadline: string | null
   payment_timeout_days: number
   total_slots: number
+  config: Record<string, unknown>
 }
+
+type RegistrationMode = 'free' | 'paid' | 'invitation'
+type SeatAssignmentMode = 'none' | 'admin' | 'attendee'
 
 const TYPE_LABEL: Record<EventType, string> = {
   forum: 'Foro',
@@ -64,7 +68,7 @@ export default function EventosAdmin() {
     const { data, error } = await supabase
       .from('events')
       .select(
-        'id, name, description, event_type, status, start_date, end_date, registration_deadline, payment_timeout_days, total_slots',
+        'id, name, description, event_type, status, start_date, end_date, registration_deadline, payment_timeout_days, total_slots, config',
       )
       .eq('organization_id', org)
       .order('created_at', { ascending: false })
@@ -616,6 +620,10 @@ function EventForm({
     registration_deadline: toLocalInput(event?.registration_deadline ?? null),
     payment_timeout_days: event?.payment_timeout_days ?? 10,
     total_slots: event?.total_slots ?? 0,
+    registration_mode: (event?.config?.registration_mode as RegistrationMode | undefined) ?? 'paid',
+    public_floorplan_visible: event?.config?.public_floorplan_visible === true,
+    public_seat_selection_enabled: event?.config?.public_seat_selection_enabled === true,
+    seat_assignment_mode: (event?.config?.seat_assignment_mode as SeatAssignmentMode | undefined) ?? 'admin',
   })
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -641,10 +649,17 @@ function EventForm({
       registration_deadline: fromLocalInput(form.registration_deadline),
       payment_timeout_days: Number(form.payment_timeout_days) || 10,
       total_slots: Number(form.total_slots) || 0,
+      config: {
+        ...(event?.config ?? {}),
+        registration_mode: form.registration_mode,
+        public_floorplan_visible: form.public_floorplan_visible,
+        public_seat_selection_enabled: form.public_floorplan_visible && form.public_seat_selection_enabled,
+        seat_assignment_mode: form.public_floorplan_visible && form.public_seat_selection_enabled ? 'attendee' : form.seat_assignment_mode,
+      },
     }
     const result = event
-      ? await supabase.from('events').update(payload).eq('id', event.id).select('id, name, description, event_type, status, start_date, end_date, registration_deadline, payment_timeout_days, total_slots').single()
-      : await supabase.from('events').insert({ ...payload, organization_id: orgId, created_by: userId }).select('id, name, description, event_type, status, start_date, end_date, registration_deadline, payment_timeout_days, total_slots').single()
+      ? await supabase.from('events').update(payload).eq('id', event.id).select('id, name, description, event_type, status, start_date, end_date, registration_deadline, payment_timeout_days, total_slots, config').single()
+      : await supabase.from('events').insert({ ...payload, organization_id: orgId, created_by: userId }).select('id, name, description, event_type, status, start_date, end_date, registration_deadline, payment_timeout_days, total_slots, config').single()
     setSaving(false)
     if (result.error || !result.data) setFormError(result.error?.message ?? 'No se pudo guardar el evento.')
     else onSaved(result.data as EventRow)
@@ -685,12 +700,35 @@ function EventForm({
         <Field label="Cierre de inscripción">
           <input type="datetime-local" value={form.registration_deadline} onChange={(e) => set('registration_deadline', e.target.value)} className={inputCls} />
         </Field>
-        <Field label="Plazo de pago (días)">
-          <input type="number" min={1} value={form.payment_timeout_days} onChange={(e) => set('payment_timeout_days', Number(e.target.value))} className={inputCls} />
+        <Field label="Modalidad del registro">
+          <select value={form.registration_mode} onChange={(e) => set('registration_mode', e.target.value as RegistrationMode)} className={inputCls}>
+            <option value="free">Gratuito · confirma inmediatamente</option>
+            <option value="paid">Pago · requiere comprobante</option>
+            <option value="invitation">Solo invitación · sin registro público</option>
+          </select>
         </Field>
+        {form.registration_mode === 'paid' && <Field label="Plazo de pago (días)">
+          <input type="number" min={1} value={form.payment_timeout_days} onChange={(e) => set('payment_timeout_days', Number(e.target.value))} className={inputCls} />
+        </Field>}
         <Field label="Cupos (0 = ilimitado)">
           <input type="number" min={0} value={form.total_slots} onChange={(e) => set('total_slots', Number(e.target.value))} className={inputCls} />
         </Field>
+        <fieldset className="sm:col-span-2 rounded-xl border border-zinc-200 p-4">
+          <legend className="px-1 text-sm font-semibold text-zinc-900">Plano y selección de puestos</legend>
+          <label className="mt-2 flex items-start gap-3 text-sm text-zinc-700">
+            <input type="checkbox" checked={form.public_floorplan_visible} onChange={(e) => set('public_floorplan_visible', e.target.checked)} className="mt-0.5" />
+            <span><b>Publicar el plano</b><span className="block text-xs text-zinc-500">Permite que visitantes y registrados consulten el plano publicado.</span></span>
+          </label>
+          <label className="mt-3 flex items-start gap-3 text-sm text-zinc-700">
+            <input type="checkbox" checked={form.public_seat_selection_enabled} disabled={!form.public_floorplan_visible} onChange={(e) => set('public_seat_selection_enabled', e.target.checked)} className="mt-0.5" />
+            <span><b>Permitir selección pública de puestos</b><span className="block text-xs text-zinc-500">Los puestos disponibles aparecerán durante el registro. Requiere publicar el plano.</span></span>
+          </label>
+          {!form.public_seat_selection_enabled && <label className="mt-3 grid gap-1 text-sm font-medium text-zinc-700">Asignación de puestos
+            <select value={form.seat_assignment_mode} onChange={(e) => set('seat_assignment_mode', e.target.value as SeatAssignmentMode)} className={inputCls}>
+              <option value="none">Sin puestos</option><option value="admin">Por el administrador</option>
+            </select>
+          </label>}
+        </fieldset>
       </div>
 
       {formError && <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{formError}</p>}
