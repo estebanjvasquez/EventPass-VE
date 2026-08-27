@@ -297,15 +297,9 @@ export default function PortalExpositor() {
       window.open(data.signedUrl, "_blank", "noopener,noreferrer");
   }
 
-  async function submitProfile(eventSubmit: React.FormEvent) {
-    eventSubmit.preventDefault();
-    if (!eventId || !membership) return;
-    setBusy(true);
-    setMessage(null);
-    const rpcName = platformPreview
-      ? "admin_submit_exhibitor_public_profile"
-      : "submit_exhibitor_public_profile";
-    const { error } = await supabase.rpc(rpcName, {
+  function profilePayload() {
+    if (!eventId || !membership) return null;
+    return {
       p_event_id: eventId,
       p_company_id: membership.company_id,
       p_logo_url: profile.logo_url,
@@ -318,15 +312,47 @@ export default function PortalExpositor() {
       },
       p_contact_email: profile.contact_email,
       p_contact_phone: profile.contact_phone,
-    });
+    };
+  }
+
+  async function saveProfileDraft() {
+    const payload = profilePayload();
+    if (!payload) return;
+    setBusy(true);
+    setMessage(null);
+    const { error } = await supabase.rpc(
+      "save_exhibitor_public_profile",
+      payload,
+    );
     if (error) setMessage(error.message);
     else {
-      setProfileStatus(platformPreview ? "approved" : "pending");
-      setMessage(
-        platformPreview
-          ? "Perfil actualizado y aprobado para el plano público."
-          : "Perfil enviado para aprobación del organizador.",
-      );
+      setProfileStatus("draft");
+      setMessage("Borrador guardado. Puedes continuar completándolo después.");
+    }
+    setBusy(false);
+  }
+
+  async function submitProfile(eventSubmit: React.FormEvent) {
+    eventSubmit.preventDefault();
+    if (!eventId || !membership) return;
+    if (!profile.description.trim() || !profile.category.trim()) {
+      setMessage("Completa la descripción y la categoría antes de enviar el perfil a revisión.");
+      return;
+    }
+    if (!profile.contact_email.trim() && !profile.contact_phone.trim()) {
+      setMessage("Agrega al menos un correo o teléfono público antes de enviar el perfil.");
+      return;
+    }
+    setBusy(true);
+    setMessage(null);
+    const rpcName = platformPreview
+      ? "admin_submit_exhibitor_public_profile"
+      : "submit_exhibitor_public_profile";
+    const { error } = await supabase.rpc(rpcName, profilePayload()!);
+    if (error) setMessage(error.message);
+    else {
+      setProfileStatus("pending");
+      setMessage("Perfil guardado y enviado para aprobación del organizador.");
     }
     setBusy(false);
   }
@@ -474,7 +500,7 @@ export default function PortalExpositor() {
               <input
                 value={profile.logo_url}
                 onChange={(event) =>
-                  setProfile({ ...profile, logo_url: event.target.value })
+                  setProfile((current) => ({ ...current, logo_url: event.target.value }))
                 }
                 placeholder="URL del logo (PNG o SVG)"
                 className="rounded-lg border p-2 text-sm"
@@ -482,7 +508,7 @@ export default function PortalExpositor() {
               <input
                 value={profile.category}
                 onChange={(event) =>
-                  setProfile({ ...profile, category: event.target.value })
+                  setProfile((current) => ({ ...current, category: event.target.value }))
                 }
                 placeholder="Categoría o sector"
                 className="rounded-lg border p-2 text-sm"
@@ -490,7 +516,7 @@ export default function PortalExpositor() {
               <textarea
                 value={profile.description}
                 onChange={(event) =>
-                  setProfile({ ...profile, description: event.target.value })
+                  setProfile((current) => ({ ...current, description: event.target.value }))
                 }
                 placeholder="Descripción pública de la empresa"
                 rows={3}
@@ -500,7 +526,7 @@ export default function PortalExpositor() {
                 type="url"
                 value={profile.website}
                 onChange={(event) =>
-                  setProfile({ ...profile, website: event.target.value })
+                  setProfile((current) => ({ ...current, website: event.target.value }))
                 }
                 placeholder="Sitio web"
                 className="rounded-lg border p-2 text-sm"
@@ -508,7 +534,7 @@ export default function PortalExpositor() {
               <input
                 value={profile.contact_email}
                 onChange={(event) =>
-                  setProfile({ ...profile, contact_email: event.target.value })
+                  setProfile((current) => ({ ...current, contact_email: event.target.value }))
                 }
                 placeholder="Correo público"
                 className="rounded-lg border p-2 text-sm"
@@ -516,7 +542,7 @@ export default function PortalExpositor() {
               <input
                 value={profile.linkedin}
                 onChange={(event) =>
-                  setProfile({ ...profile, linkedin: event.target.value })
+                  setProfile((current) => ({ ...current, linkedin: event.target.value }))
                 }
                 placeholder="LinkedIn"
                 className="rounded-lg border p-2 text-sm"
@@ -524,7 +550,7 @@ export default function PortalExpositor() {
               <input
                 value={profile.instagram}
                 onChange={(event) =>
-                  setProfile({ ...profile, instagram: event.target.value })
+                  setProfile((current) => ({ ...current, instagram: event.target.value }))
                 }
                 placeholder="Instagram"
                 className="rounded-lg border p-2 text-sm"
@@ -532,17 +558,28 @@ export default function PortalExpositor() {
               <input
                 value={profile.contact_phone}
                 onChange={(event) =>
-                  setProfile({ ...profile, contact_phone: event.target.value })
+                  setProfile((current) => ({ ...current, contact_phone: event.target.value }))
                 }
                 placeholder="Teléfono público"
                 className="rounded-lg border p-2 text-sm"
               />
-              <button
-                disabled={busy}
-                className="w-fit rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
-              >
-                {busy ? "Enviando…" : "Enviar perfil a revisión"}
-              </button>
+              <div className="flex flex-wrap gap-2 sm:col-span-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void saveProfileDraft()}
+                  className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 disabled:opacity-50"
+                >
+                  {busy ? "Guardando…" : "Guardar borrador"}
+                </button>
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  {busy ? "Enviando…" : "Enviar perfil a revisión"}
+                </button>
+              </div>
             </form>
           </section>
           <section className="rounded-xl border bg-white p-5">
