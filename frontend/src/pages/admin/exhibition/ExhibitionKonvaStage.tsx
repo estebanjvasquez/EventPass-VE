@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Arc, Arrow, Circle, Ellipse, Group, Image as KonvaImage, Layer, Line, Rect, Stage, Text, Transformer } from "react-konva";
 import type Konva from "konva";
+import { Maximize2, Minus, Plus } from "lucide-react";
+import { standSizeColor } from "./standSizeColor";
 
 type Geometry = { x: number; y: number; width: number; height: number; rotation?: number; shape?: "rect" | "polygon"; points?: number[] };
 export type SceneElement = { id: string; label: string; element_type?: string; status?: string; geometry: Geometry; layer: string; z_index: number; locked: boolean; visible: boolean; style: Record<string, unknown>; metadata: Record<string, unknown>; booth_type?: string | null; tags?: string[] };
@@ -12,6 +14,14 @@ const defaultColor: Record<Kind, string> = {
   flow_arrow: "#dbeafe", special: "#f3e8ff",
   polygon: "#f3e8ff", lobby: "#e0e7ff", blank: "#f8fafc",
 };
+
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 4;
+const ZOOM_STEP = 0.25;
+
+function clampZoom(value: number) {
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
+}
 
 function kindOf(item: SceneElement): Kind {
   return (item.metadata.object_type as Kind | undefined) ?? (item.layer === "circulation" ? "access" : "special");
@@ -32,6 +42,26 @@ function useImage(url: string | null) {
 function ElementSymbol({ item, fill, company }: { item: SceneElement; fill: string; company?: string }) {
   const kind = kindOf(item);
   const { width, height } = item.geometry;
+  if (kind === "stand") {
+    const statusLabel: Record<string, string> = { available: "DISPONIBLE", reserved: "RESERVADO", assigned: "ASIGNADO", blocked: "BLOQUEADO" };
+    const heading = (company || statusLabel[item.status ?? "available"] || "DISPONIBLE").toLocaleUpperCase("es-VE");
+    const number = item.label.replace(/^stand\s*/i, "").trim() || item.label;
+    const area = width * height;
+    const headingSize = Math.max(0.2, Math.min(0.48, height * 0.13));
+    const numberSize = Math.max(0.42, Math.min(0.95, Math.min(width * 0.28, height * 0.27)));
+    const badgeWidth = Math.min(width * 0.5, Math.max(1.15, width * 0.34));
+    const badgeHeight = Math.min(height * 0.38, 1.05);
+    const badgeX = width - badgeWidth - Math.max(0.08, width * 0.04);
+    const badgeY = height - badgeHeight - Math.max(0.08, height * 0.04);
+    const dimensions = `${width.toFixed(2)} ×\n${height.toFixed(2)} m\n${area.toFixed(area % 1 === 0 ? 0 : 2)} m²`;
+    return <Group>
+      <Rect width={width} height={height} fill={fill} stroke="#334155" strokeWidth={0.06} />
+      <Text text={heading} x={width * 0.06} y={height * 0.06} width={width * 0.88} height={height * 0.24} fontSize={headingSize} fontStyle="bold" align="center" ellipsis wrap="none" fill="#0f172a" listening={false} />
+      <Text text={number} x={width * 0.08} y={height * 0.3} width={width * 0.84} height={height * 0.34} fontSize={numberSize} fontStyle="bold" align="center" verticalAlign="middle" fill="#0f172a" listening={false} />
+      <Rect x={badgeX} y={badgeY} width={badgeWidth} height={badgeHeight} fill="rgba(255,255,255,0.72)" stroke="#475569" strokeWidth={0.04} listening={false} />
+      <Text text={dimensions} x={badgeX} y={badgeY + badgeHeight * 0.05} width={badgeWidth} height={badgeHeight * 0.9} fontSize={Math.max(0.16, Math.min(0.3, badgeHeight * 0.27))} lineHeight={0.92} align="center" verticalAlign="middle" fill="#0f172a" listening={false} />
+    </Group>;
+  }
   if (kind === "door") return <Group><Line points={[0, height, width * 0.72, height]} stroke="#475569" strokeWidth={0.08} /><Line points={[0, height, width * 0.72, height * 0.28]} stroke="#475569" strokeWidth={0.08} /><Arc x={0} y={height} innerRadius={width * 0.68} outerRadius={width * 0.72} angle={45} rotation={-45} stroke="#94a3b8" strokeWidth={0.06} /><Text text={String(item.metadata.door_role ?? "ENTRADA").toUpperCase()} x={0} y={height * 0.08} width={width} fontSize={Math.max(0.12, height * 0.45)} align="center" fill="#334155" listening={false} /></Group>;
   if (kind === "access") return <Group><Rect width={width} height={height} fill={fill} stroke="#2563eb" strokeWidth={0.08} cornerRadius={0.12} /><Arrow points={[width * 0.18, height * 0.5, width * 0.82, height * 0.5]} pointerLength={height * 0.28} pointerWidth={height * 0.28} stroke="#1d4ed8" fill="#1d4ed8" strokeWidth={0.1} /><Text text="ACCESO" x={0} y={height * 0.1} width={width} fontSize={Math.max(0.12, height * 0.25)} align="center" fill="#1e3a8a" listening={false} /></Group>;
   if (kind === "security") return <Group><Circle x={width / 2} y={height / 2} radius={Math.min(width, height) * 0.38} fill={fill} stroke="#4338ca" strokeWidth={0.1} /><Text text="✓" x={width * 0.25} y={height * 0.2} width={width * 0.5} height={height * 0.6} fontSize={Math.min(width, height) * 0.55} align="center" verticalAlign="middle" fill="#3730a3" listening={false} /><Text text="CTRL" x={0} y={height * 0.78} width={width} fontSize={Math.max(0.12, height * 0.16)} align="center" fill="#3730a3" listening={false} /></Group>;
@@ -48,16 +78,18 @@ function ElementSymbol({ item, fill, company }: { item: SceneElement; fill: stri
 
 export function ExhibitionKonvaStage({
   columns, rows, elements, assignments, selectedIds, showGrid, showDimensions, snap, backgroundUrl, opacity, tool, polygonDraft, readOnly = false,
-  onSelect, onClear, onPlace, onPolygonPoint, onPolygonFinish, onMove, onTransform,
+  calibrationActive = false, calibrationPoints = [], onSelect, onClear, onPlace, onPolygonPoint, onPolygonFinish, onMove, onTransform, onEditLabel, onCalibrationPoint,
 }: {
   columns: number; rows: number; elements: SceneElement[]; assignments: Map<string, string>; selectedIds: string[];
   showGrid: boolean; showDimensions: boolean; snap: boolean; backgroundUrl: string | null; opacity: number; tool: Kind | null; polygonDraft: number[]; readOnly?: boolean;
+  calibrationActive?: boolean; calibrationPoints?: { x: number; y: number }[];
   onSelect: (item: SceneElement, additive: boolean) => void; onClear: () => void; onPlace: (x: number, y: number) => void;
   onPolygonPoint: (x: number, y: number) => void; onPolygonFinish: () => void;
-  onMove: (id: string, x: number, y: number) => void; onTransform: (id: string, geometry: Geometry) => void;
+  onMove: (id: string, x: number, y: number) => void; onTransform: (id: string, geometry: Geometry) => void; onEditLabel?: (item: SceneElement) => void; onCalibrationPoint?: (point: { x: number; y: number }) => void;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [hostWidth, setHostWidth] = useState(760);
+  const [zoom, setZoom] = useState(1);
   const image = useImage(backgroundUrl);
   useEffect(() => {
     if (!hostRef.current) return;
@@ -65,7 +97,19 @@ export function ExhibitionKonvaStage({
     observer.observe(hostRef.current);
     return () => observer.disconnect();
   }, []);
-  const scale = Math.min(hostWidth / Math.max(columns, 1), 720 / Math.max(rows, 1));
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host || readOnly) return;
+    const handleWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      setZoom((current) => clampZoom(current + (event.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP)));
+    };
+    host.addEventListener("wheel", handleWheel, { passive: false });
+    return () => host.removeEventListener("wheel", handleWheel);
+  }, [readOnly]);
+  const fitScale = Math.min(hostWidth / Math.max(columns, 1), 720 / Math.max(rows, 1));
+  const scale = fitScale * zoom;
   const width = columns * scale;
   const height = rows * scale;
   const sorted = useMemo(() => [...elements].filter((item) => item.visible).sort((a, b) => a.z_index - b.z_index), [elements]);
@@ -110,18 +154,34 @@ export function ExhibitionKonvaStage({
     onTransform(item.id, geometry);
   }
 
-  return <div ref={hostRef} className="w-full overflow-auto rounded-xl bg-white">
-    <Stage width={width} height={height} onMouseDown={(event) => {
+  function changeZoom(nextZoom: number) {
+    setZoom(clampZoom(nextZoom));
+  }
+
+  return <div className="w-full rounded-xl bg-white">
+    {!readOnly && <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-2 text-xs">
+      <span className="font-semibold text-slate-700">Zoom del plano</span>
+      <button type="button" onClick={() => changeZoom(zoom - ZOOM_STEP)} disabled={zoom <= MIN_ZOOM} className="rounded border border-slate-300 p-1.5 text-slate-700 disabled:opacity-40" title="Alejar" aria-label="Alejar plano"><Minus className="h-3.5 w-3.5" /></button>
+      <span className="w-12 text-center font-semibold tabular-nums text-slate-700">{Math.round(zoom * 100)}%</span>
+      <button type="button" onClick={() => changeZoom(zoom + ZOOM_STEP)} disabled={zoom >= MAX_ZOOM} className="rounded border border-slate-300 p-1.5 text-slate-700 disabled:opacity-40" title="Acercar" aria-label="Acercar plano"><Plus className="h-3.5 w-3.5" /></button>
+      <button type="button" onClick={() => changeZoom(1)} disabled={zoom === 1} className="inline-flex items-center gap-1 rounded border border-slate-300 px-2 py-1.5 font-semibold text-slate-700 disabled:opacity-40" title="Ajustar el plano al área visible"><Maximize2 className="h-3.5 w-3.5" />Ajustar</button>
+      <span className="ml-auto text-slate-500">Ctrl/Cmd + rueda para ampliar</span>
+    </div>}
+    <div ref={hostRef} className="max-h-[75vh] w-full overflow-auto">
+    <Stage width={width} height={height} style={{ cursor: calibrationActive ? "crosshair" : "default" }} onMouseDown={(event) => {
       if (event.target === event.target.getStage()) {
         const point = pointerPosition(event);
-        if (tool === "polygon" && point) onPolygonPoint(Math.max(0, Math.min(columns, point.x)), Math.max(0, Math.min(rows, point.y)));
+        if (calibrationActive && point) onCalibrationPoint?.({ x: Math.max(0, Math.min(columns, point.x)), y: Math.max(0, Math.min(rows, point.y)) });
+        else if (tool === "polygon" && point) onPolygonPoint(Math.max(0, Math.min(columns, point.x)), Math.max(0, Math.min(rows, point.y)));
         else if (tool && point) onPlace(Math.max(0, Math.min(columns - 1, point.x)), Math.max(0, Math.min(rows - 1, point.y)));
         else onClear();
       }
-    }} onDblClick={(event) => { if (tool === "polygon" && event.target === event.target.getStage()) onPolygonFinish(); }} onTouchStart={(event) => { if (event.target === event.target.getStage()) onClear(); }}>
+    }} onDblClick={(event) => { if (tool === "polygon" && event.target === event.target.getStage()) onPolygonFinish(); }} onTouchStart={(event) => { if (event.target !== event.target.getStage()) return; const point = pointerPosition(event); if (calibrationActive && point) onCalibrationPoint?.({ x: Math.max(0, Math.min(columns, point.x)), y: Math.max(0, Math.min(rows, point.y)) }); else onClear(); }}>
       <Layer>
         <Group scaleX={scale} scaleY={scale}>
         {image && <KonvaImage image={image} width={columns} height={rows} opacity={opacity / 100} listening={false} />}
+        {calibrationPoints.length === 2 && <Rect x={Math.min(calibrationPoints[0].x, calibrationPoints[1].x)} y={Math.min(calibrationPoints[0].y, calibrationPoints[1].y)} width={Math.abs(calibrationPoints[1].x - calibrationPoints[0].x)} height={Math.abs(calibrationPoints[1].y - calibrationPoints[0].y)} fill="rgba(220,38,38,0.12)" stroke="#dc2626" strokeWidth={0.1} dash={[0.25, 0.12]} listening={false} />}
+        {calibrationPoints.map((point, index) => <Group key={`calibration-${index}`} x={point.x} y={point.y} listening={false}><Circle radius={0.18} fill="#ffffff" stroke="#dc2626" strokeWidth={0.08} /><Line points={[-0.35, 0, 0.35, 0]} stroke="#dc2626" strokeWidth={0.06} /><Line points={[0, -0.35, 0, 0.35]} stroke="#dc2626" strokeWidth={0.06} /></Group>)}
         {showGrid && Array.from({ length: columns + 1 }, (_, x) => <Line key={`v-${x}`} points={[x, 0, x, rows]} stroke="#cbd5e1" strokeWidth={0.015} listening={false} />)}
         {showGrid && Array.from({ length: rows + 1 }, (_, y) => <Line key={`h-${y}`} points={[0, y, columns, y]} stroke="#cbd5e1" strokeWidth={0.015} listening={false} />)}
         {showGrid && Array.from({ length: columns }, (_, x) => <Text key={`x-${x}`} text={String(x + 1)} x={x + 0.05} y={0.05} fontSize={0.28} fill="#64748b" listening={false} />)}
@@ -131,8 +191,9 @@ export function ExhibitionKonvaStage({
           const kind = kindOf(item);
           const isSelected = selectedIds.includes(item.id);
           const company = assignments.get(item.id);
-          const fill = readOnly && kind === "stand" ? (company ? "#bae6fd" : "#d1fae5") : String(item.style.fill ?? defaultColor[kind]);
-          return <Group key={item.id} ref={(node) => { if (node) nodeRefs.current.set(item.id, node); else nodeRefs.current.delete(item.id); }} x={item.geometry.x} y={item.geometry.y} rotation={item.geometry.rotation ?? 0} draggable={!readOnly && !item.locked} onMouseDown={(event) => { event.cancelBubble = true; onSelect(item, event.evt.ctrlKey || event.evt.metaKey); }} onTouchStart={(event) => { event.cancelBubble = true; onSelect(item, false); }} onDragEnd={(event) => { if (!readOnly) moveItem(item, event) }} onTransformEnd={(event) => { if (!readOnly) transformItem(item, event) }}>
+          const baseFill = String(item.style.fill ?? defaultColor[kind]);
+          const fill = kind === "stand" ? standSizeColor(item.geometry.width, item.geometry.height) : baseFill;
+          return <Group key={item.id} ref={(node) => { if (node) nodeRefs.current.set(item.id, node); else nodeRefs.current.delete(item.id); }} x={item.geometry.x} y={item.geometry.y} rotation={item.geometry.rotation ?? 0} draggable={!readOnly && !item.locked} onMouseDown={(event) => { event.cancelBubble = true; onSelect(item, event.evt.ctrlKey || event.evt.metaKey); }} onDblClick={(event) => { event.cancelBubble = true; if (!readOnly) onEditLabel?.(item); }} onDblTap={(event) => { event.cancelBubble = true; if (!readOnly) onEditLabel?.(item); }} onTouchStart={(event) => { event.cancelBubble = true; onSelect(item, false); }} onDragEnd={(event) => { if (!readOnly) moveItem(item, event) }} onTransformEnd={(event) => { if (!readOnly) transformItem(item, event) }}>
             <ElementSymbol item={item} fill={fill} company={company} />
             {isSelected && <Rect width={item.geometry.width} height={item.geometry.height} stroke="#047857" strokeWidth={0.12} cornerRadius={0.12} listening={false} />}
             {isSelected && showDimensions && <Group listening={false}><Text text={`${item.geometry.width.toFixed(1)} m`} x={0} y={item.geometry.height + 0.12} width={item.geometry.width} fontSize={0.24} fill="#047857" align="center" /><Text text={`${item.geometry.height.toFixed(1)} m`} x={item.geometry.width + 0.12} y={item.geometry.height / 2} fontSize={0.24} fill="#047857" rotation={90} /></Group>}
@@ -142,5 +203,6 @@ export function ExhibitionKonvaStage({
         </Group>
       </Layer>
     </Stage>
+    </div>
   </div>;
 }
