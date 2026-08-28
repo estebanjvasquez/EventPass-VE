@@ -32,6 +32,9 @@ type Company = {
   public_logo_url?: string | null;
   public_description?: string | null;
   public_category?: string | null;
+  public_social_links?: Record<string, string> | null;
+  public_contact_email?: string | null;
+  public_contact_phone?: string | null;
   public_profile_status?: string | null;
 };
 type Stand = { id: string; label: string; status: string };
@@ -118,6 +121,7 @@ export default function ExpositoresAdmin() {
   const [inviting, setInviting] = useState(false);
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [companyDraft, setCompanyDraft] = useState<Partial<Company>>({});
+  const [reviewCompany, setReviewCompany] = useState<Company | null>(null);
   const [portalMembers, setPortalMembers] = useState<PortalMember[]>([]);
   const [portalTasks, setPortalTasks] = useState<PortalTask[]>([]);
   const [portalPayments, setPortalPayments] = useState<PortalPayment[]>([]);
@@ -174,7 +178,7 @@ export default function ExpositoresAdmin() {
       supabase
         .from("companies")
         .select(
-          "id,name,contact_name,contact_email,contact_phone,legal_name,tax_id,fiscal_address,billing_email,billing_phone,billing_contact,website,profile_notes,public_logo_url,public_description,public_category,public_profile_status",
+          "id,name,contact_name,contact_email,contact_phone,legal_name,tax_id,fiscal_address,billing_email,billing_phone,billing_contact,website,profile_notes,public_logo_url,public_description,public_category,public_social_links,public_contact_email,public_contact_phone,public_profile_status",
         )
         .eq("organization_id", event.organization_id)
         .eq("kind", "exhibitor")
@@ -584,6 +588,7 @@ export default function ExpositoresAdmin() {
     );
     if (reviewError) setError(reviewError.message);
     else {
+      setReviewCompany(null);
       setNotice(
         approved
           ? "Perfil aprobado y visible en el plano."
@@ -638,7 +643,7 @@ export default function ExpositoresAdmin() {
                 <div key={company.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white p-3 text-sm">
                   <span><b>{company.name}</b>{company.public_category ? ` · ${company.public_category}` : ""}</span>
                   <div className="flex gap-2">
-                    <button type="button" onClick={() => selectCompany(company)} className="rounded-lg border px-3 py-1.5 text-xs font-semibold">Revisar datos</button>
+                    <button type="button" onClick={() => setReviewCompany(company)} className="rounded-lg border px-3 py-1.5 text-xs font-semibold">Ver perfil enviado</button>
                     <button type="button" onClick={() => void reviewPublicProfile(company.id, true)} className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white">Aprobar</button>
                     <button type="button" onClick={() => void reviewPublicProfile(company.id, false)} className="rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-900">Solicitar cambios</button>
                   </div>
@@ -1184,12 +1189,30 @@ export default function ExpositoresAdmin() {
                     {company.public_profile_status !== "approved" && (
                       <button
                         type="button"
+                        onClick={() => setReviewCompany(company)}
+                        className="rounded-lg border px-3 py-1.5 text-xs font-semibold"
+                      >
+                        Ver perfil
+                      </button>
+                    )}
+                    {company.public_profile_status !== "approved" && (
+                      <button
+                        type="button"
                         onClick={() =>
                           void reviewPublicProfile(company.id, true)
                         }
                         className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white"
                       >
                         Aprobar
+                      </button>
+                    )}
+                    {company.public_profile_status === "approved" && (
+                      <button
+                        type="button"
+                        onClick={() => setReviewCompany(company)}
+                        className="rounded-lg border px-3 py-1.5 text-xs font-semibold"
+                      >
+                        Ver perfil
                       </button>
                     )}
                     {company.public_profile_status === "approved" && (
@@ -1215,6 +1238,42 @@ export default function ExpositoresAdmin() {
             )}
           </div>
         </section>
+        {reviewCompany && (
+          <div className="fixed inset-0 z-50 grid place-items-center bg-zinc-950/50 p-4" onClick={() => setReviewCompany(null)}>
+            <section className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-6 shadow-xl" onClick={(event) => event.stopPropagation()}>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Perfil público enviado</p>
+                  <h2 className="mt-1 text-2xl font-bold">{reviewCompany.name}</h2>
+                  <p className="mt-1 text-sm text-zinc-500">Estado: {reviewCompany.public_profile_status === "approved" ? "Aprobado" : "Pendiente de revisión"}</p>
+                </div>
+                <button type="button" onClick={() => setReviewCompany(null)} className="rounded-lg border px-3 py-2 text-sm">Cerrar</button>
+              </div>
+              <div className="mt-5 grid gap-5 sm:grid-cols-[160px_1fr]">
+                <div className="grid h-36 place-items-center rounded-xl border bg-zinc-50 p-3">
+                  {reviewCompany.public_logo_url ? <img src={reviewCompany.public_logo_url} alt={`Logo de ${reviewCompany.name}`} className="max-h-full max-w-full object-contain" /> : <span className="text-sm text-zinc-400">Sin logo</span>}
+                </div>
+                <dl className="grid gap-3 text-sm">
+                  <div><dt className="text-xs font-semibold uppercase text-zinc-500">Categoría</dt><dd className="mt-1">{reviewCompany.public_category || "Sin categoría"}</dd></div>
+                  <div><dt className="text-xs font-semibold uppercase text-zinc-500">Contacto público</dt><dd className="mt-1">{reviewCompany.public_contact_email || reviewCompany.public_contact_phone || "Sin contacto"}</dd></div>
+                  {reviewCompany.public_social_links?.website && <div><dt className="text-xs font-semibold uppercase text-zinc-500">Sitio web</dt><dd className="mt-1"><a href={reviewCompany.public_social_links.website} target="_blank" rel="noreferrer" className="text-emerald-700 underline">{reviewCompany.public_social_links.website}</a></dd></div>}
+                </dl>
+              </div>
+              <div className="mt-5 rounded-xl border bg-zinc-50 p-4">
+                <h3 className="text-xs font-semibold uppercase text-zinc-500">Descripción pública</h3>
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-700">{reviewCompany.public_description || "Sin descripción"}</p>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-3 text-sm">
+                {reviewCompany.public_social_links?.linkedin && <a href={reviewCompany.public_social_links.linkedin} target="_blank" rel="noreferrer" className="text-emerald-700 underline">LinkedIn</a>}
+                {reviewCompany.public_social_links?.instagram && <a href={reviewCompany.public_social_links.instagram} target="_blank" rel="noreferrer" className="text-emerald-700 underline">Instagram</a>}
+              </div>
+              <div className="mt-6 flex justify-end gap-2 border-t pt-4">
+                <button type="button" onClick={() => void reviewPublicProfile(reviewCompany.id, false)} className="rounded-lg border border-amber-300 px-4 py-2 text-sm font-semibold text-amber-900">Solicitar cambios</button>
+                {reviewCompany.public_profile_status !== "approved" && <button type="button" onClick={() => void reviewPublicProfile(reviewCompany.id, true)} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">Aprobar perfil</button>}
+              </div>
+            </section>
+          </div>
+        )}
       </main>
     </div>
   );
