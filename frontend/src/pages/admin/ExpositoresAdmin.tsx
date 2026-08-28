@@ -13,6 +13,7 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import CsvImportPanel from "../../components/CsvImportPanel";
 import type { CsvColumn, CsvRow } from "../../lib/csvImport";
+import { usePersistentDraft } from "../../lib/usePersistentDraft";
 
 type Company = {
   id: string;
@@ -129,6 +130,19 @@ export default function ExpositoresAdmin() {
     typeof eventConfig.exhibitor_manual_path === "string"
       ? eventConfig.exhibitor_manual_path
       : null;
+  const selectedCompany = companies.find(
+    (company) => company.id === selectedCompanyId,
+  );
+  const companyDraftState = usePersistentDraft({
+    key:
+      eventId && selectedCompanyId
+        ? `exhibitor:${eventId}:${selectedCompanyId}`
+        : null,
+    value: companyDraft,
+    savedValue: selectedCompany ?? {},
+    enabled: Boolean(selectedCompany),
+    restore: setCompanyDraft,
+  });
 
   const load = useCallback(async () => {
     if (!eventId) return;
@@ -555,6 +569,7 @@ export default function ExpositoresAdmin() {
       .eq("id", selectedCompanyId);
     if (saveError) setError(saveError.message);
     else {
+      companyDraftState.clear();
       setError(null);
       setSelectedCompanyId("");
       setCompanyDraft({});
@@ -852,6 +867,12 @@ export default function ExpositoresAdmin() {
               <button className="mt-3 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-semibold text-white">
                 Guardar datos
               </button>
+              {companyDraftState.dirty && (
+                <p className="mt-2 text-xs font-semibold text-amber-700">
+                  Cambios sin guardar. El borrador se conserva en este dispositivo
+                  si sales y vuelves.
+                </p>
+              )}
               <div className="mt-6 grid gap-4 lg:grid-cols-2">
                 <div className="rounded-lg border p-3">
                   <h3 className="font-semibold">Personal e invitaciones</h3>

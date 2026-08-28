@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
+import { usePersistentDraft } from "../lib/usePersistentDraft";
 import CsvImportPanel from "../components/CsvImportPanel";
 import type { CsvColumn, CsvRow } from "../lib/csvImport";
 
@@ -119,6 +120,28 @@ export default function PortalExpositor() {
   const [receipt, setReceipt] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const savedProfile = membership
+    ? {
+        logo_url: membership.company?.public_logo_url ?? "",
+        description: membership.company?.public_description ?? "",
+        category: membership.company?.public_category ?? "",
+        website: membership.company?.public_social_links?.website ?? "",
+        linkedin: membership.company?.public_social_links?.linkedin ?? "",
+        instagram: membership.company?.public_social_links?.instagram ?? "",
+        contact_email: membership.company?.public_contact_email ?? "",
+        contact_phone: membership.company?.public_contact_phone ?? "",
+      }
+    : profile;
+  const profileDraftState = usePersistentDraft({
+    key:
+      eventId && membership
+        ? `exhibitor-profile:${eventId}:${membership.company_id}`
+        : null,
+    value: profile,
+    savedValue: savedProfile,
+    enabled: Boolean(membership),
+    restore: setProfile,
+  });
 
   const load = useCallback(async () => {
     if (!eventId || !user) return;
@@ -326,6 +349,7 @@ export default function PortalExpositor() {
     );
     if (error) setMessage(error.message);
     else {
+      profileDraftState.clear();
       setProfileStatus("draft");
       setMessage("Borrador guardado. Puedes continuar completándolo después.");
     }
@@ -351,6 +375,7 @@ export default function PortalExpositor() {
     const { error } = await supabase.rpc(rpcName, profilePayload()!);
     if (error) setMessage(error.message);
     else {
+      profileDraftState.clear();
       setProfileStatus("pending");
       setMessage("Perfil guardado y enviado para aprobación del organizador.");
     }

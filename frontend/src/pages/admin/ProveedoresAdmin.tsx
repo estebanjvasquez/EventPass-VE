@@ -12,6 +12,7 @@ import {
 import { Link } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { resolveActiveOrg } from "../../lib/activeOrg";
+import { usePersistentDraft } from "../../lib/usePersistentDraft";
 import CsvImportPanel from "../../components/CsvImportPanel";
 import type { CsvColumn, CsvRow } from "../../lib/csvImport";
 
@@ -144,6 +145,13 @@ export default function ProveedoresAdmin() {
   const [serviceId, setServiceId] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const providerDraftState = usePersistentDraft({
+    key: selectedProvider ? `provider:${selectedProvider.id}` : null,
+    value: draft,
+    savedValue: selectedProvider ?? {},
+    enabled: Boolean(selectedProvider),
+    restore: setDraft,
+  });
 
   const load = useCallback(async () => {
     const membership = await resolveActiveOrg();
@@ -269,6 +277,7 @@ export default function ProveedoresAdmin() {
       .eq("id", selectedProvider.id);
     if (result.error) setMessage(result.error.message);
     else {
+      providerDraftState.clear();
       setMessage("Proveedor actualizado.");
       closeProvider();
       await load();
