@@ -117,6 +117,7 @@ export default function PortalExpositor() {
     contact_phone: "",
   });
   const [profileStatus, setProfileStatus] = useState("draft");
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [reference, setReference] = useState("");
   const [amount, setAmount] = useState("");
   const [receipt, setReceipt] = useState<File | null>(null);
@@ -367,6 +368,7 @@ export default function PortalExpositor() {
     if (!payload) return;
     setBusy(true);
     setMessage(null);
+    setProfileError(null);
     const { error } = await supabase.rpc(
       "save_exhibitor_public_profile",
       payload,
@@ -384,20 +386,21 @@ export default function PortalExpositor() {
     eventSubmit.preventDefault();
     if (!eventId || !membership) return;
     if (!profile.description.trim() || !profile.category.trim()) {
-      setMessage("Completa la descripción y la categoría antes de enviar el perfil a revisión.");
+      setProfileError("Completa la descripción y la categoría antes de enviar el perfil a revisión.");
       return;
     }
     if (!profile.contact_email.trim() && !profile.contact_phone.trim()) {
-      setMessage("Agrega al menos un correo o teléfono público antes de enviar el perfil.");
+      setProfileError("Agrega al menos un correo o teléfono público antes de enviar el perfil.");
       return;
     }
     setBusy(true);
     setMessage(null);
+    setProfileError(null);
     const rpcName = platformPreview
       ? "admin_submit_exhibitor_public_profile"
       : "submit_exhibitor_public_profile";
     const { error } = await supabase.rpc(rpcName, profilePayload()!);
-    if (error) setMessage(error.message);
+    if (error) setProfileError(error.message);
     else {
       profileDraftState.clear();
       setProfileStatus("pending");
@@ -644,6 +647,11 @@ export default function PortalExpositor() {
                   </button>
                 )}
               </div>
+              {profileError && (
+                <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm font-semibold text-red-800 sm:col-span-2">
+                  No se envió a revisión: {profileError}
+                </p>
+              )}
             </form>
           </section>
           <section className="rounded-xl border bg-white p-5">

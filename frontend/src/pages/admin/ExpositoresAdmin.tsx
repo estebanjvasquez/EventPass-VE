@@ -630,6 +630,25 @@ export default function ExpositoresAdmin() {
             {notice}
           </p>
         )}
+          <section className="mt-5 rounded-xl border border-amber-300 bg-amber-50 p-4">
+            <h2 className="font-semibold text-amber-950">Revisión de perfiles públicos</h2>
+            <p className="mt-1 text-xs text-amber-900">Aprueba o devuelve los perfiles enviados antes de mostrarlos en el plano público.</p>
+            <div className="mt-3 space-y-2">
+              {companies.filter((company) => company.public_profile_status === "pending").map((company) => (
+                <div key={company.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white p-3 text-sm">
+                  <span><b>{company.name}</b>{company.public_category ? ` · ${company.public_category}` : ""}</span>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => selectCompany(company)} className="rounded-lg border px-3 py-1.5 text-xs font-semibold">Revisar datos</button>
+                    <button type="button" onClick={() => void reviewPublicProfile(company.id, true)} className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white">Aprobar</button>
+                    <button type="button" onClick={() => void reviewPublicProfile(company.id, false)} className="rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-900">Solicitar cambios</button>
+                  </div>
+                </div>
+              ))}
+              {!companies.some((company) => company.public_profile_status === "pending") && (
+                <p className="rounded-lg bg-white p-3 text-sm text-amber-900">No hay perfiles pendientes de revisión.</p>
+              )}
+            </div>
+          </section>
         <section className="mt-5 grid gap-4 md:grid-cols-2">
           <form onSubmit={create} className="rounded-xl border bg-white p-4">
             <h2 className="font-semibold">Nueva empresa expositora</h2>
