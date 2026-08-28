@@ -97,6 +97,8 @@ export default function PortalExpositor() {
   const { eventId } = useParams();
   const [searchParams] = useSearchParams();
   const { user, signOut } = useAuth();
+  const userId = user?.id;
+  const requestedCompanyId = searchParams.get("companyId");
   const [event, setEvent] = useState<EventRow | null>(null);
   const [membership, setMembership] = useState<Membership | null>(null);
   const [platformPreview, setPlatformPreview] = useState(false);
@@ -144,7 +146,7 @@ export default function PortalExpositor() {
   });
 
   const load = useCallback(async () => {
-    if (!eventId || !user) return;
+    if (!eventId || !userId) return;
     setMessage(null);
     const { data: eventData, error: eventError } = await supabase
       .from("events")
@@ -157,7 +159,6 @@ export default function PortalExpositor() {
     }
     setEvent(eventData as EventRow);
     const { data: isPlatformAdmin } = await supabase.rpc("is_platform_admin");
-    const requestedCompanyId = searchParams.get("companyId");
     let member: Membership | null = null;
     setPlatformPreview(Boolean(isPlatformAdmin && requestedCompanyId));
     if (isPlatformAdmin && requestedCompanyId) {
@@ -186,7 +187,7 @@ export default function PortalExpositor() {
           "id,company_id,role,status,company:companies(name,contact_email,public_logo_url,public_description,public_category,public_social_links,public_contact_email,public_contact_phone,public_profile_status)",
         )
         .eq("event_id", eventId)
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .eq("status", "active")
         .maybeSingle();
       if (memberError || !portalMember) {
@@ -199,7 +200,7 @@ export default function PortalExpositor() {
     }
     setMembership(member);
     const social = member.company?.public_social_links ?? {};
-    setProfile({
+    const serverProfile: PublicProfile = {
       logo_url: member.company?.public_logo_url ?? "",
       description: member.company?.public_description ?? "",
       category: member.company?.public_category ?? "",
@@ -208,7 +209,30 @@ export default function PortalExpositor() {
       instagram: social.instagram ?? "",
       contact_email: member.company?.public_contact_email ?? "",
       contact_phone: member.company?.public_contact_phone ?? "",
-    });
+    };
+    let nextProfile = serverProfile;
+    let recoveredLocalDraft = false;
+    try {
+      const stored = localStorage.getItem(
+        `eventpass:draft:exhibitor-profile:${eventId}:${member.company_id}`,
+      );
+      if (stored) {
+        nextProfile = {
+          ...serverProfile,
+          ...(JSON.parse(stored) as Partial<PublicProfile>),
+        };
+        recoveredLocalDraft = true;
+      }
+    } catch {
+      localStorage.removeItem(
+        `eventpass:draft:exhibitor-profile:${eventId}:${member.company_id}`,
+      );
+    }
+    setProfile(nextProfile);
+    if (recoveredLocalDraft)
+      setMessage(
+        "Se recuperó un borrador local de este dispositivo. Todavía no se ha guardado ni enviado al servidor.",
+      );
     setProfileStatus(member.company?.public_profile_status ?? "draft");
     const companyId = member.company_id;
     const [taskResult, paymentResult, staffResult, personnelResult] =
@@ -257,7 +281,7 @@ export default function PortalExpositor() {
     setPayments((paymentResult.data ?? []) as Payment[]);
     setStaff((staffResult.data ?? []) as Staff[]);
     setPersonnel((personnelResult.data ?? []) as Personnel[]);
-  }, [eventId, searchParams, user]);
+  }, [eventId, requestedCompanyId, userId]);
 
   useEffect(() => {
     void load();
@@ -604,6 +628,21 @@ export default function PortalExpositor() {
                 >
                   {busy ? "Enviando…" : "Enviar perfil a revisión"}
                 </button>
+                {profileDraftState.dirty && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      profileDraftState.discard(savedProfile);
+                      setMessage(
+                        "Borrador local descartado. Se restauraron los últimos datos guardados.",
+                      );
+                    }}
+                    className="rounded-lg px-3 py-2 text-sm font-semibold text-red-700 disabled:opacity-50"
+                  >
+                    Descartar cambios locales
+                  </button>
+                )}
               </div>
             </form>
           </section>

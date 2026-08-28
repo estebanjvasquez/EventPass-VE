@@ -75,5 +75,11 @@ export function usePersistentDraft<T>({
     setCommittedSerialized(serialized);
   }
 
-  return { dirty, clear };
+  function discard(nextValue: T) {
+    if (storageKey) localStorage.removeItem(storageKey);
+    setCommittedSerialized(JSON.stringify(nextValue));
+    restore(nextValue);
+  }
+
+  return { dirty, clear, discard };
 }
