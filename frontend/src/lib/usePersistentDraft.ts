@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Options<T> = {
   key: string | null;
@@ -16,7 +16,7 @@ export function usePersistentDraft<T>({
   restore,
 }: Options<T>) {
   const storageKey = key ? `eventpass:draft:${key}` : null;
-  const restoredKey = useRef<string | null>(null);
+  const [readyKey, setReadyKey] = useState<string | null>(null);
   const serialized = useMemo(() => JSON.stringify(value), [value]);
   const savedSerialized = useMemo(
     () => JSON.stringify(savedValue),
@@ -27,25 +27,21 @@ export function usePersistentDraft<T>({
   const dirty = enabled && serialized !== committedSerialized;
 
   useEffect(() => {
+    if (!enabled || !storageKey || readyKey === storageKey) return;
     setCommittedSerialized(savedSerialized);
-  }, [savedSerialized, storageKey]);
-
-  useEffect(() => {
-    if (!enabled || !storageKey || restoredKey.current === storageKey) return;
-    restoredKey.current = storageKey;
     try {
       const stored = localStorage.getItem(storageKey);
       if (stored) restore(JSON.parse(stored) as T);
     } catch {
       localStorage.removeItem(storageKey);
     }
-  }, [enabled, restore, storageKey]);
+    setReadyKey(storageKey);
+  }, [enabled, readyKey, restore, savedSerialized, storageKey]);
 
   useEffect(() => {
-    if (!enabled || !storageKey || restoredKey.current !== storageKey) return;
+    if (!enabled || !storageKey || readyKey !== storageKey) return;
     if (dirty) localStorage.setItem(storageKey, serialized);
-    else localStorage.removeItem(storageKey);
-  }, [dirty, enabled, serialized, storageKey]);
+  }, [dirty, enabled, readyKey, serialized, storageKey]);
 
   useEffect(() => {
     if (!dirty) return;
