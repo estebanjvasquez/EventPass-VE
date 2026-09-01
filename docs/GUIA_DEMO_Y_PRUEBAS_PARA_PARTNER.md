@@ -309,3 +309,25 @@ Ejemplo:
 - Usen un evento con agenda, participante, patrocinante y expositor ya preparados; evita esperas durante la reunión.
 - Para la presentación, privilegien el recorrido de la Parte A. La Parte B se usa después para recoger comentarios del equipo de eventos.
 - Si una función no está lista o no es parte del evento del cliente, no la abran durante la demo. Es mejor una historia corta y fluida que mostrar todas las pantallas.
+
+## Actualización: pantalla pública de agenda y evaluación de cliente
+
+La pantalla pública de agenda ya se puede configurar desde **Agenda → Pantalla pública**. Antes de probarla, active **Publicar esta pantalla** y guarde.
+
+El organizador puede ajustar:
+
+- Título, color principal, color de fondo y color de texto.
+- Fuente: Outfit, Arial, Georgia o monoespaciada tipo tablero.
+- Tamaño de lectura: compacto, normal o grande.
+- Visibilidad de actividad en curso, próxima actividad, tabla de agenda y patrocinantes.
+- Cintillo con mensaje, logos y nombres de patrocinantes.
+
+Para la prueba pública:
+
+1. Cree o ajuste una actividad con fecha, hora y escenario.
+2. Abra **Ver agenda pública** desde Agenda.
+3. Verifique selector de fecha, reloj, actividad actual/próxima y el cintillo.
+4. Cambie una hora o marque la actividad como cancelada y confirme el cambio en la pantalla pública.
+5. Complete la ficha de incidencia del documento Word `Guia_Pruebas_Cliente_Potencial_EventPass.docx` si algo no se entiende o falla.
+
+La guía Word orientada al cliente potencial contiene un recorrido de todas las áreas activas, criterios de resultado y tres fichas de reporte de incidencias para completar durante la prueba.
