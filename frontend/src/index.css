@@ -41,6 +41,10 @@ body {
   animation: agenda-ticker 28s linear infinite;
 }
 
+.agenda-primary { color: var(--agenda-text, #fff) !important; }
+.agenda-text-scale-compact .agenda-primary { font-size: 0.9em; }
+.agenda-text-scale-large .agenda-primary { font-size: 1.18em; }
+
 @media (prefers-reduced-motion: reduce) {
   .agenda-ticker { animation: none; }
 }
