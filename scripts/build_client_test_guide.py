@@ -9,7 +9,7 @@ from docx.enum.style import WD_STYLE_TYPE
 from pathlib import Path
 
 OUT = Path(__file__).resolve().parents[1] / 'docs' / 'Guia_Pruebas_Cliente_Potencial_EventPass.docx'
-NAVY, GREEN, MINT, LIGHT, GRAY, RED = '073B4C', '009B77', 'E8F7F2', 'F3F6F7', '5B6770', 'B42318'
+NAVY, GREEN, RED, YELLOW, MINT, LIGHT, GRAY = '25245B', '339E48', 'DF2A27', 'FFCE07', 'EDF8EF', 'F5F4FA', '5B6770'
 
 def shade(cell, color):
     tcpr = cell._tc.get_or_add_tcPr(); shd = OxmlElement('w:shd'); shd.set(qn('w:fill'), color); tcpr.append(shd)
@@ -72,12 +72,13 @@ styles=doc.styles; styles['Normal'].font.name='Calibri'; styles['Normal']._eleme
 for s in ['List Bullet','List Number']:
     styles[s].font.name='Calibri'; styles[s]._element.rPr.rFonts.set(qn('w:ascii'),'Calibri'); styles[s].font.size=Pt(11)
 
-header=sec.header.paragraphs[0]; header.alignment=WD_ALIGN_PARAGRAPH.RIGHT; style_para(header,after=0); add_text(header,'EVENTPASS VE  |  GUÍA DE PRUEBAS PARA CLIENTE',size=8,bold=True,color=GRAY)
+header=sec.header.paragraphs[0]; header.alignment=WD_ALIGN_PARAGRAPH.RIGHT; style_para(header,after=0); add_text(header,'EXPO VENEZUELA ENERGÉTICA 2026  |  GUÍA DE PRUEBAS',size=8,bold=True,color=GRAY)
 footer=sec.footer.paragraphs[0]; footer.alignment=WD_ALIGN_PARAGRAPH.CENTER; style_para(footer,after=0); add_text(footer,'Documento de evaluación - use datos de demostración.',size=8,color=GRAY)
 
-p=doc.add_paragraph(); p.alignment=WD_ALIGN_PARAGRAPH.CENTER; p.paragraph_format.space_before=Pt(72); style_para(p,after=8); add_text(p,'EVENTPASS VE',size=13,bold=True,color=GREEN)
+p=doc.add_paragraph(); p.alignment=WD_ALIGN_PARAGRAPH.CENTER; p.paragraph_format.space_before=Pt(72); style_para(p,after=8); add_text(p,'EXPO VENEZUELA ENERGÉTICA 2026',size=13,bold=True,color=GREEN)
 p=doc.add_paragraph(); p.alignment=WD_ALIGN_PARAGRAPH.CENTER; style_para(p,after=10); add_text(p,'Guía de pruebas para cliente potencial',size=28,bold=True,color=NAVY)
-p=doc.add_paragraph(); p.alignment=WD_ALIGN_PARAGRAPH.CENTER; style_para(p,after=28); add_text(p,'Recorra el sistema como organizador de eventos. Marque lo que funciona y reporte cualquier detalle en la última sección.',size=12,color=GRAY)
+p=doc.add_paragraph(); p.alignment=WD_ALIGN_PARAGRAPH.CENTER; style_para(p,after=20); add_text(p,'Recorra el sistema como organizador de eventos. Marque lo que funciona y reporte cualquier detalle en la última sección.',size=12,color=GRAY)
+table(doc,['Color principal','Color operativo','Color de aviso','Color destacado'],[['#25245B Azul marino','#339E48 Verde','#DF2A27 Rojo','#FFCE07 Amarillo']], [2340,2340,2340,2340])
 table(doc,['Propósito','Tiempo sugerido','Qué necesita'],[['Conocer el sistema y evaluar si responde a su operación','45 a 60 minutos','Un computador, teléfono opcional y acceso de demostración']], [2600,2300,4460])
 callout(doc,'Antes de comenzar','No necesita conocimientos técnicos. Use solo el evento y los datos preparados para la demostración. No comparta contraseñas y no elimine información existente.')
 heading(doc,'Enlaces de la demostración',1)
@@ -169,5 +170,5 @@ callout(doc,'Entrega sugerida','Envíe este documento completo junto con las cap
 
 for section in doc.sections:
     section.page_width=Inches(8.5); section.page_height=Inches(11)
-OUT.parent.mkdir(parents=True, exist_ok=True); doc.core_properties.title='Guía de pruebas para cliente potencial - EventPass VE'; doc.core_properties.author='EventPass VE'; doc.save(OUT)
+OUT.parent.mkdir(parents=True, exist_ok=True); doc.core_properties.title='Guía de pruebas - Expo Venezuela Energética 2026'; doc.core_properties.author='Expo Venezuela Energética 2026'; doc.save(OUT)
 print(OUT)

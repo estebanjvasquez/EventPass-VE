@@ -15,10 +15,10 @@ Usen siempre el dominio oficial: **https://eventosfacil.net**.
 
 | Dato | Valor |
 | --- | --- |
-| Organización preparada | `Asociación Demo` |
+| Organización preparada | `Expo Venezuela Energética 2026` |
 | Acceso administrativo | [Entrar a la demo](https://eventosfacil.net/admin/login) |
 | Sitio público del tenant | [Abrir sitio demo](https://expopetroleo20226.eventosfacil.net/) |
-| Evento principal de exposición | `Expo Energia 2026` |
+| Evento principal de exposición | `Expo Venezuela Energética 2026` |
 | Evento principal de foro | `Foro Energético 2026` |
 
 Las credenciales de esta cuenta se guardan solamente en `.env.demo.local` del
@@ -56,6 +56,15 @@ principal de arriba.
 | Expositores | [Abrir expositores](https://eventosfacil.net/admin/expositores/276e4d25-b107-4393-9530-542db8ed03a3) |
 | Plano de exposición | [Abrir plano](https://eventosfacil.net/admin/stands/276e4d25-b107-4393-9530-542db8ed03a3) |
 | Plano de foro con IA | [Abrir foro](https://eventosfacil.net/admin/asientos/47ad0375-24dd-4f40-80c0-500f4362767c) |
+
+## Branding de la demostración
+
+La demostración usa la identidad de **Expo Venezuela Energética 2026**:
+
+- Azul marino `#25245B` como color principal.
+- Verde `#339E48` para acciones positivas.
+- Rojo `#DF2A27` para avisos.
+- Amarillo `#FFCE07` para destacados.
 
 ## Así se ve el inicio
 
