@@ -324,7 +324,9 @@ function TenantLanding({ tenant }: { tenant: Tenant }) {
       <header className="border-b border-zinc-200/70 bg-white">
         <div className="mx-auto flex max-w-4xl items-center gap-2 px-5 py-4">
           {logoUrl ? (
-            <img src={logoUrl} alt={name} className="h-9 w-9 rounded-lg object-cover" />
+            <span className="flex h-11 w-28 shrink-0 items-center justify-center rounded-lg bg-white p-1.5">
+              <img src={logoUrl} alt={name} className="h-full w-full object-contain" />
+            </span>
           ) : (
             <span
               className="grid h-9 w-9 place-items-center rounded-lg"

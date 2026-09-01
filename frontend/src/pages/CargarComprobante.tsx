@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { CheckCircle2, FileUp, Ticket, UploadCloud } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { useTenant } from '../lib/useTenant'
+import { brandColor, brandName } from '../lib/tenantCore'
 
 type RegistrationByToken = {
   registration_id: string
@@ -25,6 +27,7 @@ const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
 
 export default function CargarComprobante() {
   const { token } = useParams()
+  const { tenant } = useTenant()
   const [reg, setReg] = useState<RegistrationByToken | null>(null)
   const [methods, setMethods] = useState<PaymentMethod[]>([])
   const [loading, setLoading] = useState(true)
@@ -37,6 +40,9 @@ export default function CargarComprobante() {
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const color = brandColor(tenant)
+  const name = brandName(tenant)
+  const logoUrl = tenant?.branding?.logo_url ?? null
 
   useEffect(() => {
     let active = true
@@ -131,12 +137,16 @@ export default function CargarComprobante() {
     <div className="min-h-[100dvh] bg-[#fafafa]">
       <header className="border-b border-zinc-200/70 bg-white">
         <div className="mx-auto flex max-w-2xl items-center gap-2 px-5 py-4">
-          <span className="grid h-9 w-9 place-items-center rounded-lg bg-zinc-900 text-emerald-400">
-            <Ticket className="h-5 w-5" strokeWidth={2.2} />
-          </span>
-          <span className="text-lg font-semibold tracking-tight text-zinc-900">
-            EventPass <span className="text-emerald-600">VE</span>
-          </span>
+          {logoUrl ? (
+            <span className="flex h-11 w-28 shrink-0 items-center justify-center rounded-lg bg-white p-1.5">
+              <img src={logoUrl} alt={name} className="h-full w-full object-contain" />
+            </span>
+          ) : (
+            <span className="grid h-9 w-9 place-items-center rounded-lg text-white" style={{ backgroundColor: color ?? '#18181b' }}>
+              <Ticket className="h-5 w-5" strokeWidth={2.2} />
+            </span>
+          )}
+          <span className="text-lg font-semibold tracking-tight text-zinc-900">{name}</span>
         </div>
       </header>
 

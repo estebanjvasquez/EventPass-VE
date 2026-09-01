@@ -32,8 +32,25 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings }>()
 
+// Los portales públicos viven en subdominios por organización. Reflejamos sólo
+// orígenes HTTPS de nuestra zona; no usamos un comodín para no exponer los
+// endpoints privilegiados del Worker a sitios de terceros.
+function allowedAppOrigin(origin: string): string | undefined {
+  try {
+    const url = new URL(origin)
+    if (url.protocol !== 'https:') return undefined
+    const host = url.hostname.toLowerCase()
+    if (host === 'eventosfacil.net' || host === 'www.eventosfacil.net' || host.endsWith('.eventosfacil.net')) return origin
+    // Previews oficiales de Cloudflare Pages para pruebas de liberación.
+    if (host.endsWith('.eventpass-d7d.pages.dev')) return origin
+  } catch {
+    // Un Origin malformado no debe recibir permisos CORS.
+  }
+  return undefined
+}
+
 app.use('*', cors({
-  origin: ['https://eventosfacil.net', 'https://www.eventosfacil.net', 'https://eventpass-d7d.pages.dev'],
+  origin: allowedAppOrigin,
   allowHeaders: ['Content-Type', 'Authorization'],
   allowMethods: ['GET', 'POST', 'OPTIONS'],
   maxAge: 86400,
