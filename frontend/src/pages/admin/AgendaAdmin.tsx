@@ -20,9 +20,9 @@ import { AgendaContentAdmin } from './agenda/AgendaContentAdmin'
 import { AgendaOperationsAdmin } from './agenda/AgendaOperationsAdmin'
 
 type SessionType = 'lecture' | 'workshop' | 'break'
-type Tab = 'schedule' | 'sessions' | 'speakers' | 'content' | 'operations'
+type Tab = 'schedule' | 'sessions' | 'speakers' | 'content' | 'operations' | 'public'
 
-type EventData = { id: string; name: string; organization_id: string; start_date: string | null; end_date: string | null }
+type EventData = { id: string; name: string; organization_id: string; start_date: string | null; end_date: string | null; config: Record<string, unknown> }
 type Stage = { id: string; name: string; stream_url: string | null; limit_video_access: boolean; sort_order: number }
 type Speaker = {
   id: string; full_name: string; company: string | null; position: string | null; bio: string | null; photo_url: string | null
@@ -86,7 +86,7 @@ export default function AgendaAdmin() {
     const active = await resolveActiveOrg()
     if (!active) { setError('No se encontró una organización activa.'); setLoading(false); return }
     const { data: eventData, error: eventError } = await supabase
-      .from('events').select('id,name,organization_id,start_date,end_date').eq('id', eventId).maybeSingle()
+      .from('events').select('id,name,organization_id,start_date,end_date,config').eq('id', eventId).maybeSingle()
     if (eventError || !eventData) { setError(eventError?.message ?? 'No se pudo cargar el evento.'); setLoading(false); return }
     if (eventData.organization_id !== active.organization_id && !active.impersonating) { setError('No tienes acceso a la agenda de este evento.'); setLoading(false); return }
     const [stageResult, sessionResult, speakerResult, linkResult, moderatorLinkResult, sponsorResult, sessionSponsorResult] = await Promise.all([
@@ -177,12 +177,14 @@ export default function AgendaAdmin() {
       <TabButton active={tab === 'speakers'} onClick={() => setTab('speakers')} icon={<Mic2 className="h-4 w-4" />}>Ponentes y moderadores</TabButton>
       <TabButton active={tab === 'content'} onClick={() => setTab('content')} icon={<Plus className="h-4 w-4" />}>Contenido</TabButton>
       <TabButton active={tab === 'operations'} onClick={() => setTab('operations')} icon={<UsersRound className="h-4 w-4" />}>Operación</TabButton>
+      <TabButton active={tab === 'public'} onClick={() => setTab('public')} icon={<CalendarDays className="h-4 w-4" />}>Pantalla pública</TabButton>
     </div>
     {tab === 'schedule' && <ScheduleView stages={stages} sessions={sessions} selectedDay={selectedDay} days={days} speakers={(id) => [speakerNames(id), moderatorNames(id) && `Moderador: ${moderatorNames(id)}`].filter(Boolean).join(' · ')} onDay={setActiveDay} onNewStage={() => setStageEditor('new')} onEditStage={setStageEditor} onDeleteStage={deleteStage} onNewSession={() => setSessionEditor('new')} onEditSession={setSessionEditor} onPersistTimeline={persistTimeline} />}
     {tab === 'sessions' && <SessionsView sessions={visibleSessions} stages={stages} speakers={(id) => [speakerNames(id), moderatorNames(id) && `Moderador: ${moderatorNames(id)}`].filter(Boolean).join(' · ')} filter={filter} search={search} onFilter={setFilter} onSearch={setSearch} onNew={() => setSessionEditor('new')} onEdit={setSessionEditor} onDelete={deleteSession} />}
     {tab === 'speakers' && <SpeakersView speakers={speakers} onNew={() => setSpeakerEditor('new')} onEdit={setSpeakerEditor} onDelete={deleteSpeaker} />}
     {tab === 'content' && <AgendaContentAdmin event={event} sessions={sessions} speakers={speakers} onRefresh={load} />}
     {tab === 'operations' && <AgendaOperationsAdmin event={event} sessions={sessions} />}
+    {tab === 'public' && <PublicAgendaDesigner event={event} onSaved={load} />}
     {stageEditor && <FriendlyStageModal stage={stageEditor === 'new' ? null : stageEditor} event={event} nextOrder={stages.length} onClose={() => setStageEditor(null)} onSaved={async () => { setStageEditor(null); await load() }} />}
     {sessionEditor && <SessionModal session={sessionEditor === 'new' ? null : sessionEditor} event={event} stages={stages} speakers={speakers} assigned={sessionEditor === 'new' ? [] : speakerIds[sessionEditor.id] ?? []} assignedModerators={sessionEditor === 'new' ? [] : moderatorIds[sessionEditor.id] ?? []} eventSponsors={eventSponsors} assignedSponsors={sessionEditor === 'new' ? [] : sessionSponsorIds[sessionEditor.id] ?? []} allSessions={sessions} onClose={() => setSessionEditor(null)} onSaved={async () => { setSessionEditor(null); await load() }} />}
     {speakerEditor && <SpeakerModal speaker={speakerEditor === 'new' ? null : speakerEditor} event={event} nextOrder={speakers.length} onClose={() => setSpeakerEditor(null)} onSaved={async () => { setSpeakerEditor(null); await load() }} />}
@@ -191,6 +193,17 @@ export default function AgendaAdmin() {
 
 function PageFrame({ title, eventId, children }: { title: string; eventId?: string; children: React.ReactNode }) {
   return <div className="min-h-[100dvh] bg-zinc-50"><header className="border-b border-zinc-200 bg-white"><div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4"><Link to={`/admin/eventos/${eventId}/administrar`} aria-label="Volver a administrar evento" className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700"><Home className="h-4 w-4" />Admin del evento</Link><div className="flex items-center gap-3"><span className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-900"><CalendarDays className="h-4 w-4 text-emerald-600" />{title}</span>{eventId && <><Link to={`/e/${eventId}/agenda`} target="_blank" className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white">Ver agenda pública</Link><Link to={`/admin/asientos/${eventId}`} className="hidden rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 sm:inline-flex">Asientos</Link></>}</div></div></header><main className="mx-auto max-w-7xl px-5 py-8">{children}</main></div>
+}
+function PublicAgendaDesigner({ event, onSaved }: { event: EventData; onSaved: () => Promise<void> }) {
+  const current = (event.config?.public_agenda as Record<string, unknown> | undefined) ?? {}
+  const [title, setTitle] = useState(String(current.title ?? 'Agenda del evento'))
+  const [accent, setAccent] = useState(String(current.accent_color ?? '#059669'))
+  const [ticker, setTicker] = useState(String(current.ticker_text ?? ''))
+  const [showSponsors, setShowSponsors] = useState(current.show_sponsors !== false)
+  const [screenMode, setScreenMode] = useState(current.screen_mode === true)
+  const [busy, setBusy] = useState(false); const [message, setMessage] = useState<string | null>(null)
+  async function save() { setBusy(true); setMessage(null); const config = { ...event.config, public_agenda: { title: title.trim() || 'Agenda del evento', accent_color: accent, ticker_text: ticker.trim(), show_sponsors: showSponsors, screen_mode: screenMode } }; const { error } = await supabase.from('events').update({ config }).eq('id', event.id); setBusy(false); if (error) setMessage(error.message); else { setMessage('Diseño de la agenda pública guardado.'); await onSaved() } }
+  return <section className="mt-6 grid gap-6 lg:grid-cols-[1fr_360px]"><form onSubmit={(e)=>{e.preventDefault();void save()}} className="rounded-2xl border bg-white p-5"><h2 className="text-lg font-bold">Diseñar pantalla pública</h2><p className="mt-1 text-sm text-zinc-600">Configura lo que verá el público en pantallas o por el enlace público.</p><div className="mt-5 grid gap-4"><label className={label}>Título visible<input value={title} onChange={e=>setTitle(e.target.value)} className={input}/></label><label className={label}>Color principal<div className="mt-1 flex gap-2"><input type="color" value={accent} onChange={e=>setAccent(e.target.value)} className="h-10 w-14 rounded border"/><input value={accent} onChange={e=>setAccent(e.target.value)} className={input}/></div></label><label className={label}>Cintillo o mensaje<textarea value={ticker} onChange={e=>setTicker(e.target.value)} rows={3} placeholder="Ej.: Gracias a nuestros patrocinantes." className={input}/></label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={showSponsors} onChange={e=>setShowSponsors(e.target.checked)}/>Mostrar patrocinantes de cada actividad</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={screenMode} onChange={e=>setScreenMode(e.target.checked)}/>Priorizar lectura para pantallas grandes</label></div><button disabled={busy} className="mt-5 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{busy?'Guardando…':'Guardar diseño público'}</button>{message&&<p className="mt-3 rounded-lg bg-zinc-100 p-3 text-sm">{message}</p>}</form><aside className="rounded-2xl border bg-zinc-950 p-5 text-white"><p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Vista previa</p><div className="mt-4 h-2 rounded" style={{backgroundColor:accent}}/><h3 className="mt-5 text-2xl font-bold">{title || 'Agenda del evento'}</h3><p className="mt-4 text-sm text-zinc-300">Actividad actual · Próximas actividades · Horarios y ponentes</p>{showSponsors&&<p className="mt-4 rounded-lg bg-white/10 p-3 text-sm">Patrocinantes de cada actividad visibles</p>}{ticker&&<p className="mt-5 border-t border-white/20 pt-3 text-sm text-zinc-200">{ticker}</p>}</aside></section>
 }
 function TabButton({ active, icon, children, onClick }: { active: boolean; icon: React.ReactNode; children: React.ReactNode; onClick: () => void }) { return <button type="button" onClick={onClick} className={`inline-flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold ${active ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-zinc-500 hover:text-zinc-800'}`}>{icon}{children}</button> }
 
