@@ -32,7 +32,12 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings }>()
 
-app.use('*', cors())
+app.use('*', cors({
+  origin: ['https://eventosfacil.net', 'https://www.eventosfacil.net', 'https://eventpass-d7d.pages.dev'],
+  allowHeaders: ['Content-Type', 'Authorization'],
+  allowMethods: ['GET', 'POST', 'OPTIONS'],
+  maxAge: 86400,
+}))
 
 app.get('/health', (c) =>
   c.json({ status: 'ok', service: 'eventpass-backend', env: c.env.ENVIRONMENT }),

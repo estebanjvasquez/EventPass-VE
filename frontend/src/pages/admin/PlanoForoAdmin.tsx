@@ -123,7 +123,7 @@ export default function PlanoForoAdmin() {
     setAiBusy(true); setError(null)
     const { data: { session } } = await supabase.auth.getSession()
     const controller = new AbortController()
-    const timeout = window.setTimeout(() => controller.abort(), 45_000)
+    const timeout = window.setTimeout(() => controller.abort(), 60_000)
     try {
       const response = await fetch(`${api}/api/ai/forum-floorplan/proposal`, { method: 'POST', cache: 'no-store', signal: controller.signal, headers: { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) }, body: JSON.stringify({ event_id: eventId, prompt: aiPrompt.trim(), current_plan: currentPlan(), override_capacity_constraints: overrideCapacityConstraints }) })
       const payload = await response.json().catch(() => null) as { error?: string; proposal?: AiPlan; needs_confirmation?: boolean; conflicts?: string[] } | null
@@ -132,8 +132,8 @@ export default function PlanoForoAdmin() {
       setAiProposal(payload.proposal)
     } catch (requestError) {
       setError(requestError instanceof DOMException && requestError.name === 'AbortError'
-        ? 'La creación superó los 45 segundos y se canceló. Inténtalo de nuevo; no se guardó ningún cambio.'
-        : 'No se pudo conectar con el servicio de IA.')
+        ? 'La creación superó los 60 segundos y se canceló. Inténtalo de nuevo; no se guardó ningún cambio.'
+        : 'No se pudo comunicar con la IA. Verifica tu conexión y vuelve a intentarlo; el plano actual no fue modificado.')
     } finally {
       window.clearTimeout(timeout)
       setAiBusy(false)
