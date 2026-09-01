@@ -3,6 +3,10 @@ main = "src/index.ts"
 compatibility_date = "2025-06-01"
 compatibility_flags = ["nodejs_compat"]
 
+# Wrangler validará estos secretos antes de publicar una versión.
+[secrets]
+required = ["OPENAI_API_KEY", "SUPABASE_SERVICE_ROLE_KEY"]
+
 # Recordatorios de pago y liberación de plazas vencidas.
 # Reemplaza a Bull/Redis del stack anterior.
 [triggers]
@@ -22,6 +26,13 @@ ENVIRONMENT = "production"
 # Remitente (dominio verificado en Cloudflare) y URL pública del frontend.
 EMAIL_FROM = "welcome@eventosfacil.net"
 APP_BASE_URL = "https://eventosfacil.net"
+# La clave OPENAI_API_KEY se carga sólo con `wrangler secret put`.
+# Este modelo es una variable no secreta y puede cambiarse tras validar coste/calidad.
+OPENAI_MODEL = "gpt-5.4-mini"
+# Foro: interpretación estructurada de instrucciones. Exposición: visión de
+# alta precisión para localizar objetos individuales en blueprints.
+OPENAI_FORUM_MODEL = "gpt-5.4-mini"
+OPENAI_VISION_MODEL = "gpt-5.4"
 
 # Aprovisionamiento de subdominios de tenant vía la API de Cloudflare Pages.
 # El secreto CF_API_TOKEN (token con permiso "Cloudflare Pages: Edit") se carga con:

@@ -2,9 +2,11 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { z } from 'zod'
-import { sendUploadLinkEmail, sendConfirmationEmail, sendPortalInviteEmail, sendProviderNoticeEmail, type EmailSendBinding } from './email'
+import { sendUploadLinkEmail, sendConfirmationEmail, sendPortalInviteEmail, sendProviderNoticeEmail, type EmailSendBinding, type EventEmailContext } from './email'
 import { runScheduledJobs } from './jobs'
 import { normalizeSlug, provisionDomain, getDomainStatus, type CfEnv } from './tenants'
+import { forumLayoutIntentJsonSchema, forumLayoutIntentSchema, generateForumPlan } from './forumFloorplan'
+import { arrayBufferToDataUrl, exhibitionDetectionJsonSchema, exhibitionDetectionSchema, normalizeExhibitionDetection } from './exhibitionImport'
 
 type Bindings = {
   SUPABASE_URL: string
@@ -21,6 +23,11 @@ type Bindings = {
   ROOT_DOMAIN?: string
   CF_ZONE_ID?: string // opcional; habilita la creación automática del DNS
   CF_PAGES_HOST?: string // opcional; destino del CNAME (p.ej. eventpass-d7d.pages.dev)
+  // Secreto OpenAI. Nunca se expone al navegador ni se declara en [vars].
+  OPENAI_API_KEY?: string
+  OPENAI_MODEL?: string
+  OPENAI_FORUM_MODEL?: string
+  OPENAI_VISION_MODEL?: string
 }
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -46,67 +53,138 @@ app.get('/api/events', async (c) => {
 // credential_token por privacidad), así que el Worker lo resuelve con
 // service-role y envía el correo a la dirección guardada en el registro.
 // ---------------------------------------------------------------------------
-// El join events(name) llega como objeto o como array según la relación.
-function extractEventName(events: unknown): string {
-  if (!events) return 'Tu evento'
-  const row = Array.isArray(events) ? events[0] : events
-  return (row as { name?: string } | undefined)?.name ?? 'Tu evento'
+type EventEmailData = {
+  name: string
+  registrationMode: 'free' | 'paid' | 'invitation'
+  context: EventEmailContext
+}
+
+async function loadEventEmailData(supabase: SupabaseClient<any>, eventId: string): Promise<EventEmailData> {
+  const { data: event } = await supabase
+    .from('events')
+    .select('name,organization_id,start_date,end_date,config')
+    .eq('id', eventId)
+    .maybeSingle()
+  if (!event) return { name: 'Tu evento', registrationMode: 'paid', context: {} }
+
+  const { data: organization } = await supabase
+    .from('organizations')
+    .select('name,branding')
+    .eq('id', event.organization_id)
+    .maybeSingle()
+  const eventConfig = (event.config ?? {}) as Record<string, unknown>
+  const eventBranding = eventConfig.branding && typeof eventConfig.branding === 'object'
+    ? eventConfig.branding as Record<string, unknown>
+    : {}
+  const organizationBranding = organization?.branding && typeof organization.branding === 'object'
+    ? organization.branding as Record<string, unknown>
+    : {}
+  const mode = eventConfig.registration_mode
+
+  return {
+    name: event.name,
+    registrationMode: mode === 'free' || mode === 'invitation' ? mode : 'paid',
+    context: {
+      organizerName: String(eventBranding.name ?? organizationBranding.name ?? organization?.name ?? 'EventosFácil'),
+      logoUrl: typeof eventBranding.logo_url === 'string' ? eventBranding.logo_url : typeof organizationBranding.logo_url === 'string' ? organizationBranding.logo_url : null,
+      accentColor: typeof eventBranding.primary_color === 'string' ? eventBranding.primary_color : typeof eventBranding.color === 'string' ? eventBranding.color : typeof organizationBranding.color === 'string' ? organizationBranding.color : null,
+      startsAt: event.start_date,
+      endsAt: event.end_date,
+      venueName: typeof eventConfig.venue_name === 'string' ? eventConfig.venue_name : typeof eventConfig.location === 'string' ? eventConfig.location : null,
+    },
+  }
+}
+
+async function recordEmailAttempt(
+  supabase: SupabaseClient<any>,
+  values: {
+    organizationId: string
+    registrationId: string | null
+    recipient: string
+    emailType: string
+    result: Awaited<ReturnType<typeof sendConfirmationEmail>>
+  },
+) {
+  let attemptNumber = 1
+  if (values.registrationId) {
+    const { count } = await supabase
+      .from('email_log')
+      .select('id', { count: 'exact', head: true })
+      .eq('registration_id', values.registrationId)
+      .eq('email_type', values.emailType)
+    attemptNumber = (count ?? 0) + 1
+  }
+  const { error } = await supabase.from('email_log').insert({
+    organization_id: values.organizationId,
+    registration_id: values.registrationId,
+    email_type: values.emailType,
+    recipient: values.recipient,
+    provider: 'cloudflare_email_service',
+    provider_message_id: values.result.providerMessageId,
+    provider_status: values.result.providerStatus,
+    error_code: values.result.errorCode,
+    error_detail: values.result.errorDetail,
+    attempt_number: attemptNumber,
+    status: values.result.ok ? 'accepted' : 'failed',
+    sent_at: values.result.ok ? new Date().toISOString() : null,
+  })
+  if (error) console.error('[email-log] no se pudo registrar el intento:', error.message)
 }
 
 const notifySchema = z.object({
-  event_id: z.string().uuid(),
-  email: z.string().email(),
+  registration_id: z.string().uuid(),
+  credential_token: z.string().min(20),
 })
 
 app.post('/api/registrations/notify', async (c) => {
   const parsed = notifySchema.safeParse(await c.req.json().catch(() => null))
   if (!parsed.success) return c.json({ error: 'Datos inválidos' }, 400)
-  const { event_id, email } = parsed.data
-
   const supabase = createClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY)
 
   const { data: reg, error } = await supabase
     .from('registrations')
-    .select('id, first_name, credential_token, status, organization_id, events(name)')
-    .eq('event_id', event_id)
-    .eq('email', email)
+    .select('id, event_id, first_name, email, credential_token, status, organization_id')
+    .eq('id', parsed.data.registration_id)
+    .eq('credential_token', parsed.data.credential_token)
     .maybeSingle()
 
   // Respuesta genérica: no revelamos si el correo existe o no.
-  if (error || !reg) return c.json({ ok: true })
+  if (error) {
+    console.error('[notify] no se pudo consultar el registro:', error.message)
+    return c.json({ ok: false, status: 'lookup_failed', error: 'No se pudo validar el registro para enviar el correo.' }, 503)
+  }
+  if (!reg) return c.json({ ok: true, status: 'ignored' })
   // Si ya está confirmado, no reenviamos el enlace de carga.
-  if (reg.status === 'confirmed') return c.json({ ok: true })
+  if (reg.status === 'confirmed') return c.json({ ok: true, status: 'ignored' })
 
   const { data: methods } = await supabase
     .from('payment_methods')
     .select('name, details')
     .eq('organization_id', reg.organization_id)
     .eq('is_active', true)
+    .or(`event_id.eq.${reg.event_id},event_id.is.null`)
+
+  const event = await loadEventEmailData(supabase, reg.event_id)
 
   const base = c.env.APP_BASE_URL.replace(/\/$/, '')
-  const sendError = await sendUploadLinkEmail({
+  const result = await sendUploadLinkEmail({
     email: c.env.EMAIL,
     from: c.env.EMAIL_FROM,
-    to: email,
+    to: reg.email,
     firstName: reg.first_name,
-    eventName: extractEventName(reg.events),
+    eventName: event.name,
     uploadUrl: `${base}/comprobante/${reg.credential_token}`,
     paymentMethods: methods ?? [],
+    context: event.context,
   })
 
-  await supabase.from('email_log').insert({
-    organization_id: reg.organization_id,
-    registration_id: reg.id,
-    email_type: 'upload_link',
-    status: sendError ? 'failed' : 'sent',
-    sent_at: sendError ? null : new Date().toISOString(),
-  })
+  await recordEmailAttempt(supabase, { organizationId: reg.organization_id, registrationId: reg.id, recipient: reg.email, emailType: 'upload_link', result })
 
-  if (sendError) {
-    console.error('[notify] envío fallido:', sendError)
-    return c.json({ ok: false }, 502)
+  if (!result.ok) {
+    console.error('[notify] envío fallido:', result.errorCode, result.errorDetail)
+    return c.json({ ok: false, status: 'failed', code: result.errorCode, error: 'El registro quedó guardado, pero el correo no pudo enviarse.' }, 502)
   }
-  return c.json({ ok: true })
+  return c.json({ ok: true, status: 'accepted', message_id: result.providerMessageId })
 })
 
 // ---------------------------------------------------------------------------
@@ -114,7 +192,10 @@ app.post('/api/registrations/notify', async (c) => {
 // registro. El Worker solo envía si el registro está realmente confirmado
 // (evita falsos "confirmado"). Incluye el enlace a la credencial con QR.
 // ---------------------------------------------------------------------------
-const confirmSchema = z.object({ registration_id: z.string().uuid() })
+const confirmSchema = z.object({
+  registration_id: z.string().uuid(),
+  credential_token: z.string().min(20),
+})
 
 app.post('/api/registrations/confirm-notify', async (c) => {
   const parsed = confirmSchema.safeParse(await c.req.json().catch(() => null))
@@ -123,37 +204,40 @@ app.post('/api/registrations/confirm-notify', async (c) => {
   const supabase = createClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY)
   const { data: reg, error } = await supabase
     .from('registrations')
-    .select('id, first_name, email, credential_token, status, organization_id, events(name)')
+    .select('id, event_id, first_name, email, credential_token, status, organization_id')
     .eq('id', parsed.data.registration_id)
+    .eq('credential_token', parsed.data.credential_token)
     .maybeSingle()
 
-  if (error || !reg) return c.json({ ok: true })
+  if (error) {
+    console.error('[confirm-notify] no se pudo consultar el registro:', error.message)
+    return c.json({ ok: false, status: 'lookup_failed', error: 'No se pudo validar el registro para enviar el correo.' }, 503)
+  }
+  if (!reg) return c.json({ ok: true, status: 'ignored' })
   // Solo se notifica una confirmación real.
-  if (reg.status !== 'confirmed') return c.json({ ok: true })
+  if (reg.status !== 'confirmed') return c.json({ ok: true, status: 'ignored' })
 
   const base = c.env.APP_BASE_URL.replace(/\/$/, '')
-  const sendError = await sendConfirmationEmail({
+  const event = await loadEventEmailData(supabase, reg.event_id)
+  const kind = event.registrationMode === 'paid' ? 'payment_confirmed' : 'free_registration'
+  const result = await sendConfirmationEmail({
     email: c.env.EMAIL,
     from: c.env.EMAIL_FROM,
     to: reg.email,
     firstName: reg.first_name,
-    eventName: extractEventName(reg.events),
+    eventName: event.name,
     credentialUrl: `${base}/credencial/${reg.credential_token}`,
+    kind,
+    context: event.context,
   })
 
-  await supabase.from('email_log').insert({
-    organization_id: reg.organization_id,
-    registration_id: reg.id,
-    email_type: 'payment_confirmed',
-    status: sendError ? 'failed' : 'sent',
-    sent_at: sendError ? null : new Date().toISOString(),
-  })
+  await recordEmailAttempt(supabase, { organizationId: reg.organization_id, registrationId: reg.id, recipient: reg.email, emailType: kind === 'payment_confirmed' ? 'payment_confirmed' : 'registration_confirmed', result })
 
-  if (sendError) {
-    console.error('[confirm-notify] envío fallido:', sendError)
-    return c.json({ ok: false }, 502)
+  if (!result.ok) {
+    console.error('[confirm-notify] envío fallido:', result.errorCode, result.errorDetail)
+    return c.json({ ok: false, status: 'failed', code: result.errorCode, error: 'La confirmación quedó guardada, pero el correo no pudo enviarse.' }, 502)
   }
-  return c.json({ ok: true })
+  return c.json({ ok: true, status: 'accepted', message_id: result.providerMessageId })
 })
 
 const participationNotifySchema = z.object({ participation_id: z.string().uuid() })
@@ -164,33 +248,39 @@ app.post('/api/program-participations/notify', async (c) => {
   const supabase = createClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY)
   const { data, error } = await supabase
     .from('event_participations')
-    .select('id,status,credential_token,people(first_name,email),event_programs(name,organization_id)')
+    .select('id,status,credential_token,people(first_name,email),event_programs(name,organization_id,venue_name,starts_at,ends_at)')
     .eq('id', parsed.data.participation_id)
     .maybeSingle()
   if (error || !data || data.status !== 'approved') return c.json({ ok: true })
   const personRaw = Array.isArray(data.people) ? data.people[0] : data.people
   const programRaw = Array.isArray(data.event_programs) ? data.event_programs[0] : data.event_programs
   const person = personRaw as { first_name?: string; email?: string } | null
-  const program = programRaw as { name?: string; organization_id?: string } | null
+  const program = programRaw as { name?: string; organization_id?: string; venue_name?: string | null; starts_at?: string | null; ends_at?: string | null } | null
   if (!person?.email || !program?.organization_id) return c.json({ ok: true })
+  const { data: organization } = await supabase.from('organizations').select('name,branding').eq('id', program.organization_id).maybeSingle()
+  const branding = organization?.branding && typeof organization.branding === 'object' ? organization.branding as Record<string, unknown> : {}
   const base = c.env.APP_BASE_URL.replace(/\/$/, '')
-  const sendError = await sendConfirmationEmail({
+  const result = await sendConfirmationEmail({
     email: c.env.EMAIL,
     from: c.env.EMAIL_FROM,
     to: person.email,
     firstName: person.first_name ?? 'Participante',
     eventName: program.name ?? 'Tu evento',
     credentialUrl: `${base}/credencial/${data.credential_token}`,
+    kind: 'program_approved',
+    activityName: program.name,
+    context: {
+      organizerName: String(branding.name ?? organization?.name ?? 'EventosFácil'),
+      logoUrl: typeof branding.logo_url === 'string' ? branding.logo_url : null,
+      accentColor: typeof branding.color === 'string' ? branding.color : null,
+      startsAt: program.starts_at,
+      endsAt: program.ends_at,
+      venueName: program.venue_name,
+    },
   })
-  await supabase.from('email_log').insert({
-    organization_id: program.organization_id,
-    registration_id: null,
-    email_type: 'program_credential',
-    status: sendError ? 'failed' : 'sent',
-    sent_at: sendError ? null : new Date().toISOString(),
-  })
-  if (sendError) return c.json({ ok: false }, 502)
-  return c.json({ ok: true })
+  await recordEmailAttempt(supabase, { organizationId: program.organization_id, registrationId: null, recipient: person.email, emailType: 'program_credential', result })
+  if (!result.ok) return c.json({ ok: false, status: 'failed', code: result.errorCode }, 502)
+  return c.json({ ok: true, status: 'accepted', message_id: result.providerMessageId })
 })
 
 // ---------------------------------------------------------------------------
@@ -221,6 +311,199 @@ async function authUserId(supabase: SupabaseAdmin, authorization?: string): Prom
   if (error || !data.user) return null
   return data.user.id
 }
+
+const forumAiRequestSchema = z.object({
+  event_id: z.string().uuid(),
+  prompt: z.string().trim().min(8).max(1600),
+  override_capacity_constraints: z.boolean().default(false),
+  current_plan: z.object({
+    columns: z.number().int().min(2).max(100),
+    rows: z.number().int().min(2).max(100),
+    fixed_elements: z.array(z.object({
+      type: z.enum(['stage', 'aisle', 'entrance']),
+      x: z.number().int().min(0).max(99), y: z.number().int().min(0).max(99),
+      width: z.number().int().min(1).max(100), height: z.number().int().min(1).max(100),
+      label: z.string().max(60), axis: z.enum(['horizontal', 'vertical']).optional(),
+    })).max(30),
+    seat_rows: z.array(z.object({ y: z.number().int().min(0).max(99), ranges: z.array(z.tuple([z.number().int().min(0).max(99), z.number().int().min(0).max(99)])).max(40) })).max(100),
+  }).optional(),
+}).strict()
+
+function outputTextFromResponse(payload: unknown): string | null {
+  const output = (payload as { output?: Array<{ content?: Array<{ type?: string; text?: string }> }> }).output
+  for (const item of output ?? []) for (const content of item.content ?? []) if (content.type === 'output_text' && typeof content.text === 'string') return content.text
+  return null
+}
+
+type OpenAiResult =
+  | { ok: true; payload: unknown }
+  | { ok: false; status: number; code: string; message: string }
+
+function openAiUserMessage(status: number, code: string) {
+  if (code === 'insufficient_quota') return 'El proyecto de OpenAI todavía no tiene cuota disponible. Revisa facturación y límites del proyecto.'
+  if (status === 401 || status === 403) return 'La conexión con OpenAI no está autorizada. Revisa la API key del Worker.'
+  if (status === 404 || code === 'model_not_found') return 'El modelo configurado para IA no está disponible en el proyecto de OpenAI.'
+  if (status === 429 || code === 'rate_limit_exceeded') return 'OpenAI aún reporta un límite de uso. Espera un minuto y vuelve a intentarlo.'
+  if (status === 400) return 'OpenAI rechazó el formato de la solicitud. El incidente quedó identificado para corrección.'
+  return 'OpenAI no pudo procesar la solicitud en este momento. Inténtalo de nuevo.'
+}
+
+async function requestOpenAi(apiKey: string, body: Record<string, unknown>, timeoutMs: number): Promise<OpenAiResult> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), timeoutMs)
+    try {
+      const response = await fetch('https://api.openai.com/v1/responses', {
+        method: 'POST', signal: controller.signal,
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const payload = await response.json().catch(() => null) as { error?: { code?: string; type?: string } } | null
+      if (response.ok) return { ok: true, payload }
+      const code = String(payload?.error?.code ?? payload?.error?.type ?? `http_${response.status}`)
+      console.error('[openai] request failed', { status: response.status, code, model: body.model, attempt: attempt + 1 })
+      const retryable = [408, 409, 429].includes(response.status) || response.status >= 500
+      if (retryable && attempt === 0) {
+        await new Promise(resolve => setTimeout(resolve, 750))
+        continue
+      }
+      return { ok: false, status: response.status, code, message: openAiUserMessage(response.status, code) }
+    } catch (error) {
+      console.error('[openai] transport failed', { model: body.model, attempt: attempt + 1, error: error instanceof Error ? error.name : 'unknown' })
+      if (attempt === 0) {
+        await new Promise(resolve => setTimeout(resolve, 750))
+        continue
+      }
+      return { ok: false, status: 502, code: 'transport_error', message: 'No se pudo contactar OpenAI. Comprueba la conexión e inténtalo de nuevo.' }
+    } finally { clearTimeout(timeout) }
+  }
+  return { ok: false, status: 502, code: 'unknown_error', message: 'OpenAI no pudo procesar la solicitud.' }
+}
+
+app.post('/api/ai/forum-floorplan/proposal', async (c) => {
+  const parsed = forumAiRequestSchema.safeParse(await c.req.json().catch(() => null))
+  if (!parsed.success) return c.json({ error: 'La solicitud del plano no es válida.' }, 400)
+  if (!c.env.OPENAI_API_KEY) return c.json({ error: 'La función de IA aún no está configurada. Solicita al administrador cargar OPENAI_API_KEY en el Worker.' }, 503)
+
+  const supabase = createClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY)
+  const caller = await authUserId(supabase, c.req.header('Authorization'))
+  if (!caller) return c.json({ error: 'no autorizado' }, 401)
+  const { data: event } = await supabase.from('events').select('id,organization_id,total_slots').eq('id', parsed.data.event_id).maybeSingle()
+  if (!event) return c.json({ error: 'Evento no encontrado' }, 404)
+  const [{ data: membership }, { data: platform }, { data: seats }, { data: categories }, { count: registrations }] = await Promise.all([
+    supabase.from('memberships').select('role').eq('organization_id', event.organization_id).eq('user_id', caller).maybeSingle(),
+    supabase.from('platform_admins').select('user_id').eq('user_id', caller).maybeSingle(),
+    supabase.from('seats').select('map_element_id,status').eq('event_id', event.id).neq('status', 'available'),
+    supabase.from('seat_reservation_categories').select('name,reserved_capacity').eq('event_id', event.id).eq('is_active', true),
+    supabase.from('registrations').select('id', { count: 'exact', head: true }).eq('event_id', event.id).neq('status', 'rejected'),
+  ])
+  if (!platform && (!membership || !['owner', 'admin'].includes(membership.role))) return c.json({ error: 'No tienes permisos para crear o reemplazar el plano con IA.' }, 403)
+  if ((seats ?? []).some(seat => seat.map_element_id)) return c.json({ error: 'Hay sillas reservadas o confirmadas. Libéralas antes de reemplazar el plano con IA.' }, 409)
+
+  const aiResult = await requestOpenAi(c.env.OPENAI_API_KEY, {
+        model: c.env.OPENAI_FORUM_MODEL || c.env.OPENAI_MODEL || 'gpt-5.4-mini', store: false, max_output_tokens: 700,
+        input: [
+          { role: 'developer', content: 'Interpreta instrucciones en español para un plano de foro. Devuelve sólo la intención del montaje; no calcules coordenadas, filas, columnas ni bloques de sillas. capacity es la cantidad total exacta de asistentes o sillas solicitada. Un pasillo central es vertical. “Delante” significa front_cross_aisle y “detrás” rear_cross_aisle. “Entradas laterales” significa both_sides. Distingue entradas de pasillos. Considera el contexto de aforo y reservas, pero la solicitud expresa del organizador prevalece. Si se modifica un plano y el usuario no cambia la capacidad, conserva la capacidad calculable desde current_plan.seat_rows. No incluyas nombres, correos ni datos personales.' },
+          { role: 'user', content: JSON.stringify({ request: parsed.data.prompt, current_plan: parsed.data.current_plan ?? null, capacity_context: { configured_capacity: event.total_slots, institutional_reservations: categories ?? [], active_registrations: registrations ?? 0 } }) },
+        ],
+        text: { format: { type: 'json_schema', name: 'forum_layout_intent', strict: true, schema: forumLayoutIntentJsonSchema } },
+  }, 25_000)
+  if (!aiResult.ok) return c.json({ error: aiResult.message, code: aiResult.code }, aiResult.status === 429 ? 429 : 502)
+
+  const text = outputTextFromResponse(aiResult.payload)
+  let candidate: unknown
+  try { candidate = text ? JSON.parse(text) : null } catch { return c.json({ error: 'La respuesta de IA no tuvo el formato esperado.' }, 502) }
+  const intent = forumLayoutIntentSchema.safeParse(candidate)
+  if (!intent.success) {
+    const details = intent.error.issues.slice(0, 4).map(issue => `${issue.path.join('.') || 'raíz'}: ${issue.message}`).join('; ')
+    console.error('[forum-ai] intención fuera del esquema:', details)
+    return c.json({ error: 'No pudimos interpretar la capacidad y circulación solicitadas. Revisa la instrucción e inténtalo de nuevo.' }, 502)
+  }
+  try {
+    const plan = generateForumPlan(intent.data)
+    const reservedCapacity = (categories ?? []).reduce((total, category) => total + Number(category.reserved_capacity ?? 0), 0)
+    const minimumRequired = reservedCapacity + (registrations ?? 0)
+    const conflicts: string[] = []
+    if (event.total_slots > 0 && plan.capacity !== event.total_slots) conflicts.push(`La instrucción solicita ${plan.capacity} sillas y el aforo configurado es ${event.total_slots}.`)
+    if (plan.capacity < minimumRequired) conflicts.push(`El plano tendría ${plan.capacity} sillas, pero hay ${minimumRequired} cupos comprometidos entre registros activos y reservas institucionales.`)
+    if (conflicts.length && !parsed.data.override_capacity_constraints) return c.json({ needs_confirmation: true, conflicts, capacity_context: { configured_capacity: event.total_slots, active_registrations: registrations ?? 0, reserved_capacity: reservedCapacity, minimum_required: minimumRequired } }, 409)
+    return c.json({ proposal: plan, intent: intent.data, capacity_context: { configured_capacity: event.total_slots, active_registrations: registrations ?? 0, reserved_capacity: reservedCapacity, overridden: conflicts.length > 0 } })
+  } catch (error) {
+    console.error('[forum-ai] fallo del motor determinista:', error instanceof Error ? error.message : 'error desconocido')
+    return c.json({ error: 'No pudimos construir un plano válido con esas condiciones. Prueba con una capacidad menor o menos pasillos.' }, 422)
+  }
+})
+
+const exhibitionImportRequestSchema = z.object({
+  event_id: z.string().uuid(),
+  map_id: z.string().uuid(),
+  import_id: z.string().uuid(),
+}).strict()
+
+app.post('/api/ai/exhibition-import/analyze', async (c) => {
+  const parsed = exhibitionImportRequestSchema.safeParse(await c.req.json().catch(() => null))
+  if (!parsed.success) return c.json({ error: 'La solicitud de análisis no es válida.' }, 400)
+  if (!c.env.OPENAI_API_KEY) return c.json({ error: 'La función de IA aún no está configurada.' }, 503)
+
+  const supabase = createClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY)
+  const caller = await authUserId(supabase, c.req.header('Authorization'))
+  if (!caller) return c.json({ error: 'no autorizado' }, 401)
+  const { data: importRow } = await supabase.from('venue_map_imports')
+    .select('id,organization_id,event_id,map_id,storage_path,file_name,mime_type,status')
+    .eq('id', parsed.data.import_id).maybeSingle()
+  if (!importRow || importRow.event_id !== parsed.data.event_id || importRow.map_id !== parsed.data.map_id) return c.json({ error: 'Importación no encontrada.' }, 404)
+  const [{ data: membership }, { data: platform }, { data: map }, { count: elementCount }] = await Promise.all([
+    supabase.from('memberships').select('role').eq('organization_id', importRow.organization_id).eq('user_id', caller).maybeSingle(),
+    supabase.from('platform_admins').select('user_id').eq('user_id', caller).maybeSingle(),
+    supabase.from('venue_maps').select('id,event_id,organization_id,published,metadata').eq('id', importRow.map_id).maybeSingle(),
+    supabase.from('venue_map_elements').select('id', { count: 'exact', head: true }).eq('map_id', importRow.map_id),
+  ])
+  if (!platform && (!membership || !['owner', 'admin'].includes(membership.role))) return c.json({ error: 'No tienes permisos para analizar este plano.' }, 403)
+  if (!map || map.event_id !== importRow.event_id || map.organization_id !== importRow.organization_id) return c.json({ error: 'El plano no corresponde a la importación.' }, 409)
+  if (map.published) return c.json({ error: 'Despublica el plano antes de analizar una importación.' }, 409)
+  if ((elementCount ?? 0) > 0) return c.json({ error: 'El MVP de IA sólo funciona sobre un plano vacío.' }, 409)
+  if (!['uploaded', 'failed'].includes(importRow.status)) return c.json({ error: 'Esta importación ya fue analizada o aplicada.' }, 409)
+
+  await supabase.from('venue_map_imports').update({ status: 'analyzing', error_message: null }).eq('id', importRow.id)
+  const fail = async (message: string, status: 422 | 429 | 502 = 502) => {
+    await supabase.from('venue_map_imports').update({ status: 'failed', error_message: message }).eq('id', importRow.id)
+    return c.json({ error: message }, status)
+  }
+  const { data: file, error: fileError } = await supabase.storage.from('floorplan-sources').download(importRow.storage_path)
+  if (fileError || !file) return fail('No se pudo leer el archivo privado del plano.')
+  if (file.size > 10 * 1024 * 1024) return fail('El archivo supera el límite de 10 MB.', 422)
+  const mimeType = importRow.mime_type as 'image/png' | 'image/jpeg' | 'application/pdf'
+  const dataUrl = arrayBufferToDataUrl(await file.arrayBuffer(), mimeType)
+  const source = mimeType === 'application/pdf'
+    ? { type: 'input_file', filename: importRow.file_name, file_data: dataUrl }
+    : { type: 'input_image', image_url: dataUrl, detail: 'high' }
+  const aiResult = await requestOpenAi(c.env.OPENAI_API_KEY, {
+        model: c.env.OPENAI_VISION_MODEL || c.env.OPENAI_MODEL || 'gpt-5.4', store: false, max_output_tokens: 6000,
+        input: [{ role: 'user', content: [
+          { type: 'input_text', text: 'Analiza esta imagen renderizada de la primera página de un plano de exposición como un problema de localización geométrica, no como un resumen del documento. Devuelve una caja delimitadora normalizada en un lienzo 0..1000, origen arriba a la izquierda, para CADA stand rectangular individual visible. Usa como label el número impreso del stand cuando sea legible (por ejemplo, Stand 53); nunca agrupes una fila, franja, zona o conjunto de stands en una sola caja. Detecta también pasillos, accesos, salidas de emergencia, escenario/foro, baños, servicios, paredes, columnas e información sólo cuando su contorno físico sea visible. La caja debe ajustarse al contorno real del objeto, no al texto cercano. Ignora logotipos, títulos, leyendas, pie de página, nombres de empresas, decoración, flechas impresas y textos sin un objeto físico delimitado. No inventes elementos ocultos o ilegibles. Cada source_id debe ser único. Reduce confidence si el contorno es ambiguo. Antes de responder verifica que los centros de las cajas coincidan visualmente con los objetos y que ninguna caja de stand abarque más de un stand. No extraigas nombres de personas, correos ni otros datos personales.' },
+          source,
+        ] }],
+        text: { format: { type: 'json_schema', name: 'exhibition_floorplan_detection', strict: true, schema: exhibitionDetectionJsonSchema } },
+  }, 45_000)
+  if (!aiResult.ok) return fail(`${aiResult.message} (${aiResult.code})`, aiResult.status === 429 ? 429 : 502)
+  const text = outputTextFromResponse(aiResult.payload)
+  let candidate: unknown
+  try { candidate = text ? JSON.parse(text) : null } catch { return fail('La respuesta de IA no tuvo el formato esperado.') }
+  const detected = exhibitionDetectionSchema.safeParse(candidate)
+  if (!detected.success) {
+    console.error('[exhibition-ai] respuesta fuera del esquema', detected.error.issues.slice(0, 5))
+    return fail('La propuesta de IA no pasó la validación del plano.')
+  }
+  const mapWidth = Number((map.metadata as Record<string, unknown> | null)?.width_units ?? 40)
+  const mapHeight = Number((map.metadata as Record<string, unknown> | null)?.height_units ?? 24)
+  const proposal = normalizeExhibitionDetection(detected.data, mapWidth, mapHeight)
+  if (!proposal.elements.length) return fail('No se detectaron elementos utilizables. Prueba con una imagen más nítida.', 422)
+  const { error: updateError } = await supabase.from('venue_map_imports').update({
+    status: 'review', proposal, warnings: proposal.warnings, analyzed_at: new Date().toISOString(), error_message: null,
+  }).eq('id', importRow.id)
+  if (updateError) return fail('El análisis terminó, pero no se pudo guardar la propuesta.')
+  return c.json({ proposal })
+})
 
 // Slug válido de la organización si el usuario tiene el rol requerido, o un error.
 async function orgSlugForRole(
@@ -422,8 +705,8 @@ app.post('/api/exhibitor-portal/invite', async (c) => {
   const caller = await authUserId(supabase, c.req.header('Authorization'))
   if (!caller) return c.json({ error: 'no autorizado' }, 401)
   const { data: event } = await supabase.from('events').select('id,organization_id').eq('id', parsed.data.event_id).maybeSingle()
-  const { data: company } = await supabase.from('companies').select('id,name,kind').eq('id', parsed.data.company_id).maybeSingle()
-  if (!event || !company || !['exhibitor', 'sponsor'].includes(company.kind)) return c.json({ error: 'Empresa o evento inválido' }, 400)
+  const { data: company } = await supabase.from('companies').select('id,name,kind,event_id,organization_id').eq('id', parsed.data.company_id).maybeSingle()
+  if (!event || !company || !['exhibitor', 'sponsor'].includes(company.kind) || company.event_id !== event.id || company.organization_id !== event.organization_id) return c.json({ error: 'Empresa o evento inválido' }, 400)
   const { data: platformAdmin } = await supabase.from('platform_admins').select('user_id').eq('user_id', caller).maybeSingle()
   const { data: orgMember } = await supabase.from('memberships').select('role').eq('organization_id', event.organization_id).eq('user_id', caller).maybeSingle()
   const { data: portalMember } = await supabase.from('exhibitor_portal_members').select('role,status').eq('event_id', event.id).eq('company_id', company.id).eq('user_id', caller).maybeSingle()

@@ -28,6 +28,16 @@ type UploadLinkParams = {
   eventName: string
   uploadUrl: string
   paymentMethods: PaymentMethod[]
+  context?: EventEmailContext
+}
+
+export type EventEmailContext = {
+  organizerName?: string | null
+  logoUrl?: string | null
+  accentColor?: string | null
+  startsAt?: string | null
+  endsAt?: string | null
+  venueName?: string | null
 }
 
 const esc = (s: string) =>
@@ -35,8 +45,69 @@ const esc = (s: string) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!,
   )
 
-const sender = (email: string) => ({ email, name: 'EventosFácil' })
+const sender = (email: string, name?: string | null) => ({ email, name: name?.trim() || 'EventosFácil' })
 const replyTo = 'soporte@eventosfacil.net'
+
+function accent(context?: EventEmailContext): string {
+  return /^#[0-9a-f]{6}$/i.test(context?.accentColor ?? '') ? context!.accentColor! : '#059669'
+}
+
+function logoHtml(context?: EventEmailContext): string {
+  if (!context?.logoUrl || !/^https:\/\//i.test(context.logoUrl)) return ''
+  return `<img src="${esc(context.logoUrl)}" alt="${esc(context.organizerName ?? 'Organizador')}" style="display:block;max-height:56px;max-width:180px;object-fit:contain;margin:0 0 20px">`
+}
+
+function formatDate(value?: string | null): string | null {
+  if (!value) return null
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return null
+  return new Intl.DateTimeFormat('es-VE', { dateStyle: 'long', timeStyle: 'short', timeZone: 'America/Caracas' }).format(parsed)
+}
+
+function eventDetailsHtml(context?: EventEmailContext): string {
+  const startsAt = formatDate(context?.startsAt)
+  const rows = [
+    startsAt ? `<div><strong>Fecha:</strong> ${esc(startsAt)}</div>` : '',
+    context?.venueName ? `<div><strong>Lugar:</strong> ${esc(context.venueName)}</div>` : '',
+  ].filter(Boolean)
+  return rows.length ? `<div style="margin:20px 0 0;padding:14px 16px;background:#fafafa;border-radius:10px;font-size:14px;line-height:1.6;color:#3f3f46">${rows.join('')}</div>` : ''
+}
+
+function eventDetailsText(context?: EventEmailContext): string {
+  const startsAt = formatDate(context?.startsAt)
+  const rows = [startsAt ? `Fecha: ${startsAt}` : '', context?.venueName ? `Lugar: ${context.venueName}` : ''].filter(Boolean)
+  return rows.length ? `\n\n${rows.join('\n')}` : ''
+}
+
+export type EmailDeliveryResult = {
+  ok: boolean
+  providerMessageId: string | null
+  providerStatus: 'accepted' | 'failed'
+  errorCode: string | null
+  errorDetail: string | null
+}
+
+function accepted(result: unknown): EmailDeliveryResult {
+  const row = result && typeof result === 'object' ? result as Record<string, unknown> : null
+  return {
+    ok: true,
+    providerMessageId: typeof row?.messageId === 'string' ? row.messageId : null,
+    providerStatus: 'accepted',
+    errorCode: null,
+    errorDetail: null,
+  }
+}
+
+function failed(error: unknown): EmailDeliveryResult {
+  const row = error && typeof error === 'object' ? error as Record<string, unknown> : null
+  return {
+    ok: false,
+    providerMessageId: null,
+    providerStatus: 'failed',
+    errorCode: typeof row?.code === 'string' ? row.code : null,
+    errorDetail: error instanceof Error ? error.message : String(error),
+  }
+}
 
 function paymentMethodsHtml(methods: PaymentMethod[]): string {
   if (methods.length === 0) return ''
@@ -72,11 +143,13 @@ function paymentMethodsText(methods: PaymentMethod[]): string {
 }
 
 export function uploadLinkEmailHtml(p: UploadLinkParams): string {
+  const color = accent(p.context)
   return `<!doctype html>
 <html lang="es"><body style="margin:0;background:#f4f4f5;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
   <div style="max-width:560px;margin:0 auto;padding:32px 20px">
     <div style="background:#ffffff;border:1px solid #e4e4e7;border-radius:16px;padding:32px">
-      <p style="font-size:13px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#059669;margin:0">
+      ${logoHtml(p.context)}
+      <p style="font-size:13px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:${color};margin:0">
         ${esc(p.eventName)}
       </p>
       <h1 style="font-size:24px;color:#18181b;margin:8px 0 0">Hola, ${esc(p.firstName)}</h1>
@@ -86,47 +159,48 @@ export function uploadLinkEmailHtml(p: UploadLinkParams): string {
       </p>
       <p style="margin:24px 0">
         <a href="${esc(p.uploadUrl)}"
-           style="display:inline-block;background:#059669;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;padding:12px 24px;border-radius:8px">
+           style="display:inline-block;background:${color};color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;padding:12px 24px;border-radius:8px">
           Cargar mi comprobante
         </a>
       </p>
+      ${eventDetailsHtml(p.context)}
       ${paymentMethodsHtml(p.paymentMethods)}
       <p style="font-size:12px;color:#a1a1aa;margin:24px 0 0;word-break:break-all">
         Si el botón no funciona, copia este enlace:<br>${esc(p.uploadUrl)}
       </p>
     </div>
     <p style="text-align:center;font-size:12px;color:#a1a1aa;margin:16px 0 0">
-      EventPass VE
+      ${esc(p.context?.organizerName ?? 'EventosFácil')}
     </p>
   </div>
 </body></html>`
 }
 
-function uploadLinkEmailText(p: UploadLinkParams): string {
+export function uploadLinkEmailText(p: UploadLinkParams): string {
   return `Hola, ${p.firstName}
 
 Recibimos tu registro para "${p.eventName}". Para completar tu inscripción,
 realiza el pago y carga tu comprobante en este enlace:
 
-${p.uploadUrl}${paymentMethodsText(p.paymentMethods)}
+${p.uploadUrl}${eventDetailsText(p.context)}${paymentMethodsText(p.paymentMethods)}
 
-— EventPass VE`
+— ${p.context?.organizerName ?? 'EventosFácil'}`
 }
 
 // Devuelve null si se envió bien; un mensaje de error en caso contrario.
-export async function sendUploadLinkEmail(p: UploadLinkParams): Promise<string | null> {
+export async function sendUploadLinkEmail(p: UploadLinkParams): Promise<EmailDeliveryResult> {
   try {
-    await p.email.send({
+    const result = await p.email.send({
       to: p.to,
-      from: sender(p.from),
+      from: sender(p.from, p.context?.organizerName),
       replyTo,
       subject: `Completa tu inscripción — ${p.eventName}`,
       html: uploadLinkEmailHtml(p),
       text: uploadLinkEmailText(p),
     })
-    return null
+    return accepted(result)
   } catch (err) {
-    return err instanceof Error ? err.message : String(err)
+    return failed(err)
   }
 }
 
@@ -358,62 +432,83 @@ type ConfirmationParams = {
   firstName: string
   eventName: string
   credentialUrl: string
+  kind: 'free_registration' | 'payment_confirmed' | 'program_approved'
+  activityName?: string | null
+  context?: EventEmailContext
 }
 
 export function confirmationEmailHtml(p: ConfirmationParams): string {
+  const color = accent(p.context)
+  const title = p.kind === 'payment_confirmed'
+    ? '¡Pago confirmado!'
+    : p.kind === 'program_approved'
+      ? '¡Participación confirmada!'
+      : '¡Registro confirmado!'
+  const message = p.kind === 'payment_confirmed'
+    ? `Hola, ${esc(p.firstName)}. Verificamos tu pago y tu plaza está confirmada.`
+    : p.kind === 'program_approved'
+      ? `Hola, ${esc(p.firstName)}. Tu participación en ${esc(p.activityName ?? p.eventName)} fue aprobada.`
+      : `Hola, ${esc(p.firstName)}. Tu registro gratuito está confirmado.`
   return `<!doctype html>
 <html lang="es"><body style="margin:0;background:#f4f4f5;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
   <div style="max-width:560px;margin:0 auto;padding:32px 20px">
     <div style="background:#ffffff;border:1px solid #e4e4e7;border-radius:16px;padding:32px">
-      <p style="font-size:13px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#059669;margin:0">
+      ${logoHtml(p.context)}
+      <p style="font-size:13px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:${color};margin:0">
         ${esc(p.eventName)}
       </p>
-      <h1 style="font-size:24px;color:#18181b;margin:8px 0 0">¡Inscripción confirmada!</h1>
+      <h1 style="font-size:24px;color:#18181b;margin:8px 0 0">${title}</h1>
       <p style="font-size:15px;line-height:1.6;color:#52525b;margin:16px 0 0">
-        Hola, ${esc(p.firstName)}. Verificamos tu pago y tu lugar está reservado.
-        Abre tu credencial con el código QR y preséntala en el ingreso:
+        ${message} Abre tu credencial con el código QR y preséntala en el ingreso.
       </p>
       <p style="margin:24px 0">
         <a href="${esc(p.credentialUrl)}"
-           style="display:inline-block;background:#059669;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;padding:12px 24px;border-radius:8px">
+           style="display:inline-block;background:${color};color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;padding:12px 24px;border-radius:8px">
           Ver mi credencial
         </a>
       </p>
+      ${eventDetailsHtml(p.context)}
       <p style="font-size:12px;color:#a1a1aa;margin:24px 0 0;word-break:break-all">
         Si el botón no funciona, copia este enlace:<br>${esc(p.credentialUrl)}
       </p>
     </div>
     <p style="text-align:center;font-size:12px;color:#a1a1aa;margin:16px 0 0">
-      EventPass VE
+      ${esc(p.context?.organizerName ?? 'EventosFácil')}
     </p>
   </div>
 </body></html>`
 }
 
-function confirmationEmailText(p: ConfirmationParams): string {
-  return `¡Inscripción confirmada! — ${p.eventName}
+export function confirmationEmailText(p: ConfirmationParams): string {
+  const title = p.kind === 'payment_confirmed' ? '¡Pago confirmado!' : p.kind === 'program_approved' ? '¡Participación confirmada!' : '¡Registro confirmado!'
+  const message = p.kind === 'payment_confirmed'
+    ? `Hola, ${p.firstName}. Verificamos tu pago y tu plaza está confirmada.`
+    : p.kind === 'program_approved'
+      ? `Hola, ${p.firstName}. Tu participación en ${p.activityName ?? p.eventName} fue aprobada.`
+      : `Hola, ${p.firstName}. Tu registro gratuito está confirmado.`
+  return `${title} — ${p.eventName}
 
-Hola, ${p.firstName}. Verificamos tu pago y tu lugar está reservado.
-Abre tu credencial con el código QR y preséntala en el ingreso:
+${message}
+Abre tu credencial con el código QR y preséntala en el ingreso.
 
-${p.credentialUrl}
+${p.credentialUrl}${eventDetailsText(p.context)}
 
-— EventPass VE`
+— ${p.context?.organizerName ?? 'EventosFácil'}`
 }
 
-export async function sendConfirmationEmail(p: ConfirmationParams): Promise<string | null> {
+export async function sendConfirmationEmail(p: ConfirmationParams): Promise<EmailDeliveryResult> {
   try {
-    await p.email.send({
+    const result = await p.email.send({
       to: p.to,
-      from: sender(p.from),
+      from: sender(p.from, p.context?.organizerName),
       replyTo,
-      subject: `Inscripción confirmada — ${p.eventName}`,
+      subject: `${p.kind === 'payment_confirmed' ? 'Pago confirmado' : p.kind === 'program_approved' ? 'Participación confirmada' : 'Registro confirmado'} — ${p.eventName}`,
       html: confirmationEmailHtml(p),
       text: confirmationEmailText(p),
     })
-    return null
+    return accepted(result)
   } catch (err) {
-    return err instanceof Error ? err.message : String(err)
+    return failed(err)
   }
 }
 

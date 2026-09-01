@@ -178,11 +178,11 @@ function DraggableElement({
           if (!activeTool && (item.kind === "stand" || item.kind === "seat")) onAssign();
         }}
         className={`flex h-full w-full items-center justify-center rounded-lg border p-1 text-xs font-semibold ${item.kind === "stand" ? (item.status === "assigned" ? "border-emerald-700 bg-emerald-600 text-white" : "border-emerald-300 bg-emerald-50") : item.kind === "seat" ? (item.status === "reserved" ? "border-amber-500 bg-amber-100 text-amber-900" : item.status === "assigned" ? "border-zinc-400 bg-zinc-200 text-zinc-500" : "border-sky-300 bg-sky-50 text-sky-800") : item.kind === "aisle" ? "border-slate-300 bg-slate-100/70" : "border-zinc-400 bg-zinc-100/80"} ${selected ? "ring-2 ring-emerald-700 ring-offset-2" : ""}`}
-        style={
-          item.kind === "aisle" && item.color
+        style={item.kind === "seat" && item.reservationColor
+          ? { borderColor: item.reservationColor, backgroundColor: `${item.reservationColor}26`, color: item.reservationColor }
+          : item.kind === "aisle" && item.color
             ? { borderColor: item.color, backgroundColor: `${item.color}26` }
-            : undefined
-        }
+            : undefined}
         aria-label={
           item.kind === "stand"
             ? `${item.label}. Doble clic para asignar empresa`

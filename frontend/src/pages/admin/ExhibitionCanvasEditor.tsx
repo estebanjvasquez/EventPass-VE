@@ -23,6 +23,7 @@ import {
   Redo2,
   Ruler,
   Save,
+  Sparkles,
   ShieldCheck,
   Sofa,
   Table2,
@@ -34,7 +35,10 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
-import { ExhibitionKonvaStage } from "./exhibition/ExhibitionKonvaStage";
+import {
+  ExhibitionKonvaStage,
+  type AiProposalElement,
+} from "./exhibition/ExhibitionKonvaStage";
 import { standSizeColor } from "./exhibition/standSizeColor";
 import { renderBlueprint } from "./exhibition/blueprint";
 
@@ -91,6 +95,11 @@ type SceneElement = {
   tags?: string[];
   style: Record<string, unknown>;
   metadata: Record<string, unknown>;
+};
+type AiImportProposal = {
+  summary: string;
+  elements: AiProposalElement[];
+  warnings: string[];
 };
 type Company = { id: string; name: string };
 type Assignment = { element_id: string; company_id: string };
@@ -472,6 +481,11 @@ export function ExhibitionCanvasEditor({
   const [calibrationPoints, setCalibrationPoints] = useState<
     { x: number; y: number }[]
   >([]);
+  const [currentVersion, setCurrentVersion] = useState(1);
+  const [aiImportId, setAiImportId] = useState<string | null>(null);
+  const [aiProposal, setAiProposal] = useState<AiImportProposal | null>(null);
+  const [aiSelectedIds, setAiSelectedIds] = useState<string[]>([]);
+  const [aiBusy, setAiBusy] = useState(false);
   const selected = elements.find((item) => item.id === selectedId) ?? null;
   const companyNames = useMemo(
     () => new Map(companies.map((company) => [company.id, company.name])),
@@ -583,6 +597,7 @@ export function ExhibitionCanvasEditor({
         .from("venue_maps")
         .update({ current_version: version })
         .eq("id", mapId);
+      setCurrentVersion(version);
     }
   }
   async function restoreSnapshot(next: Snapshot) {
@@ -698,6 +713,8 @@ export function ExhibitionCanvasEditor({
     }
     const nextMetadata = {
       ...(map.metadata ?? {}),
+      organization_id: event.organization_id,
+      current_version: Number(map.current_version ?? 1),
       plan_type: "exhibition_canvas",
       coordinate_system: "metric",
       width_units: Number(map.metadata?.width_units ?? WORLD.width),
@@ -706,6 +723,7 @@ export function ExhibitionCanvasEditor({
     };
     setMetadata(nextMetadata);
     setPublished(Boolean(map.published));
+    setCurrentVersion(Number(map.current_version ?? 1));
     setVersions(
       (savedVersions ?? []) as {
         id: string;
@@ -757,6 +775,7 @@ export function ExhibitionCanvasEditor({
           .from("companies")
           .select("id,name")
           .eq("organization_id", event.organization_id)
+          .eq("event_id", eventId)
           .eq("kind", "exhibitor")
           .order("name"),
         supabase
@@ -1373,6 +1392,50 @@ export function ExhibitionCanvasEditor({
       .from("agenda-attachments")
       .upload(path, file, { upsert: true, contentType: file.type });
     if (!error) {
+      let nextImportId: string | null = null;
+      const aiMime =
+        file.type === "application/pdf" || ext === "pdf"
+          ? "application/pdf"
+          : file.type === "image/png" || ext === "png"
+            ? "image/png"
+            : file.type === "image/jpeg" || ["jpg", "jpeg"].includes(ext)
+              ? "image/jpeg"
+              : null;
+      if (aiMime && elements.length === 0 && !published) {
+        let aiSource: File = file;
+        let aiSourceExtension = ext;
+        if (aiMime === "application/pdf") {
+          const renderedPage = await renderBlueprint(file, aiMime);
+          const renderedBlob = await fetch(renderedPage).then((response) => response.blob());
+          const baseName = file.name.replace(/\.pdf$/i, "");
+          aiSource = new File([renderedBlob], `${baseName}-pagina-1.png`, {
+            type: "image/png",
+          });
+          aiSourceExtension = "png";
+        }
+        const sourcePath = `${String(metadata.organization_id ?? "")}/${eventId}/${mapId}/source-${Date.now()}.${aiSourceExtension}`;
+        const sourceUpload = await supabase.storage
+          .from("floorplan-sources")
+          .upload(sourcePath, aiSource, {
+            upsert: false,
+            contentType: aiSource.type,
+          });
+        if (!sourceUpload.error) {
+          const inserted = await supabase
+            .from("venue_map_imports")
+            .insert({
+              organization_id: metadata.organization_id,
+              event_id: eventId,
+              map_id: mapId,
+              storage_path: sourcePath,
+              file_name: aiSource.name,
+              mime_type: aiSource.type,
+            })
+            .select("id")
+            .single();
+          if (!inserted.error) nextImportId = inserted.data.id;
+        }
+      }
       const next = {
         ...metadata,
         background_path: path,
@@ -1387,17 +1450,78 @@ export function ExhibitionCanvasEditor({
       setMetadata(next);
       setBackgroundPath(path);
       setBackgroundVisible(true);
+      setAiImportId(nextImportId);
+      setAiProposal(null);
+      setAiSelectedIds([]);
       const signed = await supabase.storage
         .from("agenda-attachments")
         .createSignedUrl(path, 3600);
       if (signed.data?.signedUrl)
         setBackgroundUrl(await renderBlueprint(file, file.type || ext));
-      setMessage(
-        "Plano base cargado. Puedes ocultarlo desde el control de blueprint.",
-      );
+      setMessage(nextImportId
+        ? "Plano base cargado. Ya puedes solicitar el análisis con IA."
+        : "Plano base cargado como referencia. La IA admite PNG, JPG o PDF y requiere un plano vacío sin publicar.");
       await createVersion("Blueprint actualizado");
     } else setMessage(error.message);
     setBusy(false);
+  }
+
+  async function analyzeWithAi() {
+    if (!aiImportId) return;
+    setAiBusy(true);
+    setMessage("Analizando el archivo con IA… puede tardar unos segundos.");
+    const { data: auth } = await supabase.auth.getSession();
+    const api = ((import.meta.env.VITE_API_URL as string | undefined) ?? "").replace(/\/$/, "");
+    try {
+      const response = await fetch(`${api}/api/ai/exhibition-import/analyze`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(auth.session?.access_token
+            ? { Authorization: `Bearer ${auth.session.access_token}` }
+            : {}),
+        },
+        body: JSON.stringify({ event_id: eventId, map_id: mapId, import_id: aiImportId }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | { proposal?: AiImportProposal; error?: string }
+        | null;
+      if (!response.ok || !payload?.proposal) throw new Error(payload?.error ?? "No se pudo analizar el plano.");
+      setAiProposal(payload.proposal);
+      setAiSelectedIds(payload.proposal.elements.map((item) => item.source_id));
+      setMessage("Propuesta lista. Revisa la superposición y desmarca cualquier elemento incorrecto.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo analizar el plano.");
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
+  async function applyAiProposal() {
+    if (!aiImportId || !aiProposal || !aiSelectedIds.length) return;
+    const selectedWithConflicts = aiProposal.elements.some(
+      (item) => aiSelectedIds.includes(item.source_id) && item.conflicts.some((id) => aiSelectedIds.includes(id)),
+    );
+    if (selectedWithConflicts) {
+      setMessage("Desmarca uno de los stands superpuestos antes de aplicar.");
+      return;
+    }
+    setAiBusy(true);
+    const { data, error } = await supabase.rpc("apply_ai_exhibition_import", {
+      p_import_id: aiImportId,
+      p_selected_source_ids: aiSelectedIds,
+      p_expected_version: currentVersion,
+    });
+    if (error) setMessage(error.message);
+    else {
+      setAiProposal(null);
+      setAiImportId(null);
+      setAiSelectedIds([]);
+      setCurrentVersion(Number((data as { version?: number } | null)?.version ?? currentVersion + 1));
+      await load();
+      setMessage(`Propuesta aplicada: ${Number((data as { created?: number } | null)?.created ?? 0)} elementos editables.`);
+    }
+    setAiBusy(false);
   }
 
   return (
@@ -1456,6 +1580,25 @@ export function ExhibitionCanvasEditor({
           PDF, PNG, JPG, SVG o DXF. El archivo queda como referencia del
           diseñador.
         </p>
+        {aiImportId && !aiProposal && (
+          <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50 p-3 text-xs text-violet-950">
+            <p className="font-semibold">Convertir blueprint con IA</p>
+            <p className="mt-1 text-[11px] text-violet-800">
+              Al continuar, el PNG, JPG o la primera página del PDF se enviará
+              a OpenAI para detectar stands, pasillos y servicios. Nada se
+              aplicará sin tu revisión.
+            </p>
+            <button
+              type="button"
+              onClick={() => void analyzeWithAi()}
+              disabled={aiBusy}
+              className="mt-2 inline-flex items-center gap-1 rounded-lg bg-violet-700 px-3 py-2 font-semibold text-white disabled:opacity-50"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              {aiBusy ? "Analizando…" : "Analizar con IA"}
+            </button>
+          </div>
+        )}
         <PlanScaleEditor
           width={columns}
           height={rows}
@@ -1526,6 +1669,54 @@ export function ExhibitionCanvasEditor({
         </div>
       </aside>
       <main>
+        {aiProposal && (
+          <div className="mb-3 rounded-xl border border-violet-200 bg-white p-4 text-xs">
+            <div className="flex flex-wrap items-start gap-3">
+              <div className="min-w-0 flex-1">
+                <h3 className="flex items-center gap-1 font-semibold text-violet-900">
+                  <Sparkles className="h-4 w-4" /> Revisión de la propuesta IA
+                </h3>
+                <p className="mt-1 text-zinc-600">{aiProposal.summary}</p>
+                <p className="mt-1 text-zinc-500">
+                  Verde: detección segura. Ámbar: baja confianza o conflicto.
+                  Desmarca lo incorrecto antes de aplicar.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void applyAiProposal()}
+                disabled={aiBusy || aiSelectedIds.length === 0}
+                className="rounded-lg bg-emerald-700 px-3 py-2 font-semibold text-white disabled:opacity-40"
+              >
+                Aplicar {aiSelectedIds.length} elementos
+              </button>
+            </div>
+            {aiProposal.warnings.length > 0 && (
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-amber-800">
+                {aiProposal.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+              </ul>
+            )}
+            <div className="mt-3 grid max-h-40 gap-1 overflow-auto sm:grid-cols-2 lg:grid-cols-3">
+              {aiProposal.elements.map((item) => (
+                <label key={item.source_id} className="flex items-center gap-2 rounded border px-2 py-1.5">
+                  <input
+                    type="checkbox"
+                    checked={aiSelectedIds.includes(item.source_id)}
+                    onChange={(event) => setAiSelectedIds((current) =>
+                      event.target.checked
+                        ? [...current, item.source_id]
+                        : current.filter((id) => id !== item.source_id),
+                    )}
+                  />
+                  <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                  <span className={item.needs_review ? "text-amber-700" : "text-emerald-700"}>
+                    {Math.round(item.confidence * 100)}%
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border bg-white p-3 text-xs">
           <span className="font-semibold">
             Canvas a escala: {columns} × {rows} m
@@ -1638,6 +1829,8 @@ export function ExhibitionCanvasEditor({
             polygonDraft={polygonDraft}
             calibrationActive={calibrationActive}
             calibrationPoints={calibrationPoints}
+            aiProposal={aiProposal?.elements ?? []}
+            aiSelectedIds={aiSelectedIds}
             onCalibrationPoint={addCalibrationPoint}
             onPolygonPoint={(x, y) =>
               setPolygonDraft((current) => [...current, x, y])

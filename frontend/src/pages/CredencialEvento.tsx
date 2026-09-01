@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import { CalendarDays, Clock3, MapPin, Printer, Ticket } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { credentialQrValue } from '../lib/credentialQr'
 
 type Credential = {
   first_name: string
@@ -31,12 +32,10 @@ export default function CredencialEvento() {
         setLoading(false)
         return
       }
-      const { data, error } = await supabase.rpc('get_credential_by_token', {
-        p_token: token,
-      })
+      const credentialResult = await supabase.rpc('get_credential_by_token', { p_token: token })
       if (!active) return
-      if (error) setLoadError(error.message)
-      else setCred((data as Credential[] | null)?.[0] ?? null)
+      if (credentialResult.error) setLoadError(credentialResult.error.message)
+      else setCred((credentialResult.data as Credential[] | null)?.[0] ?? null)
       setLoading(false)
     }
     load()
@@ -139,7 +138,7 @@ export default function CredencialEvento() {
                 <div className="flex flex-col items-center gap-2">
                   <div className="rounded-xl border border-zinc-200 bg-white p-3">
                     <QRCodeSVG
-                      value={cred.credential_token}
+                      value={credentialQrValue(cred.credential_token)}
                       size={148}
                       level="M"
                       marginSize={0}

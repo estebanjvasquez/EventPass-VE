@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { ArrowRight, CalendarDays, CheckCircle2, Ticket } from 'lucide-react'
+import { ArrowRight, CalendarDays, CheckCircle2, RefreshCw, Ticket } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useTenant } from '../lib/useTenant'
 import { brandColor, brandName } from '../lib/tenantCore'
@@ -36,6 +36,8 @@ const schema = z.object({
 })
 
 type FormValues = z.infer<typeof schema>
+type CreatedRegistration = { registration_id: string; credential_token: string; payment_required: boolean }
+type NotificationStatus = 'idle' | 'sending' | 'accepted' | 'failed'
 
 export default function RegistroEvento() {
   const { eventId } = useParams()
@@ -49,6 +51,9 @@ export default function RegistroEvento() {
   const [done, setDone] = useState(false)
   const [credentialToken, setCredentialToken] = useState<string | null>(null)
   const [paymentRequired, setPaymentRequired] = useState(false)
+  const [createdRegistration, setCreatedRegistration] = useState<CreatedRegistration | null>(null)
+  const [notificationStatus, setNotificationStatus] = useState<NotificationStatus>('idle')
+  const [notificationError, setNotificationError] = useState<string | null>(null)
 
   const {
     register,
@@ -107,6 +112,30 @@ export default function RegistroEvento() {
     setSeats((data ?? []) as Seat[])
   }
 
+  async function sendRegistrationEmail(registration: CreatedRegistration) {
+    const apiUrl = import.meta.env.VITE_API_URL
+    if (!apiUrl) {
+      setNotificationStatus('failed')
+      setNotificationError('El servicio de correo no está configurado.')
+      return
+    }
+    setNotificationStatus('sending')
+    setNotificationError(null)
+    try {
+      const response = await fetch(`${apiUrl}${registration.payment_required ? '/api/registrations/notify' : '/api/registrations/confirm-notify'}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ registration_id: registration.registration_id, credential_token: registration.credential_token }),
+      })
+      const body = await response.json().catch(() => null) as { error?: string; status?: string } | null
+      if (!response.ok || body?.status !== 'accepted') throw new Error(body?.error ?? 'El proveedor no aceptó el correo.')
+      setNotificationStatus('accepted')
+    } catch (emailError) {
+      setNotificationStatus('failed')
+      setNotificationError(emailError instanceof Error ? emailError.message : 'No se pudo enviar el correo.')
+    }
+  }
+
   async function onSubmit(values: FormValues) {
     if (!event) return
     setSubmitError(null)
@@ -140,26 +169,12 @@ export default function RegistroEvento() {
       return
     }
 
-    const registration = Array.isArray(data) ? data[0] as { registration_id: string; credential_token: string; payment_required: boolean } | undefined : undefined
+    const registration = Array.isArray(data) ? data[0] as CreatedRegistration | undefined : undefined
     setCredentialToken(registration?.credential_token ?? null)
     setPaymentRequired(registration?.payment_required === true)
-
-    // El correo depende de la modalidad. En eventos gratuitos se envía la
-    // credencial; en eventos pagos, las instrucciones para el comprobante.
-    const apiUrl = import.meta.env.VITE_API_URL
-    if (apiUrl && registration) {
-      try {
-        await fetch(`${apiUrl}${registration.payment_required ? '/api/registrations/notify' : '/api/registrations/confirm-notify'}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(registration.payment_required ? { event_id: event.id, email: values.email } : { registration_id: registration.registration_id }),
-        })
-      } catch {
-        // El correo también puede reintentarse desde el panel admin.
-      }
-    }
-
+    setCreatedRegistration(registration ?? null)
     setDone(true)
+    if (registration) await sendRegistrationEmail(registration)
   }
 
   const color = brandColor(tenant)
@@ -280,8 +295,18 @@ export default function RegistroEvento() {
             </span>
             <h2 className="mt-5 text-2xl font-bold text-zinc-900">{paymentRequired ? '¡Plaza reservada!' : '¡Registro confirmado!'}</h2>
             <p className="mx-auto mt-3 max-w-md text-zinc-600">
-              {paymentRequired ? 'Te enviaremos un correo con los métodos de pago y el enlace para cargar tu comprobante. Tu plaza queda reservada mientras completas el pago.' : 'Tu acceso está confirmado. Puedes abrir ahora tu credencial y presentarla en el ingreso.'}
+              {paymentRequired ? 'Tu plaza está reservada mientras completas el pago.' : 'Tu acceso está confirmado. Puedes abrir ahora tu credencial y presentarla en el ingreso.'}
             </p>
+            {notificationStatus === 'sending' && <p role="status" className="mt-4 text-sm text-zinc-600">Enviando el correo de confirmación…</p>}
+            {notificationStatus === 'accepted' && <p role="status" className="mt-4 text-sm font-medium text-emerald-700">Correo aceptado para envío. Revisa también la carpeta de spam.</p>}
+            {notificationStatus === 'failed' && (
+              <div className="mx-auto mt-4 max-w-lg rounded-lg border border-amber-300 bg-amber-50 p-4 text-left text-sm text-amber-900">
+                <p className="font-semibold">Tu registro sí quedó guardado, pero el correo no pudo enviarse.</p>
+                <p className="mt-1">{notificationError}</p>
+                {createdRegistration && <button type="button" onClick={() => void sendRegistrationEmail(createdRegistration)} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-amber-400 bg-white px-3 py-2 font-semibold"><RefreshCw className="h-4 w-4"/>Reintentar correo</button>}
+              </div>
+            )}
+            {paymentRequired && credentialToken && <Link to={`/comprobante/${credentialToken}`} className="mt-5 inline-flex rounded-lg bg-emerald-600 px-5 py-3 text-sm font-semibold text-white">Cargar comprobante ahora</Link>}
             {!paymentRequired && credentialToken && <Link to={`/credencial/${credentialToken}`} className="mt-5 inline-flex rounded-lg bg-emerald-600 px-5 py-3 text-sm font-semibold text-white">Ver mi credencial</Link>}
           </div>
         )}

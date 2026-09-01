@@ -2,15 +2,19 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowRight,
+  Armchair,
   BellRing,
+  Building2,
   CalendarDays,
-  Check,
+  ClipboardCheck,
   LayoutDashboard,
   QrCode,
   ScanLine,
   ShieldCheck,
+  Sparkles,
+  Store,
   Ticket,
-  WifiOff,
+  Users,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useTenant } from '../lib/useTenant'
@@ -38,56 +42,44 @@ const features = [
     body: 'Lee el QR el día del evento y registra la asistencia en segundos desde cualquier teléfono.',
   },
   {
-    icon: WifiOff,
-    title: 'Funciona sin internet',
-    body: 'El check-in opera offline y sincroniza al volver la conexión. Pensado para cortes de luz e internet.',
+    icon: ClipboardCheck,
+    title: 'Acreditación e impresión',
+    body: 'Busca participantes, revisa su estado y configura e imprime credenciales desde el mostrador de acreditación.',
   },
   {
     icon: LayoutDashboard,
-    title: 'Panel administrativo',
-    body: 'Configura tipos de entrada, métodos de pago, branding y reportes. Todo desde un solo lugar.',
-  },
-]
-
-const plans = [
-  {
-    name: 'Arranque',
-    price: 49,
-    tagline: 'Para tu primer evento profesional.',
-    features: [
-      '1 evento activo',
-      'Hasta 200 registros',
-      'Recordatorios automáticos',
-      'Panel admin básico',
-      'Exportación CSV',
-    ],
-    highlight: false,
+    title: 'Panel para el organizador',
+    body: 'Centraliza eventos, registros, acreditación, equipo operativo, aliados comerciales y accesos desde un solo lugar.',
   },
   {
-    name: 'Profesional',
-    price: 99,
-    tagline: 'Lo que la mayoría necesita.',
-    features: [
-      'Eventos ilimitados',
-      'Hasta 1.000 registros/mes',
-      'Credencial con QR + check-in',
-      'Mapa de asientos',
-      'Reportes y soporte por WhatsApp',
-    ],
-    highlight: true,
+    icon: CalendarDays,
+    title: 'Agenda de foros y actividades',
+    body: 'Organiza charlas, talleres, recesos, ponentes, moderadores y patrocinantes, con una agenda pública para los asistentes.',
   },
   {
-    name: 'Asociación',
-    price: 179,
-    tagline: 'Para gremios y multi-evento.',
-    features: [
-      'Registros ilimitados',
-      'Dominio propio o embed',
-      'Branding completo',
-      'Roles de equipo',
-      'Soporte prioritario',
-    ],
-    highlight: false,
+    icon: Armchair,
+    title: 'Plano de foro editable',
+    body: 'Crea escenarios, pasillos, accesos y asientos. La IA propone el montaje y el equipo puede seguir editándolo manualmente.',
+  },
+  {
+    icon: Sparkles,
+    title: 'Análisis de planos con IA',
+    body: 'Carga imágenes o PDF de una exposición, revisa la propuesta detectada y conviértela en elementos editables del plano.',
+  },
+  {
+    icon: Store,
+    title: 'Expositores y stands',
+    body: 'Gestiona empresas por evento, asigna stands y publica un plano con directorio, buscador y perfiles aprobados.',
+  },
+  {
+    icon: Building2,
+    title: 'Portal del expositor',
+    body: 'Cada empresa administra su perfil, personal, pendientes, actividades, pagos y datos operativos sin mezclarse con otros eventos.',
+  },
+  {
+    icon: Users,
+    title: 'Visitantes de cada stand',
+    body: 'El expositor escanea credenciales, conserva visitas repetidas, consulta contactos y descarga su listado en CSV.',
   },
 ]
 
@@ -107,8 +99,8 @@ function Header() {
           <a href="#caracteristicas" className="transition-colors hover:text-zinc-900">
             Características
           </a>
-          <a href="#planes" className="transition-colors hover:text-zinc-900">
-            Planes
+          <a href="#contacto" className="transition-colors hover:text-zinc-900">
+            Solicitar demo
           </a>
         </nav>
         <Link
@@ -138,7 +130,7 @@ function Hero() {
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-zinc-600">
             Tus asistentes se inscriben, cargan su comprobante y reciben su
             credencial con QR. Tú verificas pagos y haces check-in desde un
-            panel — incluso sin internet en el evento.
+            panel preparado para la operación del evento.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Link
@@ -149,15 +141,13 @@ function Hero() {
               <ArrowRight className="h-4 w-4" />
             </Link>
             <a
-              href="#planes"
+              href="#contacto"
               className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold text-zinc-800 transition-colors hover:border-zinc-400"
             >
-              Ver planes
+              Conocer el sistema
             </a>
           </div>
-          <p className="mt-6 text-sm text-zinc-500">
-            Desde <span className="font-semibold text-zinc-700">$49/mes</span> · Prueba de 14 días · Pago por Zelle o Binance
-          </p>
+          <p className="mt-6 text-sm text-zinc-500">Configuración guiada para foros, congresos y exposiciones.</p>
         </div>
 
         <div className="md:col-span-5">
@@ -228,8 +218,8 @@ function Features() {
             Todo el ciclo del evento, automatizado
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            Desde la inscripción hasta el check-in. Menos trabajo manual, menos
-            errores y una experiencia profesional para tus asistentes.
+            Desde la inscripción hasta la operación del evento, los planos y la
+            atención de expositores. Menos tareas dispersas y más control.
           </p>
         </div>
 
@@ -244,78 +234,6 @@ function Features() {
             </div>
           ))}
         </div>
-      </div>
-    </section>
-  )
-}
-
-function Pricing() {
-  return (
-    <section id="planes" className="mx-auto max-w-6xl px-5 py-20">
-      <div className="max-w-2xl">
-        <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-          Planes claros, en dólares
-        </h2>
-        <p className="mt-4 text-lg text-zinc-600">
-          Sin contratos forzosos. Cambia de plan cuando tu organización crezca.
-        </p>
-      </div>
-
-      <div className="mt-14 grid gap-6 lg:grid-cols-3">
-        {plans.map((plan) => (
-          <div
-            key={plan.name}
-            className={`flex flex-col rounded-2xl border p-7 ${
-              plan.highlight
-                ? 'border-emerald-600 bg-zinc-900 text-white'
-                : 'border-zinc-200 bg-white'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <h3 className={`text-lg font-semibold ${plan.highlight ? 'text-white' : 'text-zinc-900'}`}>
-                {plan.name}
-              </h3>
-              {plan.highlight && (
-                <span className="rounded-full bg-emerald-500 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-900">
-                  Más vendido
-                </span>
-              )}
-            </div>
-            <p className={`mt-1 text-sm ${plan.highlight ? 'text-zinc-300' : 'text-zinc-500'}`}>
-              {plan.tagline}
-            </p>
-            <div className="mt-6 flex items-baseline gap-1">
-              <span className={`text-4xl font-extrabold tracking-tight ${plan.highlight ? 'text-white' : 'text-zinc-900'}`}>
-                ${plan.price}
-              </span>
-              <span className={`text-sm ${plan.highlight ? 'text-zinc-400' : 'text-zinc-500'}`}>/mes</span>
-            </div>
-
-            <ul className="mt-7 space-y-3 border-t pt-6 text-sm">
-              {plan.features.map((f) => (
-                <li key={f} className="flex items-start gap-2.5">
-                  <Check
-                    className={`mt-0.5 h-4 w-4 shrink-0 ${plan.highlight ? 'text-emerald-400' : 'text-emerald-600'}`}
-                    strokeWidth={2.5}
-                  />
-                  <span className={plan.highlight ? 'text-zinc-200' : 'text-zinc-700'}>{f}</span>
-                </li>
-              ))}
-            </ul>
-
-            <Link
-              to="/crear-cuenta"
-              className={`mt-8 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold transition-transform active:scale-[0.98] ${
-                plan.highlight
-                  ? 'bg-emerald-500 text-zinc-900'
-                  : 'bg-zinc-900 text-white'
-              }`}
-            >
-              Empezar
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
-        ))}
       </div>
     </section>
   )
@@ -486,7 +404,6 @@ export default function Landing() {
       <main>
         <Hero />
         <Features />
-        <Pricing />
         <CallToAction />
       </main>
       <Footer />

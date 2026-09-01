@@ -1,4 +1,4 @@
-const CACHE = 'eventpass-shell-v2'
+const CACHE = 'eventpass-shell-v3'
 const SHELL = ['/', '/admin', '/favicon.svg']
 
 self.addEventListener('install', (event) => {
@@ -12,16 +12,20 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return
   const request = event.request
-  const isAppCode = request.url.includes('/assets/') || request.destination === 'script' || request.destination === 'style' || request.mode === 'navigate'
+  const url = new URL(request.url)
+
+  // Las API autenticadas y cualquier recurso de otro origen deben llegar
+  // siempre a la red. Guardarlas en Cache Storage devuelve datos obsoletos y
+  // puede mezclar respuestas que dependen de la sesión del usuario.
+  if (url.origin !== self.location.origin) return
+
+  const isAppCode = url.pathname.startsWith('/assets/') || request.destination === 'script' || request.destination === 'style' || request.mode === 'navigate'
+  if (!isAppCode) return
   event.respondWith(
-    (isAppCode ? fetch(request).then((response) => {
+    fetch(request).then((response) => {
       const copy = response.clone()
       void caches.open(CACHE).then((cache) => cache.put(request, copy))
       return response
-    }).catch(() => caches.match(request)) : caches.match(request).then((cached) => cached || fetch(request).then((response) => {
-      const copy = response.clone()
-      void caches.open(CACHE).then((cache) => cache.put(request, copy))
-      return response
-    }))).catch(() => caches.match('/'))
+    }).catch(() => caches.match(request).then((cached) => cached || (request.mode === 'navigate' ? caches.match('/') : Response.error())))
   )
 })

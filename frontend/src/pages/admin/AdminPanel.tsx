@@ -19,6 +19,7 @@ type Registration = {
   payment_method: string | null
   payment_amount: number | null
   seat_id: string | null
+  credential_token: string
   seats: SeatInfo | SeatInfo[] | null
   created_at: string
 }
@@ -71,7 +72,7 @@ export default function AdminPanel() {
     let query = supabase
       .from('registrations')
       .select(
-        'id, first_name, last_name, email, phone, status, comprobante_path, payment_method, payment_amount, seat_id, seats(seat_number, row_label, column_number), created_at',
+        'id, first_name, last_name, email, phone, status, comprobante_path, payment_method, payment_amount, seat_id, credential_token, seats(seat_number, row_label, column_number), created_at',
       )
       .eq('organization_id', orgId)
     if (eventId !== 'all') query = query.eq('event_id', eventId)
@@ -125,6 +126,30 @@ export default function AdminPanel() {
     window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
   }
 
+  async function sendConfirmation(row: Registration): Promise<boolean> {
+    const apiUrl = import.meta.env.VITE_API_URL
+    if (!apiUrl) {
+      setError('La confirmación quedó guardada, pero el servicio de correo no está configurado.')
+      return false
+    }
+    try {
+      const response = await fetch(`${apiUrl}/api/registrations/confirm-notify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ registration_id: row.id, credential_token: row.credential_token }),
+      })
+      const body = await response.json().catch(() => null) as { error?: string; status?: string } | null
+      if (!response.ok || body?.status !== 'accepted') {
+        setError(body?.error ?? 'La confirmación quedó guardada, pero el correo no pudo enviarse. Puedes reintentarlo.')
+        return false
+      }
+      return true
+    } catch {
+      setError('La confirmación quedó guardada, pero no hubo conexión con el servicio de correo. Puedes reintentarlo.')
+      return false
+    }
+  }
+
   async function act(row: Registration, status: 'confirmed' | 'rejected') {
     if (!membership) return
     let rejection_reason: string | null = null
@@ -153,20 +178,8 @@ export default function AdminPanel() {
         .eq('id', row.seat_id)
     }
 
-    // Al confirmar, dispara el correo con el enlace a la credencial (Worker).
-    // Best-effort: un fallo de correo no revierte la confirmación.
-    const apiUrl = import.meta.env.VITE_API_URL
-    if (status === 'confirmed' && apiUrl) {
-      try {
-        await fetch(`${apiUrl}/api/registrations/confirm-notify`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ registration_id: row.id }),
-        })
-      } catch {
-        // Silencioso: el registro ya quedó confirmado.
-      }
-    }
+    // Un fallo del proveedor no revierte la confirmación, pero queda visible y reintentable.
+    if (status === 'confirmed') await sendConfirmation(row)
 
     await loadRegistrations(membership.organization_id, eventFilter)
     setActingId(null)
@@ -403,6 +416,16 @@ export default function AdminPanel() {
                               >
                                 <Check className="h-3.5 w-3.5" />
                                 Confirmar
+                              </button>
+                            )}
+                            {r.status === 'confirmed' && (
+                              <button
+                                disabled={actingId === r.id}
+                                onClick={async () => { setActingId(r.id); setError(null); await sendConfirmation(r); setActingId(null) }}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition-colors hover:border-emerald-500 disabled:opacity-50"
+                              >
+                                <RefreshCw className={`h-3.5 w-3.5 ${actingId === r.id ? 'animate-spin' : ''}`} />
+                                Reenviar correo
                               </button>
                             )}
                             {r.status !== 'rejected' && (

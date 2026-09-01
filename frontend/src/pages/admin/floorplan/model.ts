@@ -29,6 +29,7 @@ export type FloorplanElement = FloorplanRect & {
   purpose?: string;
   rotation?: 0 | 90 | 180 | 270;
   color?: string;
+  reservationColor?: string;
   doorRole?: "entry" | "exit";
   assignedCompanyName?: string;
 };

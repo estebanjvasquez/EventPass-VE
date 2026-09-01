@@ -14,6 +14,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
+import { credentialQrValue, extractCredentialToken } from "../../lib/credentialQr";
 import { supabase } from "../../lib/supabase";
 import { resolveActiveOrg } from "../../lib/activeOrg";
 import ImpersonationBanner from "../../components/ImpersonationBanner";
@@ -33,7 +34,15 @@ type Reg = {
   seat_label: string | null;
   badge_cancelled_at: string | null;
 };
-type EventOption = { id: string; name: string };
+type EventOption = {
+  id: string;
+  name: string;
+  status: string;
+  total_participants: number;
+  ready_participants: number;
+  can_print: boolean;
+  can_configure: boolean;
+};
 type PrintLog = {
   id: string;
   print_kind: "initial" | "reprint" | "cancelled";
@@ -136,6 +145,7 @@ export default function AcreditacionEvento() {
   const [eventId, setEventId] = useState("");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Reg[]>([]);
+  const [hasSearched, setHasSearched] = useState(false);
   const [selected, setSelected] = useState<Reg | null>(null);
   const [edit, setEdit] = useState({
     first_name: "",
@@ -174,12 +184,13 @@ export default function AcreditacionEvento() {
       if (!active) return;
       setOrgId(active.organization_id);
       setOrgName(active.organizations?.name ?? "");
-      const { data } = await supabase
-        .from("events")
-        .select("id,name")
-        .eq("organization_id", active.organization_id)
-        .eq("status", "published")
-        .order("created_at", { ascending: false });
+      const { data, error: eventsError } = await supabase.rpc(
+        "get_accreditation_event_options",
+      );
+      if (eventsError) {
+        setError(eventsError.message);
+        return;
+      }
       const rows = (data ?? []) as EventOption[];
       setEvents(rows);
       if (rows[0]) setEventId(rows[0].id);
@@ -213,6 +224,7 @@ export default function AcreditacionEvento() {
   useEffect(() => {
     setSelected(null);
     setResults([]);
+    setHasSearched(false);
     void loadOperationalData();
   }, [eventId, loadOperationalData]);
 
@@ -231,8 +243,19 @@ export default function AcreditacionEvento() {
   }
   async function search(e?: React.FormEvent) {
     e?.preventDefault();
-    if (!eventId || query.trim().length < 2) return;
+    const event = events.find((item) => item.id === eventId);
+    if (!eventId || query.trim().length < 2) {
+      setError("Escribe al menos dos caracteres para buscar.");
+      return;
+    }
+    if (!event?.can_print) {
+      setError(
+        "No tienes permiso para acreditar e imprimir en este evento. Pide a un administrador que te asigne “Imprimir acreditaciones”.",
+      );
+      return;
+    }
     setError(null);
+    setHasSearched(true);
     const { data, error: rpcError } = await supabase.rpc(
       "search_event_badges",
       { p_event_id: eventId, p_query: query.trim().replace(/[%,]/g, "") },
@@ -243,7 +266,7 @@ export default function AcreditacionEvento() {
   const pickByToken = useCallback(async (token: string) => {
     const { data, error: rpcError } = await supabase.rpc(
       "get_event_badge_by_token",
-      { p_token: token.trim() },
+      { p_token: extractCredentialToken(token) },
     );
     const row = Array.isArray(data) ? (data[0] as Reg | undefined) : undefined;
     if (rpcError || !row)
@@ -532,7 +555,10 @@ export default function AcreditacionEvento() {
     }
   }
 
-  const eventName = events.find((item) => item.id === eventId)?.name ?? "";
+  const currentEvent = events.find((item) => item.id === eventId);
+  const eventName = currentEvent?.name ?? "";
+  const canPrint = Boolean(currentEvent?.can_print);
+  const canConfigure = Boolean(currentEvent?.can_configure);
   const activeTemplate = selected
     ? (templates.find(
         (item) => item.participation_type === selected.participation_type,
@@ -560,11 +586,10 @@ export default function AcreditacionEvento() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold">
-              Buscar, confirmar, imprimir y entregar
+              Mostrador de acreditación
             </h1>
             <p className="mt-1 text-sm text-zinc-600">
-              La impresión no realiza check-in. Cada paso queda auditado por
-              separado.
+              Sigue los pasos: selecciona el evento, busca, confirma, imprime y entrega.
             </p>
           </div>
           <div className="flex gap-2">
@@ -576,16 +601,32 @@ export default function AcreditacionEvento() {
               <UserPlus className="h-4 w-4" />
               Registrar walk-in
             </button>
-            <button
-              type="button"
-              onClick={() => setShowDesigner((v) => !v)}
-              className="inline-flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm font-semibold"
-            >
-              <Palette className="h-4 w-4" />
-              Diseñar credenciales
-            </button>
+            {canConfigure && (
+              <button
+                type="button"
+                onClick={() => setShowDesigner((v) => !v)}
+                className="inline-flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm font-semibold"
+              >
+                <Palette className="h-4 w-4" />
+                Configuración de impresión
+              </button>
+            )}
           </div>
         </div>
+        <section className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {[
+            ["1", "Selecciona el evento"],
+            ["2", "Busca al participante"],
+            ["3", "Confirma sus datos"],
+            ["4", "Imprime la credencial"],
+            ["5", "Marca la entrega"],
+          ].map(([step, label]) => (
+            <div key={step} className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm font-medium text-emerald-900">
+              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-emerald-700 text-xs font-bold text-white">{step}</span>
+              {label}
+            </div>
+          ))}
+        </section>
         <section className="mt-5 grid gap-3 sm:grid-cols-3 lg:grid-cols-7">
           {[
             ["Iniciales", metrics.initial_prints],
@@ -623,7 +664,7 @@ export default function AcreditacionEvento() {
             {info}
           </p>
         )}
-        {showDesigner && (
+        {showDesigner && canConfigure && (
           <Designer
             template={templateDraft}
             setTemplate={setTemplateDraft}
@@ -650,11 +691,11 @@ export default function AcreditacionEvento() {
                 className={input}
               >
                 {events.length === 0 && (
-                  <option value="">Sin eventos publicados</option>
+                  <option value="">Sin eventos disponibles para acreditación</option>
                 )}
                 {events.map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.name}
+                    {item.name} · {item.total_participants} participantes
                   </option>
                 ))}
               </select>
@@ -667,6 +708,24 @@ export default function AcreditacionEvento() {
                 {scanning ? "Cerrar cámara" : "Escanear QR"}
               </button>
             </div>
+            {currentEvent && (
+              <div className="mt-3 rounded-lg bg-zinc-50 p-3 text-sm text-zinc-700">
+                <p className="font-semibold">{currentEvent.name}</p>
+                <p className="mt-1 text-xs text-zinc-600">
+                  {currentEvent.total_participants} participantes · {currentEvent.ready_participants} confirmados o aprobados
+                </p>
+                {!canPrint && (
+                  <p className="mt-2 rounded bg-amber-50 p-2 text-xs font-medium text-amber-800">
+                    Puedes consultar la operación, pero no acreditar ni imprimir hasta tener el permiso “Imprimir acreditaciones” para este evento.
+                  </p>
+                )}
+                {!canConfigure && (
+                  <p className="mt-2 text-xs text-zinc-500">
+                    Plantilla activa: la configura un administrador; tú puedes usarla para imprimir cuando tengas permiso.
+                  </p>
+                )}
+              </div>
+            )}
             {scanning && (
               <div className="mt-3 overflow-hidden rounded-xl bg-black">
                 <div id={READER_ID} />
@@ -717,6 +776,11 @@ export default function AcreditacionEvento() {
                   </span>
                 </button>
               ))}
+              {hasSearched && results.length === 0 && (
+                <p className="rounded-lg border border-dashed border-zinc-300 p-4 text-sm text-zinc-600">
+                  No encontramos participantes en “{eventName}”. Verifica que elegiste el evento correcto o busca por otro dato.
+                </p>
+              )}
             </div>
           </section>
           <section className="rounded-2xl border bg-white p-5">
@@ -818,6 +882,7 @@ export default function AcreditacionEvento() {
                     type="button"
                     disabled={
                       busy ||
+                      !canPrint ||
                       !isConfirmed(selected) ||
                       !!selected.badge_cancelled_at
                     }
@@ -829,6 +894,11 @@ export default function AcreditacionEvento() {
                       ? "Reimprimir"
                       : "Imprimir"}
                   </button>
+                  {!canPrint && (
+                    <p className="self-center text-xs font-medium text-amber-700">
+                      Falta el permiso de impresión para este evento.
+                    </p>
+                  )}
                   {printed && (
                     <>
                       <button
@@ -1205,7 +1275,7 @@ function BadgePrint({
         {template.show_qr && (
           <div className={landscape ? "shrink-0" : "mt-2"}>
             <QRCodeSVG
-              value={reg.credential_token}
+              value={credentialQrValue(reg.credential_token)}
               size={qr}
               level="M"
               marginSize={0}

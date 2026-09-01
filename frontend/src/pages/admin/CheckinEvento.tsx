@@ -4,6 +4,7 @@ import { Html5Qrcode } from 'html5-qrcode'
 import { ArrowLeft, CheckCircle2, ScanLine, TriangleAlert, XCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { resolveActiveOrg } from '../../lib/activeOrg'
+import { extractCredentialToken } from '../../lib/credentialQr'
 
 type Outcome = {
   kind: 'success' | 'warning' | 'error'
@@ -70,7 +71,7 @@ export default function CheckinEvento() {
   }, [accessPointId, accessPoints])
 
   const process = useCallback(async (rawToken: string) => {
-    const token = rawToken.trim()
+    const token = extractCredentialToken(rawToken)
     if (!token || busyRef.current) return
     busyRef.current = true
     try {

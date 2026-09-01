@@ -36,6 +36,7 @@ type Company = {
   public_contact_email?: string | null;
   public_contact_phone?: string | null;
   public_profile_status?: string | null;
+  public_profile_review_notes?: string | null;
 };
 type Stand = { id: string; label: string; status: string };
 type Assignment = { element_id: string; company_id: string };
@@ -122,6 +123,9 @@ export default function ExpositoresAdmin() {
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [companyDraft, setCompanyDraft] = useState<Partial<Company>>({});
   const [reviewCompany, setReviewCompany] = useState<Company | null>(null);
+  const [reviewBusy, setReviewBusy] = useState(false);
+  const [changeRequestOpen, setChangeRequestOpen] = useState(false);
+  const [changeRequestNotes, setChangeRequestNotes] = useState("");
   const [portalMembers, setPortalMembers] = useState<PortalMember[]>([]);
   const [portalTasks, setPortalTasks] = useState<PortalTask[]>([]);
   const [portalPayments, setPortalPayments] = useState<PortalPayment[]>([]);
@@ -178,9 +182,10 @@ export default function ExpositoresAdmin() {
       supabase
         .from("companies")
         .select(
-          "id,name,contact_name,contact_email,contact_phone,legal_name,tax_id,fiscal_address,billing_email,billing_phone,billing_contact,website,profile_notes,public_logo_url,public_description,public_category,public_social_links,public_contact_email,public_contact_phone,public_profile_status",
+          "id,name,contact_name,contact_email,contact_phone,legal_name,tax_id,fiscal_address,billing_email,billing_phone,billing_contact,website,profile_notes,public_logo_url,public_description,public_category,public_social_links,public_contact_email,public_contact_phone,public_profile_status,public_profile_review_notes",
         )
         .eq("organization_id", event.organization_id)
+        .eq("event_id", eventId)
         .eq("kind", "exhibitor")
         .order("name"),
       map
@@ -218,10 +223,10 @@ export default function ExpositoresAdmin() {
 
   async function create(event: React.FormEvent) {
     event.preventDefault();
-    if (!orgId || !name.trim()) return;
+    if (!orgId || !eventId || !name.trim()) return;
     const { error: insertError } = await supabase
       .from("companies")
-      .insert({ organization_id: orgId, name: name.trim(), kind: "exhibitor" });
+      .insert({ organization_id: orgId, event_id: eventId, name: name.trim(), kind: "exhibitor" });
     if (insertError) setError(insertError.message);
     else {
       setName("");
@@ -230,7 +235,7 @@ export default function ExpositoresAdmin() {
   }
 
   async function importCompanies(rows: CsvRow[]) {
-    if (!orgId)
+    if (!orgId || !eventId)
       throw new Error("No se pudo identificar la organización del evento.");
     const known = new Set(
       companies.map((company) => company.name.trim().toLocaleLowerCase("es")),
@@ -246,6 +251,7 @@ export default function ExpositoresAdmin() {
       known.add(key);
       pending.push({
         organization_id: orgId,
+        event_id: eventId,
         kind: "exhibitor",
         name: row.name.trim(),
         legal_name: row.legal_name || null,
@@ -581,21 +587,42 @@ export default function ExpositoresAdmin() {
     }
   }
 
-  async function reviewPublicProfile(companyId: string, approved: boolean) {
-    const { error: reviewError } = await supabase.rpc(
+  async function reviewPublicProfile(companyId: string, approved: boolean, feedback: string | null = null) {
+    if (!approved && (feedback?.trim().length ?? 0) < 10) {
+      setError("Describe los cambios solicitados con al menos 10 caracteres.");
+      return;
+    }
+    setReviewBusy(true);
+    setError(null);
+    const { data: reviewed, error: reviewError } = await supabase.rpc(
       "review_exhibitor_public_profile",
-      { p_company_id: companyId, p_approved: approved },
+      { p_company_id: companyId, p_approved: approved, p_feedback: feedback },
     );
     if (reviewError) setError(reviewError.message);
+    else if (!reviewed || reviewed.public_profile_status !== (approved ? "approved" : "rejected")) {
+      setError("No se pudo confirmar el nuevo estado del perfil.");
+    }
     else {
       setReviewCompany(null);
+      setChangeRequestOpen(false);
+      setChangeRequestNotes("");
       setNotice(
         approved
-          ? "Perfil aprobado y visible en el plano."
+          ? assigned.has(companyId)
+            ? "Perfil aprobado. Se publicará junto con el plano."
+            : "Perfil aprobado. Se publicará cuando tenga un stand asignado y se publique el plano."
           : "Perfil devuelto para correcciones.",
       );
       await load();
     }
+    setReviewBusy(false);
+  }
+
+  function requestProfileChanges(company: Company) {
+    setReviewCompany(company);
+    setChangeRequestNotes(company.public_profile_review_notes ?? "");
+    setChangeRequestOpen(true);
+    setError(null);
   }
 
   const assigned = new Map(
@@ -635,25 +662,6 @@ export default function ExpositoresAdmin() {
             {notice}
           </p>
         )}
-          <section className="mt-5 rounded-xl border border-amber-300 bg-amber-50 p-4">
-            <h2 className="font-semibold text-amber-950">Revisión de perfiles públicos</h2>
-            <p className="mt-1 text-xs text-amber-900">Aprueba o devuelve los perfiles enviados antes de mostrarlos en el plano público.</p>
-            <div className="mt-3 space-y-2">
-              {companies.filter((company) => company.public_profile_status === "pending").map((company) => (
-                <div key={company.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white p-3 text-sm">
-                  <span><b>{company.name}</b>{company.public_category ? ` · ${company.public_category}` : ""}</span>
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => setReviewCompany(company)} className="rounded-lg border px-3 py-1.5 text-xs font-semibold">Ver perfil enviado</button>
-                    <button type="button" onClick={() => void reviewPublicProfile(company.id, true)} className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white">Aprobar</button>
-                    <button type="button" onClick={() => void reviewPublicProfile(company.id, false)} className="rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-900">Solicitar cambios</button>
-                  </div>
-                </div>
-              ))}
-              {!companies.some((company) => company.public_profile_status === "pending") && (
-                <p className="rounded-lg bg-white p-3 text-sm text-amber-900">No hay perfiles pendientes de revisión.</p>
-              )}
-            </div>
-          </section>
         <section className="mt-5 grid gap-4 md:grid-cols-2">
           <form onSubmit={create} className="rounded-xl border bg-white p-4">
             <h2 className="font-semibold">Nueva empresa expositora</h2>
@@ -1136,12 +1144,10 @@ export default function ExpositoresAdmin() {
                     </select>
                   </td>
                   <td className="p-3">
-                    <Link
-                      to={`/portal/expositor/${eventId}?companyId=${company.id}`}
-                      className="text-xs font-semibold text-emerald-700"
-                    >
-                      Abrir portal
-                    </Link>
+                    <div className="flex flex-col items-start gap-1">
+                      <Link to={`/portal/expositor/${eventId}?companyId=${company.id}`} className="text-xs font-semibold text-emerald-700">Abrir portal</Link>
+                      {assigned.get(company.id) && <button type="button" onClick={() => { const url = `${window.location.origin}/expo/${eventId}/plano?element=${assigned.get(company.id)}`; void navigator.clipboard.writeText(url).then(() => setNotice("Enlace público de la empresa copiado.")); }} className="text-xs font-semibold text-blue-700">Copiar enlace público</button>}
+                    </div>
                   </td>
                   <td className="p-3">
                     <button
@@ -1207,6 +1213,11 @@ export default function ExpositoresAdmin() {
                       </button>
                     )}
                     {company.public_profile_status === "approved" && (
+                      <span className="rounded-full bg-emerald-100 px-3 py-1.5 text-xs font-semibold text-emerald-800">
+                        ✓ Perfil aprobado
+                      </span>
+                    )}
+                    {company.public_profile_status === "approved" && (
                       <button
                         type="button"
                         onClick={() => setReviewCompany(company)}
@@ -1218,9 +1229,7 @@ export default function ExpositoresAdmin() {
                     {company.public_profile_status === "approved" && (
                       <button
                         type="button"
-                        onClick={() =>
-                          void reviewPublicProfile(company.id, false)
-                        }
+                        onClick={() => requestProfileChanges(company)}
                         className="rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-800"
                       >
                         Solicitar cambios
@@ -1246,6 +1255,11 @@ export default function ExpositoresAdmin() {
                   <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Perfil público enviado</p>
                   <h2 className="mt-1 text-2xl font-bold">{reviewCompany.name}</h2>
                   <p className="mt-1 text-sm text-zinc-500">Estado: {reviewCompany.public_profile_status === "approved" ? "Aprobado" : "Pendiente de revisión"}</p>
+                  {reviewCompany.public_profile_status === "approved" && (
+                    <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
+                      ✓ Aprobado para publicarse con el plano{assigned.has(reviewCompany.id) ? "." : " cuando tenga un stand asignado."}
+                    </p>
+                  )}
                 </div>
                 <button type="button" onClick={() => setReviewCompany(null)} className="rounded-lg border px-3 py-2 text-sm">Cerrar</button>
               </div>
@@ -1268,10 +1282,36 @@ export default function ExpositoresAdmin() {
                 {reviewCompany.public_social_links?.instagram && <a href={reviewCompany.public_social_links.instagram} target="_blank" rel="noreferrer" className="text-emerald-700 underline">Instagram</a>}
               </div>
               <div className="mt-6 flex justify-end gap-2 border-t pt-4">
-                <button type="button" onClick={() => void reviewPublicProfile(reviewCompany.id, false)} className="rounded-lg border border-amber-300 px-4 py-2 text-sm font-semibold text-amber-900">Solicitar cambios</button>
-                {reviewCompany.public_profile_status !== "approved" && <button type="button" onClick={() => void reviewPublicProfile(reviewCompany.id, true)} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">Aprobar perfil</button>}
+                <button disabled={reviewBusy} type="button" onClick={() => requestProfileChanges(reviewCompany)} className="rounded-lg border border-amber-300 px-4 py-2 text-sm font-semibold text-amber-900 disabled:opacity-50">Solicitar cambios</button>
+                {reviewCompany.public_profile_status !== "approved" && <button disabled={reviewBusy} type="button" onClick={() => void reviewPublicProfile(reviewCompany.id, true)} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{reviewBusy ? "Aprobando…" : "Aprobar y publicar con el plano"}</button>}
               </div>
             </section>
+          </div>
+        )}
+        {changeRequestOpen && reviewCompany && (
+          <div className="fixed inset-0 z-[60] grid place-items-center bg-zinc-950/60 p-4" onClick={() => { if (!reviewBusy) { setChangeRequestOpen(false); setChangeRequestNotes(""); } }}>
+            <form
+              className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl"
+              onClick={(event) => event.stopPropagation()}
+              onSubmit={(event) => {
+                event.preventDefault();
+                void reviewPublicProfile(reviewCompany.id, false, changeRequestNotes);
+              }}
+            >
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Solicitud de correcciones</p>
+              <h2 className="mt-1 text-xl font-bold">{reviewCompany.name}</h2>
+              <label className="mt-5 block text-sm font-semibold text-zinc-900" htmlFor="profile-change-request">¿Qué debe corregir el expositor?</label>
+              <p className="mt-1 text-sm text-zinc-600">Escribe instrucciones claras. El expositor las verá en su portal.</p>
+              <textarea id="profile-change-request" autoFocus required minLength={10} rows={5} maxLength={2000} value={changeRequestNotes} onChange={(event) => setChangeRequestNotes(event.target.value)} placeholder="Ejemplo: Reemplazar el logo por una versión con fondo transparente y completar el correo de contacto público." className="mt-3 w-full rounded-lg border border-amber-300 bg-white p-3 text-sm focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200" />
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <span className="text-xs text-zinc-500">Mínimo 10 caracteres</span>
+                <span className="text-xs text-amber-800">{changeRequestNotes.trim().length}/2000</span>
+              </div>
+              <div className="mt-5 flex justify-end gap-2 border-t pt-4">
+                <button type="button" disabled={reviewBusy} onClick={() => { setChangeRequestOpen(false); setChangeRequestNotes(""); }} className="rounded-lg border px-4 py-2 text-sm font-semibold disabled:opacity-50">Cancelar</button>
+                <button type="submit" disabled={reviewBusy || changeRequestNotes.trim().length < 10} className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{reviewBusy ? "Enviando…" : "Enviar solicitud de cambios"}</button>
+              </div>
+            </form>
           </div>
         )}
       </main>

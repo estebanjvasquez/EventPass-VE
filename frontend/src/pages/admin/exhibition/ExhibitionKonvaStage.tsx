@@ -41,6 +41,18 @@ export type SceneElement = {
   booth_type?: string | null;
   tags?: string[];
 };
+export type AiProposalElement = {
+  source_id: string;
+  label: string;
+  kind: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  confidence: number;
+  conflicts: string[];
+  needs_review: boolean;
+};
 type Kind =
   | "stand"
   | "aisle"
@@ -852,6 +864,8 @@ export function ExhibitionKonvaStage({
   readOnly = false,
   calibrationActive = false,
   calibrationPoints = [],
+  aiProposal = [],
+  aiSelectedIds = [],
   onSelect,
   onClear,
   onPlace,
@@ -877,6 +891,8 @@ export function ExhibitionKonvaStage({
   readOnly?: boolean;
   calibrationActive?: boolean;
   calibrationPoints?: { x: number; y: number }[];
+  aiProposal?: AiProposalElement[];
+  aiSelectedIds?: string[];
   onSelect: (item: SceneElement, additive: boolean) => void;
   onClear: () => void;
   onPlace: (x: number, y: number) => void;
@@ -1179,6 +1195,32 @@ export function ExhibitionKonvaStage({
                   listening={false}
                 />
               )}
+              {aiProposal.map((item) => {
+                const selected = aiSelectedIds.includes(item.source_id);
+                const warning = item.needs_review || item.conflicts.length > 0;
+                return (
+                  <Group key={`ai-${item.source_id}`} listening={false} opacity={selected ? 0.85 : 0.25}>
+                    <Rect
+                      x={item.x}
+                      y={item.y}
+                      width={item.width}
+                      height={item.height}
+                      fill={warning ? "#fef3c7" : "#d1fae5"}
+                      stroke={warning ? "#d97706" : "#059669"}
+                      strokeWidth={0.12}
+                      dash={[0.25, 0.12]}
+                    />
+                    <Text
+                      text={`IA · ${item.label}`}
+                      x={item.x + 0.08}
+                      y={item.y + 0.08}
+                      width={Math.max(0.2, item.width - 0.16)}
+                      fontSize={Math.max(0.16, Math.min(0.32, item.height / 4))}
+                      fill="#1f2937"
+                    />
+                  </Group>
+                );
+              })}
               {sorted.map((item) => {
                 const kind = kindOf(item);
                 const isSelected = selectedIds.includes(item.id);

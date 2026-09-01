@@ -18,6 +18,7 @@ const DefinirClave = lazy(() => import('./pages/DefinirClave'))
 const RecuperarClave = lazy(() => import('./pages/RecuperarClave'))
 const Login = lazy(() => import('./pages/admin/Login'))
 const AdminPanel = lazy(() => import('./pages/admin/AdminPanel'))
+const OrganizadorDashboard = lazy(() => import('./pages/admin/OrganizadorDashboard'))
 const CheckinEvento = lazy(() => import('./pages/admin/CheckinEvento'))
 const CheckinReportAdmin = lazy(() => import('./pages/admin/CheckinReportAdmin'))
 const AcreditacionEvento = lazy(() => import('./pages/admin/AcreditacionEvento'))
@@ -31,6 +32,8 @@ const EquipoOperativoAdmin = lazy(() => import('./pages/admin/EquipoOperativoAdm
 const StandsAdmin = lazy(() => import('./pages/admin/StandsAdmin'))
 const ExpositoresAdmin = lazy(() => import('./pages/admin/ExpositoresAdmin'))
 const PortalExpositor = lazy(() => import('./pages/PortalExpositor'))
+const PortalExpositorInicio = lazy(() => import('./pages/PortalExpositorInicio'))
+const PortalExpositorVisitantes = lazy(() => import('./pages/PortalExpositorVisitantes'))
 const PlanoPublico = lazy(() => import('./pages/PlanoPublico'))
 const PatrocinantesAdmin = lazy(() => import('./pages/admin/PatrocinantesAdmin'))
 const PatrocinantesGestionAdmin = lazy(() => import('./pages/admin/PatrocinantesGestionAdmin'))
@@ -73,7 +76,7 @@ function App() {
           path="/admin"
           element={
             <RequireAuth>
-              <AdminPanel />
+              <OrganizadorDashboard />
             </RequireAuth>
           }
         />
@@ -85,6 +88,7 @@ function App() {
             </RequireAuth>
           }
         />
+        <Route path="/admin/registros" element={<RequireAuth><AdminPanel /></RequireAuth>} />
         <Route path="/admin/puntos-acceso" element={<RequireAuth><PuntosAccesoAdmin /></RequireAuth>} />
         <Route path="/admin/equipo-operativo" element={<RequireAuth><EquipoOperativoAdmin /></RequireAuth>} />
         <Route path="/admin/checkin/control" element={<RequireAuth><CheckinReportAdmin /></RequireAuth>} />
@@ -110,7 +114,9 @@ function App() {
         <Route path="/admin/programs" element={<Navigate to="/admin/programas" replace />} />
         <Route path="/admin/stands/:eventId" element={<RequireAuth><StandsAdmin /></RequireAuth>} />
         <Route path="/admin/expositores/:eventId" element={<RequireAuth><ExpositoresAdmin /></RequireAuth>} />
+        <Route path="/portal/expositor" element={<RequireAuth><PortalExpositorInicio /></RequireAuth>} />
         <Route path="/portal/expositor/:eventId" element={<RequireAuth><PortalExpositor /></RequireAuth>} />
+        <Route path="/portal/expositor/:eventId/visitantes" element={<RequireAuth><PortalExpositorVisitantes /></RequireAuth>} />
         <Route path="/expo/:eventId/plano" element={<PlanoPublico />} />
         <Route path="/admin/patrocinantes/:eventId" element={<RequireAuth><PatrocinantesAdmin /></RequireAuth>} />
         <Route path="/admin/patrocinantes" element={<RequireAuth><PatrocinantesGestionAdmin /></RequireAuth>} />

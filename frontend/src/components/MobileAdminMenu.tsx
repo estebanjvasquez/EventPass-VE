@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { CalendarCog, Handshake, IdCard, LogOut, Menu, ScanLine, ShieldCheck, Ticket, Users, X } from 'lucide-react'
+import { CalendarCog, Handshake, IdCard, LayoutDashboard, LogOut, Menu, ScanLine, ShieldCheck, Ticket, Users, X } from 'lucide-react'
 import { useAuth } from '../lib/auth'
 
 const links = [
-  { href: '/admin', label: 'Registros', icon: Ticket },
+  { href: '/admin', label: 'Inicio', icon: LayoutDashboard },
+  { href: '/admin/registros', label: 'Registros', icon: Ticket },
   { href: '/admin/eventos', label: 'Eventos', icon: CalendarCog },
   { href: '/admin/acreditacion', label: 'Acreditación', icon: IdCard },
   { href: '/admin/checkin', label: 'Check-in', icon: ScanLine },
