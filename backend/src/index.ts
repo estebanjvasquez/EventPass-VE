@@ -41,8 +41,10 @@ function allowedAppOrigin(origin: string): string | undefined {
     if (url.protocol !== 'https:') return undefined
     const host = url.hostname.toLowerCase()
     if (host === 'eventosfacil.net' || host === 'www.eventosfacil.net' || host.endsWith('.eventosfacil.net')) return origin
-    // Previews oficiales de Cloudflare Pages para pruebas de liberación.
-    if (host.endsWith('.eventpass-d7d.pages.dev')) return origin
+    // Dominio principal y previews oficiales de Cloudflare Pages para pruebas
+    // de liberación. El dominio raíz no cumple `endsWith('.…')`, por lo que
+    // debe admitirse explícitamente para evitar un `Failed to fetch` en IA.
+    if (host === 'eventpass-d7d.pages.dev' || host.endsWith('.eventpass-d7d.pages.dev')) return origin
   } catch {
     // Un Origin malformado no debe recibir permisos CORS.
   }
