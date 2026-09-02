@@ -184,7 +184,7 @@ export default function AgendaAdmin() {
     {tab === 'speakers' && <SpeakersView speakers={speakers} onNew={() => setSpeakerEditor('new')} onEdit={setSpeakerEditor} onDelete={deleteSpeaker} />}
     {tab === 'content' && <AgendaContentAdmin event={event} sessions={sessions} speakers={speakers} onRefresh={load} />}
     {tab === 'operations' && <AgendaOperationsAdmin event={event} sessions={sessions} />}
-    {tab === 'public' && <PublicAgendaDesigner event={event} onSaved={load} />}
+    {tab === 'public' && <><PublicAgendaRefreshControl event={event} onSaved={load} /><PublicAgendaDesigner event={event} onSaved={load} /></>}
     {stageEditor && <FriendlyStageModal stage={stageEditor === 'new' ? null : stageEditor} event={event} nextOrder={stages.length} onClose={() => setStageEditor(null)} onSaved={async () => { setStageEditor(null); await load() }} />}
     {sessionEditor && <SessionModal session={sessionEditor === 'new' ? null : sessionEditor} event={event} stages={stages} speakers={speakers} assigned={sessionEditor === 'new' ? [] : speakerIds[sessionEditor.id] ?? []} assignedModerators={sessionEditor === 'new' ? [] : moderatorIds[sessionEditor.id] ?? []} eventSponsors={eventSponsors} assignedSponsors={sessionEditor === 'new' ? [] : sessionSponsorIds[sessionEditor.id] ?? []} allSessions={sessions} onClose={() => setSessionEditor(null)} onSaved={async () => { setSessionEditor(null); await load() }} />}
     {speakerEditor && <SpeakerModal speaker={speakerEditor === 'new' ? null : speakerEditor} event={event} nextOrder={speakers.length} onClose={() => setSpeakerEditor(null)} onSaved={async () => { setSpeakerEditor(null); await load() }} />}
@@ -193,6 +193,21 @@ export default function AgendaAdmin() {
 
 function PageFrame({ title, eventId, children }: { title: string; eventId?: string; children: React.ReactNode }) {
   return <div className="min-h-[100dvh] bg-zinc-50"><header className="border-b border-zinc-200 bg-white"><div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4"><Link to={`/admin/eventos/${eventId}/administrar`} aria-label="Volver a administrar evento" className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700"><Home className="h-4 w-4" />Admin del evento</Link><div className="flex items-center gap-3"><span className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-900"><CalendarDays className="h-4 w-4 text-emerald-600" />{title}</span>{eventId && <><Link to={`/e/${eventId}/agenda`} target="_blank" className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white">Ver agenda pública</Link><Link to={`/admin/asientos/${eventId}`} className="hidden rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 sm:inline-flex">Asientos</Link></>}</div></div></header><main className="mx-auto max-w-7xl px-5 py-8">{children}</main></div>
+}
+function PublicAgendaRefreshControl({ event, onSaved }: { event: EventData; onSaved: () => Promise<void> }) {
+  const current = (event.config?.public_agenda as Record<string, unknown> | undefined) ?? {}
+  const initial = [10, 15, 30, 60, 120, 300].includes(Number(current.refresh_seconds)) ? Number(current.refresh_seconds) : 15
+  const [seconds, setSeconds] = useState(initial)
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+  async function save() {
+    setBusy(true); setMessage(null)
+    const config = { ...event.config, public_agenda: { ...current, refresh_seconds: seconds } }
+    const { error } = await supabase.from('events').update({ config }).eq('id', event.id)
+    setBusy(false)
+    if (error) setMessage(error.message); else { setMessage('Intervalo de actualización guardado.'); await onSaved() }
+  }
+  return <section className="mt-6 flex flex-wrap items-end justify-between gap-4 rounded-2xl border border-sky-200 bg-sky-50 p-5"><div><h2 className="font-bold text-slate-900">Actualización de la pantalla</h2><p className="mt-1 text-sm text-slate-700">Define cada cuánto las pantallas públicas consultan cambios de horario, cancelaciones y patrocinantes.</p></div><div className="flex flex-wrap items-end gap-3"><label className={label}>Refrescar cada<select value={seconds} onChange={e=>setSeconds(Number(e.target.value))} className={`${input} mt-1`}><option value={10}>10 segundos</option><option value={15}>15 segundos (recomendado)</option><option value={30}>30 segundos</option><option value={60}>1 minuto</option><option value={120}>2 minutos</option><option value={300}>5 minutos</option></select></label><button type="button" disabled={busy} onClick={()=>void save()} className="rounded-lg bg-sky-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{busy ? 'Guardando…' : 'Guardar intervalo'}</button></div>{message && <p className="w-full text-sm text-slate-800">{message}</p>}</section>
 }
 function PublicAgendaDesigner({ event, onSaved }: { event: EventData; onSaved: () => Promise<void> }) {
   const current = (event.config?.public_agenda as Record<string, unknown> | undefined) ?? {}
