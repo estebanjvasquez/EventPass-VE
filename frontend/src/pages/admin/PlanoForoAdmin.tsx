@@ -139,18 +139,14 @@ export default function PlanoForoAdmin() {
       setAiBusy(false)
     }
   }
-  async function applyAiProposal() {
-    if (!eventId || !aiProposal) return
-    if (!window.confirm(`Aplicar esta propuesta reemplazará el plano actual por ${aiProposal.capacity} sillas editables. Las sillas reservadas o confirmadas no se reemplazan.`)) return
-    setBusy(true); setError(null)
-    const { error } = await supabase.rpc('apply_ai_forum_floorplan', { p_event_id: eventId, p_plan: aiProposal })
-    if (error) { setBusy(false); setError(error.message); return }
+  async function assignConfiguredReservations() {
+    if (!eventId || !categories.length) return null
     const { data: generatedSeats, error: seatsError } = await supabase
       .from('seats')
       .select('id,row_label,column_number')
       .eq('event_id', eventId)
       .eq('status', 'available')
-    if (seatsError) { setBusy(false); setError(`El plano fue creado, pero no se pudieron cargar sus reservas: ${seatsError.message}`); return }
+    if (seatsError) return `No se pudieron cargar las sillas del plano: ${seatsError.message}`
     const rowNumber = (value: string | null) => Number((value ?? '').match(/\d+/)?.[0] ?? Number.MAX_SAFE_INTEGER)
     let seats = [...(generatedSeats ?? [])].sort((a, b) => rowNumber(a.row_label) - rowNumber(b.row_label) || a.column_number - b.column_number)
     const prompt = aiPrompt.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
@@ -159,6 +155,9 @@ export default function PlanoForoAdmin() {
       .map((category, index) => ({ category, index, position: category.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/\s+/).filter(word => word.length > 3).map(word => prompt.indexOf(word)).filter(position => position >= 0).sort((a, b) => a - b)[0] ?? Number.MAX_SAFE_INTEGER }))
       .sort((a, b) => a.position - b.position || a.index - b.index)
     for (const { category } of orderedCategories) {
+      const alreadyAssigned = Object.values(seatsByElement).filter(seat => seat.reservation_category_id === category.id).length
+      const remainingCapacity = Math.max(0, category.reserved_capacity - alreadyAssigned)
+      if (!remainingCapacity) continue
       const categoryWords = category.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/\s+/).filter(word => word.length > 3)
       const categoryPosition = categoryWords.map(word => prompt.indexOf(word)).filter(position => position >= 0).sort((a, b) => a - b)[0] ?? -1
       const instruction = categoryPosition >= 0 ? prompt.slice(categoryPosition, categoryPosition + 180) : ''
@@ -175,7 +174,7 @@ export default function PlanoForoAdmin() {
         const occupiedRows = new Set(seats.filter(seat => rowNumber(seat.row_label) <= 2).map(seat => rowNumber(seat.row_label)))
         if (occupiedRows.size === 2) candidates = seats.filter(seat => rowNumber(seat.row_label) > 2)
       }
-      const selected = candidates.slice(0, category.reserved_capacity)
+      const selected = candidates.slice(0, remainingCapacity)
       const selectedIds = new Set(selected.map(seat => seat.id))
       seats = seats.filter(seat => !selectedIds.has(seat.id))
       const seatIds = selected.map(seat => seat.id)
@@ -186,9 +185,27 @@ export default function PlanoForoAdmin() {
         p_reserved_for: '',
         p_notes: 'Asignación automática al crear el plano con IA',
       })
-      if (assignmentError) { setBusy(false); setError(`El plano fue creado, pero no se pudo marcar la reserva “${category.name}”: ${assignmentError.message}`); await load(); return }
+      if (assignmentError) return `No se pudo marcar la reserva “${category.name}”: ${assignmentError.message}`
     }
-    setBusy(false); setAiProposal(null); setSelectedId(null); setSelectedSeatIds([]); await load()
+    return null
+  }
+  async function autoAssignConfiguredReservations() {
+    if (!map || !categories.length) { setError('Crea al menos una categoría de reserva antes de ubicarla en el plano.'); return }
+    setBusy(true); setError(null)
+    const assignmentError = await assignConfiguredReservations()
+    setBusy(false)
+    if (assignmentError) setError(assignmentError); else await load()
+  }
+  async function applyAiProposal() {
+    if (!eventId || !aiProposal) return
+    if (!window.confirm(`Aplicar esta propuesta reemplazará el plano actual por ${aiProposal.capacity} sillas editables. Las sillas reservadas o confirmadas no se reemplazan.`)) return
+    setBusy(true); setError(null)
+    const { error } = await supabase.rpc('apply_ai_forum_floorplan', { p_event_id: eventId, p_plan: aiProposal })
+    if (error) { setBusy(false); setError(error.message); return }
+    const assignmentError = await assignConfiguredReservations()
+    setBusy(false)
+    if (assignmentError) { setError(`El plano fue creado, pero ${assignmentError.toLowerCase()}`); await load(); return }
+    setAiProposal(null); setSelectedId(null); setSelectedSeatIds([]); await load()
   }
   async function addSeats() {
     if (!map) return
@@ -388,6 +405,7 @@ export default function PlanoForoAdmin() {
       {error && <p className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
       <CapacitySummary eventCapacity={eventCapacity} registrationCount={registrationCount} checkedInCount={checkedInCount} reservedCapacity={reservedCapacity}/>
       <ReservationManager eventCapacity={eventCapacity} publicCapacity={publicCapacity} registrationCount={registrationCount} reservedCapacity={reservedCapacity} categories={categories} seats={Object.values(seatsByElement)} activeCategoryId={activeCategoryId} setActiveCategoryId={setActiveCategoryId} categoryName={categoryName} setCategoryName={setCategoryName} categoryColor={categoryColor} setCategoryColor={setCategoryColor} categoryCapacity={categoryCapacity} setCategoryCapacity={setCategoryCapacity} selectedCount={selectedSeatIds.length} busy={busy} onCreate={saveCategory} onAssign={assignSelectedToCategory} onRelease={releaseInstitutionalSelected} onDelete={deleteCategory}/>
+      {map && categories.some(category => !Object.values(seatsByElement).some(seat => seat.reservation_category_id === category.id)) && <button type="button" disabled={busy} onClick={autoAssignConfiguredReservations} className="mt-3 rounded-lg border border-violet-400 bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-800 disabled:opacity-50">Ubicar reservas automáticamente en este plano</button>}
       {!map ? <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]"><section className="rounded-xl border bg-white p-5"><b className="text-sm">Diseño manual</b><p className="mt-1 text-sm text-zinc-600">Comienza con una cuadrícula vacía, luego añade escenario, pasillos, accesos y sillas.</p><button type="button" disabled={busy} onClick={createPlan} className="mt-4 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{busy ? 'Creando…' : 'Crear plano manual'}</button></section><AiPlanAssistant prompt={aiPrompt} setPrompt={setAiPrompt} proposal={aiProposal} busy={aiBusy} applying={busy} onGenerate={generateAiProposal} onApply={applyAiProposal}/></div> : <>
         <div className="mt-6"><AiPlanAssistant prompt={aiPrompt} setPrompt={setAiPrompt} proposal={aiProposal} busy={aiBusy} applying={busy} onGenerate={generateAiProposal} onApply={applyAiProposal} existingPlan/></div>
         <div className="mt-6 grid gap-4 lg:grid-cols-2 xl:grid-cols-4"><section className="rounded-xl border bg-white p-4"><b className="text-sm">Tamaño del plano</b><p className="mt-1 text-xs text-zinc-500">{columns} columnas × {rows} filas. Al reducir, el plano reubica los elementos sin eliminarlos.</p><div className="mt-3 grid grid-cols-2 gap-2"><button type="button" disabled={busy} onClick={()=>resizeGrid('columns',1)} className={buttonCls}>+ columna</button><button type="button" disabled={busy} onClick={()=>resizeGrid('columns',-1)} className={buttonCls}>− columna</button><button type="button" disabled={busy} onClick={()=>resizeGrid('rows',1)} className={buttonCls}>+ fila</button><button type="button" disabled={busy} onClick={()=>resizeGrid('rows',-1)} className={buttonCls}>− fila</button></div></section><section className="rounded-xl border bg-white p-4"><b className="text-sm">Añadir sillas</b><p className="mt-1 text-xs text-zinc-500">Define el patrón y el rango. Un lote vuelve a la columna inicial en cada fila y respeta pasillos.</p><div className="mt-3 grid grid-cols-2 gap-2"><label className="text-xs text-zinc-600">Distribución<select value={seatMode} onChange={e=>setSeatMode(e.target.value as 'block'|'row'|'column')} className={`${fieldCls} mt-1 w-full`}><option value="block">Lote por filas</option><option value="row">Una sola fila</option><option value="column">Una sola columna</option></select></label><NumberInput label="Cantidad de sillas" value={seatQuantity} set={setSeatQuantity} max={1000}/><NumberInput label="Desde columna" value={seatX+1} set={v=>setSeatX(v-1)}/>{seatMode!=='column'&&<NumberInput label="Hasta columna" value={seatEndX+1} set={v=>setSeatEndX(v-1)}/>}<NumberInput label="Desde fila" value={seatY+1} set={v=>setSeatY(v-1)}/></div><button type="button" disabled={busy} onClick={addSeats} className={`${buttonCls} mt-3`}><Armchair className="h-4 w-4"/>Añadir {seatQuantity} silla{seatQuantity===1?'':'s'}</button></section><section className="rounded-xl border bg-white p-4"><b className="text-sm">Añadir pasillo</b><div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5"><select value={aisleAxis} onChange={e=>setAisleAxis(e.target.value as 'horizontal'|'vertical')} className={fieldCls}><option value="horizontal">Horizontal</option><option value="vertical">Vertical</option></select><NumberInput label="Col." value={aisleX+1} set={v=>setAisleX(v-1)}/><NumberInput label="Fila" value={aisleY+1} set={v=>setAisleY(v-1)}/><NumberInput label="Largo" value={aisleLength} set={setAisleLength}/><NumberInput label="Ancho" value={aisleThickness} set={setAisleThickness}/></div><button type="button" disabled={busy} onClick={addAisle} className={`${buttonCls} mt-3`}>{aisleAxis==='horizontal'?<Rows3 className="h-4 w-4"/>:<Columns3 className="h-4 w-4"/>}Añadir pasillo</button></section><section className="rounded-2xl border bg-white p-4"><b className="text-sm">Añadir acceso</b><div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4"><select value={accessAxis} onChange={e=>setAccessAxis(e.target.value as 'horizontal'|'vertical')} className={fieldCls}><option value="horizontal">Horizontal</option><option value="vertical">Vertical</option></select><NumberInput label="Col." value={accessX+1} set={v=>setAccessX(v-1)}/><NumberInput label="Fila" value={accessY+1} set={v=>setAccessY(v-1)}/><NumberInput label="Largo" value={accessLength} set={setAccessLength}/></div><button type="button" onClick={addAccess} className={`${buttonCls} mt-3`}>Añadir acceso</button></section></div>
