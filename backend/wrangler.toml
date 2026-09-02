@@ -9,6 +9,12 @@ compatibility_flags = ["nodejs_compat"]
 pattern = "api.eventosfacil.net"
 custom_domain = true
 
+# El panel de administración se sirve desde eventosfacil.net. Esta ruta evita
+# una segunda conexión de origen para sus llamadas autenticadas a la API.
+[[routes]]
+pattern = "eventosfacil.net/api/*"
+zone_id = "627e78510f507ae70e87129eea65e5d1"
+
 # Wrangler validará estos secretos antes de publicar una versión.
 [secrets]
 required = ["OPENAI_API_KEY", "SUPABASE_SERVICE_ROLE_KEY"]
