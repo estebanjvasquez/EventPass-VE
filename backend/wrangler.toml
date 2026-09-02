@@ -3,6 +3,12 @@ main = "src/index.ts"
 compatibility_date = "2025-06-01"
 compatibility_flags = ["nodejs_compat"]
 
+# API de primer nivel para el frontend público. Evita depender de workers.dev
+# en navegadores o redes que bloquean dominios de terceros.
+[[routes]]
+pattern = "api.eventosfacil.net"
+custom_domain = true
+
 # Wrangler validará estos secretos antes de publicar una versión.
 [secrets]
 required = ["OPENAI_API_KEY", "SUPABASE_SERVICE_ROLE_KEY"]
