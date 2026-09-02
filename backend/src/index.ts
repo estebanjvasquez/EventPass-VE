@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { sendUploadLinkEmail, sendConfirmationEmail, sendPortalInviteEmail, sendProviderNoticeEmail, type EmailSendBinding, type EventEmailContext } from './email'
 import { runScheduledJobs } from './jobs'
 import { normalizeSlug, provisionDomain, getDomainStatus, type CfEnv } from './tenants'
-import { forumLayoutIntentJsonSchema, forumLayoutIntentSchema, generateForumPlan } from './forumFloorplan'
+import { forumLayoutIntentJsonSchema, forumLayoutIntentSchema, generateForumPlan, inferForumLayoutIntent } from './forumFloorplan'
 import { arrayBufferToDataUrl, exhibitionDetectionJsonSchema, exhibitionDetectionSchema, normalizeExhibitionDetection } from './exhibitionImport'
 
 type Bindings = {
@@ -437,9 +437,13 @@ app.post('/api/ai/forum-floorplan/proposal', async (c) => {
   const text = outputTextFromResponse(aiResult.payload)
   let candidate: unknown
   try { candidate = text ? JSON.parse(text) : null } catch { return c.json({ error: 'La respuesta de IA no tuvo el formato esperado.' }, 502) }
-  const intent = forumLayoutIntentSchema.safeParse(candidate)
+  const parsedIntent = forumLayoutIntentSchema.safeParse(candidate)
+  const fallbackIntent = parsedIntent.success ? null : inferForumLayoutIntent(parsed.data.prompt)
+  const intent = parsedIntent.success ? parsedIntent : fallbackIntent ? forumLayoutIntentSchema.safeParse(fallbackIntent) : parsedIntent
   if (!intent.success) {
-    const details = intent.error.issues.slice(0, 4).map(issue => `${issue.path.join('.') || 'raíz'}: ${issue.message}`).join('; ')
+    const details = !parsedIntent.success
+      ? parsedIntent.error.issues.slice(0, 4).map(issue => `${issue.path.join('.') || 'raíz'}: ${issue.message}`).join('; ')
+      : 'la recuperación local no produjo una intención válida'
     console.error('[forum-ai] intención fuera del esquema:', details)
     return c.json({ error: 'No pudimos interpretar la capacidad y circulación solicitadas. Revisa la instrucción e inténtalo de nuevo.' }, 502)
   }

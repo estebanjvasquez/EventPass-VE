@@ -144,8 +144,51 @@ export default function PlanoForoAdmin() {
     if (!window.confirm(`Aplicar esta propuesta reemplazará el plano actual por ${aiProposal.capacity} sillas editables. Las sillas reservadas o confirmadas no se reemplazan.`)) return
     setBusy(true); setError(null)
     const { error } = await supabase.rpc('apply_ai_forum_floorplan', { p_event_id: eventId, p_plan: aiProposal })
-    setBusy(false)
-    if (error) setError(error.message); else { setAiProposal(null); setSelectedId(null); setSelectedSeatIds([]); await load() }
+    if (error) { setBusy(false); setError(error.message); return }
+    const { data: generatedSeats, error: seatsError } = await supabase
+      .from('seats')
+      .select('id,row_label,column_number')
+      .eq('event_id', eventId)
+      .eq('status', 'available')
+    if (seatsError) { setBusy(false); setError(`El plano fue creado, pero no se pudieron cargar sus reservas: ${seatsError.message}`); return }
+    const rowNumber = (value: string | null) => Number((value ?? '').match(/\d+/)?.[0] ?? Number.MAX_SAFE_INTEGER)
+    let seats = [...(generatedSeats ?? [])].sort((a, b) => rowNumber(a.row_label) - rowNumber(b.row_label) || a.column_number - b.column_number)
+    const prompt = aiPrompt.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    const wordsToNumber: Record<string, number> = { una: 1, uno: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10 }
+    const orderedCategories = categories
+      .map((category, index) => ({ category, index, position: category.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/\s+/).filter(word => word.length > 3).map(word => prompt.indexOf(word)).filter(position => position >= 0).sort((a, b) => a - b)[0] ?? Number.MAX_SAFE_INTEGER }))
+      .sort((a, b) => a.position - b.position || a.index - b.index)
+    for (const { category } of orderedCategories) {
+      const categoryWords = category.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/\s+/).filter(word => word.length > 3)
+      const categoryPosition = categoryWords.map(word => prompt.indexOf(word)).filter(position => position >= 0).sort((a, b) => a - b)[0] ?? -1
+      const instruction = categoryPosition >= 0 ? prompt.slice(categoryPosition, categoryPosition + 180) : ''
+      const firstRowsMatch = instruction.match(/(\d+|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+primeras?\s+filas?/)
+      const firstRows = firstRowsMatch ? (/^\d+$/.test(firstRowsMatch[1]) ? Number(firstRowsMatch[1]) : wordsToNumber[firstRowsMatch[1]]) : 0
+      const followsPrevious = /(?:filas?\s+)?siguientes|despues/.test(instruction)
+      let candidates = seats
+      if (firstRows > 0) {
+        // Intercalamos columnas y filas para que una reserva de dos filas se vea
+        // distribuida en ambas, aun cuando la categoría tenga menos sillas.
+        candidates = seats.filter(seat => rowNumber(seat.row_label) <= firstRows)
+          .sort((a, b) => a.column_number - b.column_number || rowNumber(a.row_label) - rowNumber(b.row_label))
+      } else if (followsPrevious) {
+        const occupiedRows = new Set(seats.filter(seat => rowNumber(seat.row_label) <= 2).map(seat => rowNumber(seat.row_label)))
+        if (occupiedRows.size === 2) candidates = seats.filter(seat => rowNumber(seat.row_label) > 2)
+      }
+      const selected = candidates.slice(0, category.reserved_capacity)
+      const selectedIds = new Set(selected.map(seat => seat.id))
+      seats = seats.filter(seat => !selectedIds.has(seat.id))
+      const seatIds = selected.map(seat => seat.id)
+      if (!seatIds.length) continue
+      const { error: assignmentError } = await supabase.rpc('assign_seats_to_reservation_category', {
+        p_category_id: category.id,
+        p_seat_ids: seatIds,
+        p_reserved_for: '',
+        p_notes: 'Asignación automática al crear el plano con IA',
+      })
+      if (assignmentError) { setBusy(false); setError(`El plano fue creado, pero no se pudo marcar la reserva “${category.name}”: ${assignmentError.message}`); await load(); return }
+    }
+    setBusy(false); setAiProposal(null); setSelectedId(null); setSelectedSeatIds([]); await load()
   }
   async function addSeats() {
     if (!map) return

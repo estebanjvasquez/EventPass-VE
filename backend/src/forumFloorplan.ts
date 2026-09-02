@@ -12,6 +12,49 @@ export const forumLayoutIntentSchema = z.object({
 
 export type ForumLayoutIntent = z.infer<typeof forumLayoutIntentSchema>
 
+const numberWords: Record<string, number> = {
+  uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5,
+  seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10,
+}
+
+function normalized(text: string) {
+  return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+}
+
+/**
+ * Mantiene la creación disponible si el modelo devuelve una respuesta fuera del
+ * esquema, pero el texto contiene un montaje inequívoco. Las reservas se
+ * aplican después con las categorías ya configuradas en el evento.
+ */
+export function inferForumLayoutIntent(prompt: string): ForumLayoutIntent | null {
+  const text = normalized(prompt)
+  const capacityMatch = text.match(/(?:para|aforo(?:\s+de)?|capacidad(?:\s+de)?|con)\s+(\d{1,4}|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+(?:personas|asistentes|sillas|cupos)/)
+    ?? text.match(/(\d{1,4})\s+(?:personas|asistentes|sillas|cupos)/)
+  if (!capacityMatch) return null
+  const rawCapacity = capacityMatch[1]
+  const capacity = /^\d+$/.test(rawCapacity) ? Number(rawCapacity) : numberWords[rawCapacity]
+  if (!capacity || capacity < 1 || capacity > 5000) return null
+
+  const central_aisle = /pasillo\s+central|central\s+vertical/.test(text)
+  const front_cross_aisle = /pasillo\s+(?:delante|frontal)|(?:delante|frontal).*pasillo/.test(text)
+  const rear_cross_aisle = /pasillo\s+(?:detras|posterior)|(?:detras|posterior).*pasillo/.test(text)
+  const side_aisles: ForumLayoutIntent['side_aisles'] = /pasillos?\s+laterales|laterales.*pasillos?/.test(text) ? 'both' : 'none'
+  const entrances: ForumLayoutIntent['entrances'] = /entradas?\s+laterales|laterales.*entradas?/.test(text)
+    ? 'both_sides'
+    : /entradas?\s+(?:posteriores|traseras)|(?:posteriores|traseras).*entradas?/.test(text)
+      ? 'rear_pair'
+      : 'none'
+  return {
+    capacity,
+    central_aisle,
+    front_cross_aisle,
+    rear_cross_aisle,
+    side_aisles,
+    entrances,
+    interpretation: `Plano para ${capacity} personas con ${central_aisle ? 'pasillo central' : 'circulación lateral'}${front_cross_aisle ? ', pasillo frontal' : ''}${rear_cross_aisle ? ', pasillo posterior' : ''}.`,
+  }
+}
+
 const forumRectSchema = z.object({
   x: z.number().int().min(0).max(99),
   y: z.number().int().min(0).max(99),
