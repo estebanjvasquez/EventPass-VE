@@ -1416,22 +1416,29 @@ export function ExhibitionCanvasEditor({
   }
   async function uploadBackground(file: File) {
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "bin";
-    let orgId = organizationId ?? String(metadata.organization_id ?? "");
-    if (!orgId) {
-      const eventResult = await supabase.from("events").select("organization_id").eq("id", eventId).single();
-      orgId = eventResult.data?.organization_id ?? "";
-    }
-    if (!orgId) {
-      setMessage("No se pudo identificar la organización del evento para guardar el blueprint.");
-      return;
-    }
-    const path = `${orgId}/${eventId}/map-${mapId}/background-${Date.now()}.${ext}`;
     remember();
     setBusy(true);
-    const { error } = await supabase.storage
-      .from("agenda-attachments")
-      .upload(path, file, { upsert: true, contentType: file.type });
-    if (!error) {
+    const { data: auth } = await supabase.auth.getSession();
+    const api = ((import.meta.env.VITE_API_URL as string | undefined) ?? "").replace(/\/$/, "");
+    const body = new FormData();
+    body.set("event_id", eventId);
+    body.set("file", file);
+    try {
+      const response = await fetch(`${api}/api/floorplans/${mapId}/blueprint`, {
+        method: "POST",
+        headers: auth.session?.access_token
+          ? { Authorization: `Bearer ${auth.session.access_token}` }
+          : {},
+        body,
+      });
+      const uploaded = (await response.json().catch(() => null)) as
+        | { organization_id?: string; background_path?: string; background_name?: string; background_mime?: string; cleanup_warning?: string | null; error?: string }
+        | null;
+      if (!response.ok || !uploaded?.background_path) {
+        throw new Error(uploaded?.error ?? "No se pudo guardar el blueprint.");
+      }
+      const orgId = uploaded.organization_id ?? organizationId ?? String(metadata.organization_id ?? "");
+      const path = uploaded.background_path;
       let nextImportId: string | null = null;
       const aiMime =
         file.type === "application/pdf" || ext === "pdf"
@@ -1453,7 +1460,7 @@ export function ExhibitionCanvasEditor({
           });
           aiSourceExtension = "png";
         }
-        const sourcePath = `${String(metadata.organization_id ?? "")}/${eventId}/${mapId}/source-${Date.now()}.${aiSourceExtension}`;
+        const sourcePath = `${orgId}/${eventId}/${mapId}/source-${Date.now()}.${aiSourceExtension}`;
         const sourceUpload = await supabase.storage
           .from("floorplan-sources")
           .upload(sourcePath, aiSource, {
@@ -1480,19 +1487,11 @@ export function ExhibitionCanvasEditor({
       const next = {
         ...metadata,
         background_path: path,
-        background_name: file.name,
-        background_mime: file.type || `application/${ext}`,
+        background_name: uploaded.background_name ?? file.name,
+        background_mime: uploaded.background_mime ?? (file.type || `application/${ext}`),
         background_visible: true,
       };
-      const metadataUpdate = await supabase
-        .from("venue_maps")
-        .update({ metadata: next })
-        .eq("id", mapId);
-      if (metadataUpdate.error) {
-        setMessage(`El archivo se cargó, pero no se pudo guardar en el plano: ${metadataUpdate.error.message}`);
-        setBusy(false);
-        return;
-      }
+      setOrganizationId(orgId || null);
       setMetadata(next);
       setBackgroundPath(path);
       setBackgroundVisible(true);
@@ -1508,15 +1507,15 @@ export function ExhibitionCanvasEditor({
       } catch (error) {
         setMessage(`Blueprint guardado, pero no se pudo renderizar: ${error instanceof Error ? error.message : "formato no compatible"}`);
       }
-      if (backgroundPath && backgroundPath !== path) {
-        await supabase.storage.from("agenda-attachments").remove([backgroundPath]);
-      }
       setMessage(nextImportId
         ? "Plano base cargado. Ya puedes solicitar el análisis con IA."
-        : "Plano base cargado como referencia. La IA admite PNG, JPG o PDF y requiere un plano vacío sin publicar.");
+        : uploaded.cleanup_warning ?? "Plano base cargado como referencia. La IA admite PNG, JPG o PDF y requiere un plano vacío sin publicar.");
       await createVersion("Blueprint actualizado");
-    } else setMessage(error.message);
-    setBusy(false);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo guardar el blueprint.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function analyzeWithAi() {

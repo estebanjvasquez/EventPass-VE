@@ -336,6 +336,73 @@ async function authUserId(supabase: SupabaseAdmin, authorization?: string): Prom
   return data.user.id
 }
 
+const blueprintMimeByExtension: Record<string, string> = {
+  pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+  svg: 'image/svg+xml', dxf: 'application/dxf',
+}
+
+// La carga se ejecuta con service-role sólo después de comprobar la relación
+// del usuario con el evento. Así Storage no depende de que una política de
+// carpeta evalúe correctamente una ruta creada desde el navegador.
+app.post('/api/floorplans/:mapId/blueprint', async (c) => {
+  const supabase = createClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY)
+  const caller = await authUserId(supabase, c.req.header('Authorization'))
+  if (!caller) return c.json({ error: 'No autorizado.' }, 401)
+
+  const form = await c.req.formData().catch(() => null)
+  const eventId = typeof form?.get('event_id') === 'string' ? String(form.get('event_id')) : ''
+  const file: unknown = form?.get('file')
+  if (!z.string().uuid().safeParse(eventId).success || !(file instanceof File)) {
+    return c.json({ error: 'Archivo o evento inválido.' }, 400)
+  }
+  if (file.size === 0 || file.size > 10 * 1024 * 1024) {
+    return c.json({ error: 'El blueprint debe pesar entre 1 byte y 10 MB.' }, 400)
+  }
+  const extension = file.name.split('.').pop()?.toLowerCase() ?? ''
+  const mimeType = blueprintMimeByExtension[extension]
+  if (!mimeType) return c.json({ error: 'Formato no admitido. Usa PDF, PNG, JPG, SVG o DXF.' }, 400)
+
+  const { data: map } = await supabase
+    .from('venue_maps')
+    .select('id,event_id,organization_id,metadata')
+    .eq('id', c.req.param('mapId'))
+    .maybeSingle()
+  if (!map || map.event_id !== eventId) return c.json({ error: 'El plano no corresponde al evento.' }, 404)
+
+  const [{ data: membership }, { data: platform }] = await Promise.all([
+    supabase.from('memberships').select('role').eq('organization_id', map.organization_id).eq('user_id', caller).maybeSingle(),
+    supabase.from('platform_admins').select('user_id').eq('user_id', caller).maybeSingle(),
+  ])
+  if (!platform && (!membership || !['owner', 'admin'].includes(membership.role))) {
+    return c.json({ error: 'No tienes permisos para modificar el blueprint de este evento.' }, 403)
+  }
+
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_') || `blueprint.${extension}`
+  const path = `${map.organization_id}/${eventId}/map-${map.id}/background-${Date.now()}-${safeName}`
+  const uploaded = await supabase.storage.from('agenda-attachments').upload(path, file, { upsert: false, contentType: mimeType })
+  if (uploaded.error) {
+    console.error('[floorplan-blueprint] storage upload failed:', uploaded.error.message)
+    return c.json({ error: 'No se pudo guardar el blueprint. Inténtalo nuevamente.' }, 502)
+  }
+
+  const currentMetadata = (map.metadata && typeof map.metadata === 'object' ? map.metadata : {}) as Record<string, unknown>
+  const oldPath = typeof currentMetadata.background_path === 'string' ? currentMetadata.background_path : null
+  const metadata = { ...currentMetadata, background_path: path, background_name: file.name, background_mime: mimeType, background_visible: true }
+  const updated = await supabase.from('venue_maps').update({ metadata }).eq('id', map.id)
+  if (updated.error) {
+    await supabase.storage.from('agenda-attachments').remove([path])
+    console.error('[floorplan-blueprint] metadata update failed:', updated.error.message)
+    return c.json({ error: 'El archivo se cargó pero no se pudo asociar al plano.' }, 500)
+  }
+
+  let cleanupWarning: string | null = null
+  if (oldPath && oldPath !== path) {
+    const removed = await supabase.storage.from('agenda-attachments').remove([oldPath])
+    if (removed.error) cleanupWarning = 'El blueprint anterior ya no se usa, pero no pudo eliminarse del almacenamiento.'
+  }
+  return c.json({ organization_id: map.organization_id, background_path: path, background_name: file.name, background_mime: mimeType, cleanup_warning: cleanupWarning })
+})
+
 const forumAiRequestSchema = z.object({
   event_id: z.string().uuid(),
   prompt: z.string().trim().min(8).max(1600),
