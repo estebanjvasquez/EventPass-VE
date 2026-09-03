@@ -467,6 +467,7 @@ export function ExhibitionCanvasEditor({
   const [backgroundUrl, setBackgroundUrl] = useState<string | null>(null);
   const [backgroundPath, setBackgroundPath] = useState<string | null>(null);
   const [backgroundVisible, setBackgroundVisible] = useState(true);
+  const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [opacity, setOpacity] = useState(65);
   const [showGrid, setShowGrid] = useState(true);
   const [showDimensions, setShowDimensions] = useState(true);
@@ -721,6 +722,7 @@ export function ExhibitionCanvasEditor({
       height_units: Number(map.metadata?.height_units ?? WORLD.height),
       snap_step: Number(map.metadata?.snap_step ?? 1),
     };
+    setOrganizationId(event.organization_id);
     setMetadata(nextMetadata);
     setPublished(Boolean(map.published));
     setCurrentVersion(Number(map.current_version ?? 1));
@@ -789,19 +791,26 @@ export function ExhibitionCanvasEditor({
     const path = nextMetadata.background_path as string | undefined;
     setBackgroundPath(path ?? null);
     setBackgroundVisible(nextMetadata.background_visible !== false);
+    setBackgroundUrl(null);
     if (path) {
       const signed = await supabase.storage
         .from("agenda-attachments")
         .createSignedUrl(path, 3600);
-      if (!signed.error) {
+      if (signed.error || !signed.data?.signedUrl) {
+        setMessage(`No se pudo mostrar el blueprint guardado: ${signed.error?.message ?? "archivo no encontrado"}`);
+      } else {
         const url = signed.data.signedUrl;
         const mime = String(nextMetadata.background_mime ?? "");
-        if (mime.includes("pdf") || mime.includes("dxf")) {
-          const buffer = await fetch(url).then((response) =>
-            response.arrayBuffer(),
-          );
-          setBackgroundUrl(await renderBlueprint(buffer, mime));
-        } else setBackgroundUrl(url);
+        try {
+          if (mime.includes("pdf") || mime.includes("dxf")) {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const buffer = await response.arrayBuffer();
+            setBackgroundUrl(await renderBlueprint(buffer, mime));
+          } else setBackgroundUrl(url);
+        } catch (error) {
+          setMessage(`No se pudo renderizar el blueprint: ${error instanceof Error ? error.message : "formato no compatible"}`);
+        }
       }
     }
   }, [eventId, mapId]);
@@ -1315,6 +1324,28 @@ export function ExhibitionCanvasEditor({
       .eq("id", mapId);
     await createVersion("Visibilidad del blueprint");
   }
+  async function removeBlueprint() {
+    if (busy || !backgroundPath) return;
+    if (!window.confirm("¿Eliminar el blueprint de referencia? Los elementos del plano se conservarán.")) return;
+    setBusy(true);
+    const oldPath = backgroundPath;
+    const next = { ...metadata };
+    ["background_path", "background_name", "background_mime", "background_visible"].forEach((key) => delete next[key]);
+    const update = await supabase.from("venue_maps").update({ metadata: next }).eq("id", mapId);
+    if (update.error) {
+      setMessage(`No se pudo eliminar el blueprint: ${update.error.message}`);
+      setBusy(false);
+      return;
+    }
+    const removed = await supabase.storage.from("agenda-attachments").remove([oldPath]);
+    setMetadata(next);
+    setBackgroundPath(null);
+    setBackgroundUrl(null);
+    setBackgroundVisible(false);
+    setBusy(false);
+    await createVersion("Blueprint eliminado");
+    setMessage(removed.error ? `Blueprint eliminado del plano. No se pudo limpiar el archivo almacenado: ${removed.error.message}` : "Blueprint eliminado. Los elementos del plano se conservaron.");
+  }
   function startCalibration() {
     setTool(null);
     setPolygonDraft([]);
@@ -1385,7 +1416,16 @@ export function ExhibitionCanvasEditor({
   }
   async function uploadBackground(file: File) {
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "bin";
-    const path = `${String(metadata.organization_id ?? "org")}/${eventId}/map-${mapId}/background-${Date.now()}.${ext}`;
+    let orgId = organizationId ?? String(metadata.organization_id ?? "");
+    if (!orgId) {
+      const eventResult = await supabase.from("events").select("organization_id").eq("id", eventId).single();
+      orgId = eventResult.data?.organization_id ?? "";
+    }
+    if (!orgId) {
+      setMessage("No se pudo identificar la organización del evento para guardar el blueprint.");
+      return;
+    }
+    const path = `${orgId}/${eventId}/map-${mapId}/background-${Date.now()}.${ext}`;
     remember();
     setBusy(true);
     const { error } = await supabase.storage
@@ -1424,7 +1464,7 @@ export function ExhibitionCanvasEditor({
           const inserted = await supabase
             .from("venue_map_imports")
             .insert({
-              organization_id: metadata.organization_id,
+              organization_id: orgId,
               event_id: eventId,
               map_id: mapId,
               storage_path: sourcePath,
@@ -1434,6 +1474,7 @@ export function ExhibitionCanvasEditor({
             .select("id")
             .single();
           if (!inserted.error) nextImportId = inserted.data.id;
+          else setMessage(`Blueprint cargado, pero no se pudo preparar el análisis IA: ${inserted.error.message}`);
         }
       }
       const next = {
@@ -1443,10 +1484,15 @@ export function ExhibitionCanvasEditor({
         background_mime: file.type || `application/${ext}`,
         background_visible: true,
       };
-      await supabase
+      const metadataUpdate = await supabase
         .from("venue_maps")
         .update({ metadata: next })
         .eq("id", mapId);
+      if (metadataUpdate.error) {
+        setMessage(`El archivo se cargó, pero no se pudo guardar en el plano: ${metadataUpdate.error.message}`);
+        setBusy(false);
+        return;
+      }
       setMetadata(next);
       setBackgroundPath(path);
       setBackgroundVisible(true);
@@ -1456,8 +1502,15 @@ export function ExhibitionCanvasEditor({
       const signed = await supabase.storage
         .from("agenda-attachments")
         .createSignedUrl(path, 3600);
-      if (signed.data?.signedUrl)
+      try {
+        if (signed.error || !signed.data?.signedUrl) throw signed.error ?? new Error("archivo no encontrado");
         setBackgroundUrl(await renderBlueprint(file, file.type || ext));
+      } catch (error) {
+        setMessage(`Blueprint guardado, pero no se pudo renderizar: ${error instanceof Error ? error.message : "formato no compatible"}`);
+      }
+      if (backgroundPath && backgroundPath !== path) {
+        await supabase.storage.from("agenda-attachments").remove([backgroundPath]);
+      }
       setMessage(nextImportId
         ? "Plano base cargado. Ya puedes solicitar el análisis con IA."
         : "Plano base cargado como referencia. La IA admite PNG, JPG o PDF y requiere un plano vacío sin publicar.");
@@ -1580,6 +1633,17 @@ export function ExhibitionCanvasEditor({
           PDF, PNG, JPG, SVG o DXF. El archivo queda como referencia del
           diseñador.
         </p>
+        {backgroundPath && (
+          <button
+            type="button"
+            onClick={() => void removeBlueprint()}
+            disabled={busy}
+            className="mt-2 inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 disabled:opacity-50"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Eliminar blueprint
+          </button>
+        )}
         {aiImportId && !aiProposal && (
           <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50 p-3 text-xs text-violet-950">
             <p className="font-semibold">Convertir blueprint con IA</p>
