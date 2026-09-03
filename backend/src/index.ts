@@ -403,6 +403,36 @@ app.post('/api/floorplans/:mapId/blueprint', async (c) => {
   return c.json({ organization_id: map.organization_id, background_path: path, background_name: file.name, background_mime: mimeType, cleanup_warning: cleanupWarning })
 })
 
+app.get('/api/floorplans/:mapId/blueprint', async (c) => {
+  const supabase = createClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY)
+  const caller = await authUserId(supabase, c.req.header('Authorization'))
+  if (!caller) return c.json({ error: 'No autorizado.' }, 401)
+
+  const { data: map } = await supabase
+    .from('venue_maps')
+    .select('id,organization_id,metadata')
+    .eq('id', c.req.param('mapId'))
+    .maybeSingle()
+  if (!map) return c.json({ error: 'Plano no encontrado.' }, 404)
+  const [{ data: membership }, { data: platform }] = await Promise.all([
+    supabase.from('memberships').select('role').eq('organization_id', map.organization_id).eq('user_id', caller).maybeSingle(),
+    supabase.from('platform_admins').select('user_id').eq('user_id', caller).maybeSingle(),
+  ])
+  if (!platform && (!membership || !['owner', 'admin'].includes(membership.role))) {
+    return c.json({ error: 'No tienes permisos para ver el blueprint de este evento.' }, 403)
+  }
+
+  const metadata = (map.metadata && typeof map.metadata === 'object' ? map.metadata : {}) as Record<string, unknown>
+  const path = typeof metadata.background_path === 'string' ? metadata.background_path : null
+  if (!path) return c.json({ error: 'Este plano no tiene un blueprint cargado.' }, 404)
+  const signed = await supabase.storage.from('agenda-attachments').createSignedUrl(path, 3600)
+  if (signed.error || !signed.data?.signedUrl) {
+    console.error('[floorplan-blueprint] signed read failed:', signed.error?.message)
+    return c.json({ error: 'No se pudo abrir el blueprint guardado.' }, 502)
+  }
+  return c.json({ url: signed.data.signedUrl, mime_type: String(metadata.background_mime ?? ''), name: String(metadata.background_name ?? '') })
+})
+
 const forumAiRequestSchema = z.object({
   event_id: z.string().uuid(),
   prompt: z.string().trim().min(8).max(1600),

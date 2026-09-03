@@ -793,14 +793,21 @@ export function ExhibitionCanvasEditor({
     setBackgroundVisible(nextMetadata.background_visible !== false);
     setBackgroundUrl(null);
     if (path) {
-      const signed = await supabase.storage
-        .from("agenda-attachments")
-        .createSignedUrl(path, 3600);
-      if (signed.error || !signed.data?.signedUrl) {
-        setMessage(`No se pudo mostrar el blueprint guardado: ${signed.error?.message ?? "archivo no encontrado"}`);
+      const { data: auth } = await supabase.auth.getSession();
+      const api = ((import.meta.env.VITE_API_URL as string | undefined) ?? "").replace(/\/$/, "");
+      const response = await fetch(`${api}/api/floorplans/${mapId}/blueprint`, {
+        headers: auth.session?.access_token
+          ? { Authorization: `Bearer ${auth.session.access_token}` }
+          : {},
+      });
+      const blueprint = (await response.json().catch(() => null)) as
+        | { url?: string; mime_type?: string; error?: string }
+        | null;
+      if (!response.ok || !blueprint?.url) {
+        setMessage(`No se pudo mostrar el blueprint guardado: ${blueprint?.error ?? "archivo no encontrado"}`);
       } else {
-        const url = signed.data.signedUrl;
-        const mime = String(nextMetadata.background_mime ?? "");
+        const url = blueprint.url;
+        const mime = blueprint.mime_type || String(nextMetadata.background_mime ?? "");
         try {
           if (mime.includes("pdf") || mime.includes("dxf")) {
             const response = await fetch(url);
