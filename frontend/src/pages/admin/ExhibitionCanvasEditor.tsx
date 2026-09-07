@@ -455,6 +455,7 @@ export function ExhibitionCanvasEditor({
 }) {
   const navigate = useNavigate();
   const [elements, setElements] = useState<SceneElement[]>([]);
+  const [libraryExpanded, setLibraryExpanded] = useState(false);
   const [metadata, setMetadata] = useState<Record<string, unknown>>({});
   const [published, setPublished] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -1584,9 +1585,13 @@ export function ExhibitionCanvasEditor({
   }
 
   return (
-    <section className="grid gap-4 xl:grid-cols-[220px_1fr_280px]">
-      <aside className="rounded-2xl border bg-white p-4">
+    <section className="exhibition-workspace grid items-start gap-4 xl:grid-cols-[220px_minmax(0,1fr)_280px]">
+      <aside className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm xl:sticky xl:top-4 xl:max-h-[calc(100dvh-100px)] xl:overflow-y-auto">
         <h2 className="font-semibold">Biblioteca</h2>
+        <button type="button" aria-expanded={libraryExpanded} aria-controls="exhibition-library-tools" onClick={() => setLibraryExpanded(value => !value)} className="mt-2 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm font-semibold xl:hidden">
+          {libraryExpanded ? "Ocultar herramientas y ver plano" : "Abrir objetos y herramientas"}
+        </button>
+        <div id="exhibition-library-tools" className={libraryExpanded ? "block" : "hidden xl:block"}>
         <p className="mt-1 text-xs text-zinc-500">
           Selecciona un objeto y haz clic en el plano para colocarlo.
         </p>
@@ -1737,6 +1742,7 @@ export function ExhibitionCanvasEditor({
           <b>Área irregular:</b> selecciona “Dibujar área”, haz clic en cada
           vértice y doble clic para cerrar.
         </div>
+        </div>
       </aside>
       <main>
         {aiProposal && (
@@ -1883,7 +1889,7 @@ export function ExhibitionCanvasEditor({
             )}
           </button>
         </div>
-        <div className="overflow-auto rounded-2xl border bg-slate-100 p-3">
+        <div className="overflow-auto rounded-2xl border border-zinc-200 bg-zinc-50 p-2 shadow-sm sm:p-3">
           <ExhibitionKonvaStage
             columns={columns}
             rows={rows}
@@ -1934,7 +1940,7 @@ export function ExhibitionCanvasEditor({
           número. Ctrl/Cmd + clic permite seleccionar varios elementos.
         </p>
       </main>
-      <aside className="h-fit rounded-2xl border bg-white p-4">
+      <aside className="h-fit rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm xl:sticky xl:top-4 xl:max-h-[calc(100dvh-100px)] xl:overflow-y-auto">
         {selected ? (
           <Inspector
             item={selected}

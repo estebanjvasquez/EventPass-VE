@@ -47,7 +47,15 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .agenda-ticker { animation: none; }
+  .animate-float-up { animation: none; }
 }
+
+/* Keep organizer-selected light and dark agenda themes readable. */
+.public-agenda [class*="text-white/"] { color: color-mix(in srgb, var(--agenda-text) 78%, transparent); }
+.public-agenda button:not([style]) { color: var(--agenda-text); }
+.public-agenda.agenda-text-scale-large .agenda-session-title { font-size: 1.75rem; }
+.public-agenda.agenda-text-scale-compact .agenda-session-title { font-size: 1.125rem; }
+.exhibition-workspace > main { min-width: 0; }
 
 /* Impresión aislada del gafete: solo se imprime #badge-print-root. */
 #badge-print-root {
@@ -97,6 +105,12 @@ body {
   }
 }
 @media print {
+  #root:has(.public-floorplan) {
+    display: block !important;
+  }
+  body:has(.public-floorplan) #badge-print-root {
+    display: none !important;
+  }
   #root {
     display: none !important;
   }

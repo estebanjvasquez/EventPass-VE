@@ -1228,7 +1228,12 @@ export function ExhibitionKonvaStage({
                 const baseFill = String(item.style.fill ?? defaultColor[kind]);
                 const fill =
                   kind === "stand"
-                    ? standSizeColor(item.geometry.width, item.geometry.height)
+                    ? readOnly
+                      ? company ? "#e0f2fe"
+                        : item.status === "reserved" ? "#fef3c7"
+                        : item.status && item.status !== "available" ? "#e2e8f0"
+                        : "#d1fae5"
+                      : standSizeColor(item.geometry.width, item.geometry.height)
                     : baseFill;
                 return (
                   <Group
