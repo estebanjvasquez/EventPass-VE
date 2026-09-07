@@ -12,6 +12,8 @@ Esta entrega solo cambia el frontend y documentación/pruebas. No cambia Worker,
 
 ## Recuperación inmediata
 
+Commit visual a revertir: `55da1cea33c277c0e5a02cb41e299c576436c97b`. Si no existen cambios posteriores solapados, `git revert 55da1ce` revierte esta entrega sin borrar el historial; revisar y compilar antes de publicar el revert.
+
 1. Comprobar que no hay una ejecución pendiente de `Deploy frontend` en GitHub Actions, para evitar que una nueva publicación sustituya el rollback.
 2. Abrir [el despliegue anterior en Cloudflare](https://dash.cloudflare.com/cb77662770c0955288691715afa25690/pages/view/eventpass/e3b9fb0d-bb47-4bed-9d5a-add42d807834).
 3. En Deployments / All deployments seleccionar ese despliegue y **Rollback to this deployment**. Confirmar.
@@ -25,3 +27,13 @@ Referencia: [rollback oficial de Cloudflare Pages](https://developers.cloudflare
 Crear un worktree separado desde la etiqueta, instalar dependencias con `npm ci` en su carpeta `frontend/`, configurar localmente las mismas variables públicas de producción y ejecutar `npm run build`. Tras comprobar TypeScript, desplegar ese `dist` en `eventpass`, rama `main`. No reutilizar un `dist` generado antes de una compilación fallida. No copiar secretos a Git.
 
 El tag incluye el árbol completo del repositorio anterior y sus lockfiles. Mantener el despliegue de Pages anterior sin eliminarlo proporciona además el artefacto ya compilado, sin depender de una reconstrucción.
+
+## Publicación confirmada
+
+- Nuevo despliegue: `256dcaa4-559b-4b29-870c-547d33fc9b2e`, fuente `55da1ce`.
+- URL: https://256dcaa4.eventpass-d7d.pages.dev/
+- [GitHub Actions aprobado](https://github.com/estebanjvasquez/EventPass-VE/actions/runs/34132391155).
+- Se comprobó que el HTML del dominio productivo coincide con el nuevo despliegue; el anterior continúa respondiendo 200.
+- Smoke Chromium anónimo: portada nueva visible, plano del evento de la guía con canvas y directorio, módulos JS/CSS sin errores HTTP/MIME, sin excepciones JavaScript.
+- Avisos detectados: blueprint del evento de la guía inaccesible (stands visibles), agenda de ese evento sin sesiones publicadas. Se conservan permisos y datos, sin intentar solventarlos mediante cambios de seguridad.
+- No se realizó smoke autenticado de edición en esta publicación.
