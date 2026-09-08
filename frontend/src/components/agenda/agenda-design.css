@@ -1,0 +1,47 @@
+.agenda-design { --agenda-surface: color-mix(in srgb, var(--agenda-text) 6%, var(--agenda-background)); --agenda-border: color-mix(in srgb, var(--agenda-text) 18%, transparent); }
+.agenda-design header { background: var(--agenda-surface); border-color: var(--agenda-border); }
+.agenda-design article { background: var(--agenda-surface); border-color: var(--agenda-border); }
+.agenda-design h1 { white-space: normal; text-wrap: balance; }
+.agenda-design .agenda-session-title { text-wrap: pretty; }
+.agenda-design h1.agenda-primary { font-size: 1.875rem; }
+.agenda-design.agenda-text-scale-large { font-size: 1.125rem; }
+.agenda-design.agenda-text-scale-large h1 { font-size: 2.25rem; }
+.agenda-design.agenda-text-scale-large .agenda-session-title { font-size: 1.875rem; }
+.agenda-design.agenda-text-scale-compact .agenda-session-title { font-size: 1.125rem; }
+.agenda-design.agenda-layout-timeline .agenda-schedule article { border-radius: 0; border-width: 0 0 1px; background: transparent; }
+.agenda-design { container-type: inline-size; }
+@container (min-width: 1000px) {
+  .agenda-layout-split .agenda-program-layout { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.3fr); gap: 1.5rem; align-items: start; }
+  .agenda-layout-split .agenda-highlights { grid-template-columns: 1fr; }
+}
+.agenda-design.agenda-preview { min-height: 540px; position: relative; }
+.agenda-sponsors { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: .75rem; }
+.agenda-sponsor-badge { display: inline-flex; align-items: center; gap: .6rem; font-size: .85rem; font-weight: 600; max-width: 100%; }
+.agenda-sponsor-badge img { display: block; object-fit: contain; background: #fff; border-radius: .4rem; padding: .35rem; flex-shrink: 0; }
+.agenda-sponsor-footer { position: fixed; bottom: 0; left: 0; right: 0; z-index: 10; padding: .75rem 3.5rem .75rem 1rem; color: var(--agenda-text); background: var(--agenda-background); border-top: 1px solid var(--agenda-border); }
+.agenda-sponsor-footer.is-preview { position: sticky; margin-top: 1rem; }
+.agenda-sponsor-footer.is-static { position: static; }
+.agenda-preview .agenda-highlights { grid-template-columns: 1fr; }
+.agenda-preview .agenda-schedule article { grid-template-columns: 1fr; }
+.agenda-design .agenda-sponsor-badge { overflow-wrap: anywhere; }
+.agenda-motion-toggle { position: absolute; right: .75rem; top: 50%; transform: translateY(-50%); padding: .5rem; border: 1px solid var(--agenda-border); border-radius: .5rem; }
+.agenda-marquee { container-type: inline-size; overflow: hidden; }
+.agenda-marquee-track { display: flex; width: max-content; }
+.agenda-marquee-group { display: flex; align-items: center; gap: 2.5rem; padding-right: 2.5rem; min-width: 100cqw; flex-shrink: 0; }
+.agenda-ticker-message { white-space: nowrap; font-weight: 600; }
+.agenda-marquee.is-animated .agenda-marquee-track { animation: agenda-sponsor-loop var(--ticker-duration, 45s) linear infinite; animation-direction: var(--ticker-direction, normal); }
+.agenda-marquee.is-paused .agenda-marquee-track, .agenda-marquee:hover .agenda-marquee-track, .agenda-marquee:focus-within .agenda-marquee-track { animation-play-state: paused; }
+.agenda-marquee:not(.is-animated) .agenda-marquee-track { width: 100%; }
+.agenda-marquee:not(.is-animated) .agenda-marquee-group { flex-wrap: wrap; gap: 1rem; min-width: 0; }
+.agenda-marquee:not(.is-animated) .agenda-ticker-message { white-space: normal; }
+@keyframes agenda-sponsor-loop { to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) {
+  .agenda-marquee.is-animated .agenda-marquee-track { animation: none; width: 100%; }
+  .agenda-marquee-group { flex-wrap: wrap; min-width: 0; gap: 1rem; }
+  .agenda-marquee-copy { display: none; }
+  .agenda-ticker-message { white-space: normal; }
+  .agenda-sponsor-footer { position: static; }
+  .agenda-motion-toggle { display: none; }
+}
+.agenda-design button:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+@media (max-width: 640px) { .agenda-sponsor-footer { position: sticky; } .agenda-design.agenda-text-scale-large h1 { font-size: 1.5rem; } }

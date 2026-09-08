@@ -18,6 +18,8 @@ import { supabase } from '../../lib/supabase'
 import { AgendaTimelineCanvas } from './agenda/AgendaTimelineCanvas'
 import { AgendaContentAdmin } from './agenda/AgendaContentAdmin'
 import { AgendaOperationsAdmin } from './agenda/AgendaOperationsAdmin'
+import { PublicAgendaDesigner } from './agenda/PublicAgendaDesigner'
+import type { AgendaItem } from '../../components/agenda/AgendaDisplay'
 
 type SessionType = 'lecture' | 'workshop' | 'break'
 type Tab = 'schedule' | 'sessions' | 'speakers' | 'content' | 'operations' | 'public'
@@ -30,11 +32,12 @@ type Speaker = {
   country: string | null; language: string | null; sort_order: number; profile_type?: 'speaker' | 'moderator'
 }
 type Session = {
+  status?: 'scheduled' | 'cancelled' | 'completed'
   id: string; name: string; description: string | null; starts_at: string | null; ends_at: string | null; capacity: number | null
   session_type: SessionType; stage_id: string | null; stream_url: string | null; meeting_url: string | null; attachment_url: string | null
   limit_video_access: boolean; sort_order: number
 }
-type EventSponsor = { id: string; company_id: string; status: string; company?: { name: string } | { name: string }[] | null }
+type EventSponsor = { id: string; company_id: string; status: string; company?: { name: string; public_logo_url?: string | null } | { name: string; public_logo_url?: string | null }[] | null }
 
 const input = 'w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100'
 const label = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-zinc-500'
@@ -91,11 +94,11 @@ export default function AgendaAdmin() {
     if (eventData.organization_id !== active.organization_id && !active.impersonating) { setError('No tienes acceso a la agenda de este evento.'); setLoading(false); return }
     const [stageResult, sessionResult, speakerResult, linkResult, moderatorLinkResult, sponsorResult, sessionSponsorResult] = await Promise.all([
       supabase.from('event_stages').select('id,name,stream_url,limit_video_access,sort_order').eq('event_id', eventId).order('sort_order').order('name'),
-      supabase.from('event_sessions').select('id,name,description,starts_at,ends_at,capacity,session_type,stage_id,stream_url,meeting_url,attachment_url,limit_video_access,sort_order').eq('event_id', eventId).order('starts_at').order('sort_order'),
+      supabase.from('event_sessions').select('id,name,description,starts_at,ends_at,capacity,status,session_type,stage_id,stream_url,meeting_url,attachment_url,limit_video_access,sort_order').eq('event_id', eventId).order('starts_at').order('sort_order'),
       supabase.from('event_speakers').select('id,full_name,company,position,bio,photo_url,email,phone,web,linkedin,facebook,twitter,instagram,country,language,sort_order,profile_type').eq('event_id', eventId).order('sort_order').order('full_name'),
       supabase.from('session_speakers').select('session_id,speaker_id,sort_order').order('sort_order'),
       supabase.from('session_moderators').select('session_id,moderator_id,sort_order').order('sort_order'),
-      supabase.from('event_sponsorships').select('id,company_id,status,company:companies(name)').eq('event_id', eventId).order('created_at'),
+      supabase.from('event_sponsorships').select('id,company_id,status,company:companies(name,public_logo_url)').eq('event_id', eventId).order('created_at'),
       supabase.from('session_sponsorships').select('session_id,event_sponsorship_id,sort_order').order('sort_order'),
     ])
     const firstError = stageResult.error ?? sessionResult.error ?? speakerResult.error ?? linkResult.error ?? moderatorLinkResult.error ?? sponsorResult.error ?? sessionSponsorResult.error
@@ -165,6 +168,10 @@ export default function AgendaAdmin() {
   if (loading) return <div className="grid min-h-[100dvh] place-items-center bg-zinc-50"><span className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-300 border-t-emerald-600" /></div>
   if (!event) return <PageFrame title="Agenda del foro"><p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error ?? 'Evento no encontrado.'}</p></PageFrame>
 
+  const confirmedSponsors = eventSponsors.filter(s => ['confirmed', 'active', 'fulfilled'].includes(s.status))
+  const publicSponsor = (s: EventSponsor) => { const company = Array.isArray(s.company) ? s.company[0] : s.company; return { name: company?.name ?? 'Patrocinante', logo_url: company?.public_logo_url } }
+  const previewItems: AgendaItem[] = sessions.map(s => ({ event_name: event.name, event_branding: null, public_agenda_config: null, session_id: s.id, session_name: s.name, session_type: s.session_type, session_status: s.status ?? 'scheduled', starts_at: s.starts_at, ends_at: s.ends_at, stage_name: stages.find(stage => stage.id === s.stage_id)?.name ?? null, speakers: speakers.filter(p => [...(speakerIds[s.id] ?? []), ...(moderatorIds[s.id] ?? [])].includes(p.id)), sponsors: confirmedSponsors.filter(p => sessionSponsorIds[s.id]?.includes(p.id)).map(publicSponsor), event_sponsors: confirmedSponsors.map(publicSponsor) }))
+
   return <PageFrame title={`Agenda · ${event.name}`} eventId={event.id}>
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div><p className="text-sm text-zinc-500">Programa del foro</p><h1 className="text-2xl font-bold tracking-tight text-zinc-900">{event.name}</h1><p className="mt-1 text-sm text-zinc-600">Crea escenarios, sesiones, talleres, recesos y perfiles de ponentes.</p></div>
@@ -184,7 +191,7 @@ export default function AgendaAdmin() {
     {tab === 'speakers' && <SpeakersView speakers={speakers} onNew={() => setSpeakerEditor('new')} onEdit={setSpeakerEditor} onDelete={deleteSpeaker} />}
     {tab === 'content' && <AgendaContentAdmin event={event} sessions={sessions} speakers={speakers} onRefresh={load} />}
     {tab === 'operations' && <AgendaOperationsAdmin event={event} sessions={sessions} />}
-    {tab === 'public' && <><PublicAgendaRefreshControl event={event} onSaved={load} /><PublicAgendaDesigner event={event} onSaved={load} /></>}
+    {tab === 'public' && <PublicAgendaDesigner key={event.id} event={event} items={previewItems} onSaved={load} />}
     {stageEditor && <FriendlyStageModal stage={stageEditor === 'new' ? null : stageEditor} event={event} nextOrder={stages.length} onClose={() => setStageEditor(null)} onSaved={async () => { setStageEditor(null); await load() }} />}
     {sessionEditor && <SessionModal session={sessionEditor === 'new' ? null : sessionEditor} event={event} stages={stages} speakers={speakers} assigned={sessionEditor === 'new' ? [] : speakerIds[sessionEditor.id] ?? []} assignedModerators={sessionEditor === 'new' ? [] : moderatorIds[sessionEditor.id] ?? []} eventSponsors={eventSponsors} assignedSponsors={sessionEditor === 'new' ? [] : sessionSponsorIds[sessionEditor.id] ?? []} allSessions={sessions} onClose={() => setSessionEditor(null)} onSaved={async () => { setSessionEditor(null); await load() }} />}
     {speakerEditor && <SpeakerModal speaker={speakerEditor === 'new' ? null : speakerEditor} event={event} nextOrder={speakers.length} onClose={() => setSpeakerEditor(null)} onSaved={async () => { setSpeakerEditor(null); await load() }} />}
@@ -193,39 +200,6 @@ export default function AgendaAdmin() {
 
 function PageFrame({ title, eventId, children }: { title: string; eventId?: string; children: React.ReactNode }) {
   return <div className="min-h-[100dvh] bg-zinc-50"><header className="border-b border-zinc-200 bg-white"><div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4"><Link to={`/admin/eventos/${eventId}/administrar`} aria-label="Volver a administrar evento" className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700"><Home className="h-4 w-4" />Admin del evento</Link><div className="flex items-center gap-3"><span className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-900"><CalendarDays className="h-4 w-4 text-emerald-600" />{title}</span>{eventId && <><Link to={`/e/${eventId}/agenda`} target="_blank" className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white">Ver agenda pública</Link><Link to={`/admin/asientos/${eventId}`} className="hidden rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 sm:inline-flex">Asientos</Link></>}</div></div></header><main className="mx-auto max-w-7xl px-5 py-8">{children}</main></div>
-}
-function PublicAgendaRefreshControl({ event, onSaved }: { event: EventData; onSaved: () => Promise<void> }) {
-  const current = (event.config?.public_agenda as Record<string, unknown> | undefined) ?? {}
-  const initial = [10, 15, 30, 60, 120, 300].includes(Number(current.refresh_seconds)) ? Number(current.refresh_seconds) : 15
-  const [seconds, setSeconds] = useState(initial)
-  const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState<string | null>(null)
-  async function save() {
-    setBusy(true); setMessage(null)
-    const config = { ...event.config, public_agenda: { ...current, refresh_seconds: seconds } }
-    const { error } = await supabase.from('events').update({ config }).eq('id', event.id)
-    setBusy(false)
-    if (error) setMessage(error.message); else { setMessage('Intervalo de actualización guardado.'); await onSaved() }
-  }
-  return <section className="mt-6 flex flex-wrap items-end justify-between gap-4 rounded-2xl border border-sky-200 bg-sky-50 p-5"><div><h2 className="font-bold text-slate-900">Actualización de la pantalla</h2><p className="mt-1 text-sm text-slate-700">Define cada cuánto las pantallas públicas consultan cambios de horario, cancelaciones y patrocinantes.</p></div><div className="flex flex-wrap items-end gap-3"><label className={label}>Refrescar cada<select value={seconds} onChange={e=>setSeconds(Number(e.target.value))} className={`${input} mt-1`}><option value={10}>10 segundos</option><option value={15}>15 segundos (recomendado)</option><option value={30}>30 segundos</option><option value={60}>1 minuto</option><option value={120}>2 minutos</option><option value={300}>5 minutos</option></select></label><button type="button" disabled={busy} onClick={()=>void save()} className="rounded-lg bg-sky-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{busy ? 'Guardando…' : 'Guardar intervalo'}</button></div>{message && <p className="w-full text-sm text-slate-800">{message}</p>}</section>
-}
-function PublicAgendaDesigner({ event, onSaved }: { event: EventData; onSaved: () => Promise<void> }) {
-  const current = (event.config?.public_agenda as Record<string, unknown> | undefined) ?? {}
-  const [title, setTitle] = useState(String(current.title ?? 'Agenda del evento'))
-  const [accent, setAccent] = useState(String(current.accent_color ?? '#059669'))
-  const [background, setBackground] = useState(String(current.background_color ?? '#071d2b'))
-  const [textColor, setTextColor] = useState(String(current.text_color ?? '#ffffff'))
-  const [fontFamily, setFontFamily] = useState(String(current.font_family ?? 'outfit'))
-  const [textScale, setTextScale] = useState(String(current.text_scale ?? 'normal'))
-  const [ticker, setTicker] = useState(String(current.ticker_text ?? ''))
-  const [published, setPublished] = useState(current.published === true)
-  const [showSponsors, setShowSponsors] = useState(current.show_sponsors !== false)
-  const [showSchedule, setShowSchedule] = useState(current.show_schedule !== false)
-  const [showCurrent, setShowCurrent] = useState(current.show_current !== false)
-  const [showNext, setShowNext] = useState(current.show_next !== false)
-  const [busy, setBusy] = useState(false); const [message, setMessage] = useState<string | null>(null)
-  async function save() { setBusy(true); setMessage(null); const config = { ...event.config, public_agenda: { title: title.trim() || 'Agenda del evento', accent_color: accent, background_color: background, text_color: textColor, font_family: fontFamily, text_scale: textScale, ticker_text: ticker.trim(), published, show_sponsors: showSponsors, show_schedule: showSchedule, show_current: showCurrent, show_next: showNext } }; const { error } = await supabase.from('events').update({ config }).eq('id', event.id); setBusy(false); if (error) setMessage(error.message); else { setMessage(published ? 'Pantalla pública guardada y publicada.' : 'Diseño guardado. Activa la publicación cuando esté listo.'); await onSaved() } }
-  return <section className="mt-6 grid gap-6 lg:grid-cols-[1fr_400px]"><form onSubmit={(e)=>{e.preventDefault();void save()}} className="rounded-2xl border bg-white p-5"><h2 className="text-lg font-bold">Pantalla pública de agenda</h2><p className="mt-1 text-sm text-zinc-600">Una pantalla de lectura rápida para TV, proyector o enlace público. Los cambios de horarios y cancelaciones se reflejan automáticamente.</p><div className="mt-5 grid gap-4"><label className={label}>Título visible<input value={title} onChange={e=>setTitle(e.target.value)} className={input}/></label><div className="grid gap-4 sm:grid-cols-2"><label className={label}>Color de acento<div className="mt-1 flex gap-2"><input type="color" value={accent} onChange={e=>setAccent(e.target.value)} className="h-10 w-14 rounded border"/><input value={accent} onChange={e=>setAccent(e.target.value)} className={input}/></div></label><label className={label}>Fondo de pantalla<div className="mt-1 flex gap-2"><input type="color" value={background} onChange={e=>setBackground(e.target.value)} className="h-10 w-14 rounded border"/><input value={background} onChange={e=>setBackground(e.target.value)} className={input}/></div></label></div><div className="grid gap-4 sm:grid-cols-3"><label className={label}>Color del texto<div className="mt-1 flex gap-2"><input type="color" value={textColor} onChange={e=>setTextColor(e.target.value)} className="h-10 w-14 rounded border"/><input value={textColor} onChange={e=>setTextColor(e.target.value)} className={input}/></div></label><label className={label}>Fuente<select value={fontFamily} onChange={e=>setFontFamily(e.target.value)} className={`${input} mt-1`}><option value="outfit">Outfit moderna</option><option value="arial">Arial legible</option><option value="georgia">Georgia editorial</option><option value="mono">Monoespaciada FIDS</option></select></label><label className={label}>Tamaño de lectura<select value={textScale} onChange={e=>setTextScale(e.target.value)} className={`${input} mt-1`}><option value="compact">Compacto</option><option value="normal">Normal</option><option value="large">Grande</option></select></label></div><label className={label}>Mensaje del cintillo<textarea value={ticker} onChange={e=>setTicker(e.target.value)} rows={2} placeholder="Ej.: Bienvenidos a Expo Petróleo 2026." className={input}/></label><fieldset className="grid gap-2 rounded-xl border border-zinc-200 p-4"><legend className="px-1 text-sm font-semibold">Contenido visible</legend><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={showSchedule} onChange={e=>setShowSchedule(e.target.checked)}/>Tabla de agenda y estados</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={showCurrent} onChange={e=>setShowCurrent(e.target.checked)}/>Actividad en curso</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={showNext} onChange={e=>setShowNext(e.target.checked)}/>Próxima actividad</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={showSponsors} onChange={e=>setShowSponsors(e.target.checked)}/>Logos y nombres de patrocinantes, globales y por actividad</label></fieldset><label className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950"><input className="mt-1" type="checkbox" checked={published} onChange={e=>setPublished(e.target.checked)}/><span><strong>Publicar esta pantalla.</strong><br/>Al activarla, el enlace será visible incluso si la inscripción general todavía no está publicada.</span></label></div><div className="mt-5 flex flex-wrap gap-3"><button disabled={busy} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{busy?'Guardando…':'Guardar configuración'}</button><Link to={`/e/${event.id}/agenda`} target="_blank" className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700">Abrir pantalla pública</Link></div>{message&&<p className="mt-3 rounded-lg bg-zinc-100 p-3 text-sm">{message}</p>}</form><aside className="overflow-hidden rounded-2xl border p-5 text-white" style={{backgroundColor:background}}><p className="text-xs font-semibold uppercase tracking-wide text-white/55">Vista previa</p><div className="mt-4 h-2 rounded" style={{backgroundColor:accent}}/><h3 className="mt-5 text-2xl font-bold">{title || 'Agenda del evento'}</h3><p className="mt-4 text-sm text-white/70">EN ESTE MOMENTO · A CONTINUACIÓN</p>{showSchedule&&<div className="mt-4 divide-y divide-white/15 border-y border-white/15 text-sm"><p className="py-3">10:00 · Apertura · Auditorio</p><p className="py-3">11:00 · Panel principal · En curso</p></div>}{showSponsors&&<p className="mt-4 text-sm" style={{color:accent}}>Patrocinantes y logos en el cintillo</p>}{ticker&&<p className="mt-5 border-t border-white/20 pt-3 text-sm text-white/80">{ticker}</p>}<p className="mt-5 text-xs text-white/50">{published ? 'PUBLICADA' : 'AÚN SIN PUBLICAR'}</p></aside></section>
 }
 function TabButton({ active, icon, children, onClick }: { active: boolean; icon: React.ReactNode; children: React.ReactNode; onClick: () => void }) { return <button type="button" onClick={onClick} className={`inline-flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold ${active ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-zinc-500 hover:text-zinc-800'}`}>{icon}{children}</button> }
 
