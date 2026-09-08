@@ -316,3 +316,14 @@ dispositivos autorizados.
   persistente, para avanzar a Confirmado/Activo/Cumplido solo cuando corresponda.
 - No requiere migración ni cambio de RLS. Falta validar en producción el
   cintillo de agenda con expositores procedentes de un evento hermano.
+
+## Cintillo público de patrocinantes — 8 de septiembre de 2026
+
+- Se elimina la pausa automática al pasar el cursor, que hacía parecer detenido
+  el cintillo durante la revisión. El botón de pausa/reanudar conserva el
+  control explícito.
+- La pista de movimiento se refuerza para desplazar dos grupos idénticos de
+  manera continua. Si se respeta `prefers-reduced-motion`, se presenta estática
+  y centrada.
+- El diseñador de agenda incorpora alineación centrada o izquierda cuando el
+  organizador desactiva el movimiento. No requiere migración.

@@ -6,7 +6,7 @@ export type AgendaSettings = {
   text_scale?: 'compact' | 'normal' | 'large';
   layout?: 'cards' | 'timeline' | 'split';
   ticker_text?: string; ticker_animated?: boolean; ticker_seconds?: number;
-  ticker_direction?: 'left' | 'right'; logo_size?: number;
+  ticker_direction?: 'left' | 'right'; ticker_static_align?: 'left' | 'center'; logo_size?: number;
   activity_sponsors?: SponsorMode; event_sponsors?: SponsorMode;
   show_sponsors?: boolean; show_schedule?: boolean; show_current?: boolean; show_next?: boolean;
   show_clock?: boolean; show_speakers?: boolean; show_locations?: boolean; show_cancelled?: boolean;

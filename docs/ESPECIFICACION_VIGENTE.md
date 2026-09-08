@@ -49,6 +49,9 @@ rol independiente de plataforma (`platform_admins`).
    Los patrocinantes se hacen visibles en la agenda pública únicamente cuando
    su acuerdo está Confirmado, Activo o Cumplido; el administrador puede cambiar
    el estado de cada asignación desde el evento sin alterar su empresa de origen.
+   El cintillo de patrocinantes puede desplazarse en ambos sentidos, pausarse de
+   forma manual y, cuando se desactiva su movimiento, alinearse al centro o a
+   la izquierda.
 4. **Registro y pago.** El visitante se registra, reserva asiento de forma
    atómica si corresponde y recibe un enlace para cargar el comprobante.
 5. **Verificación.** Un admin confirma o rechaza el comprobante. La

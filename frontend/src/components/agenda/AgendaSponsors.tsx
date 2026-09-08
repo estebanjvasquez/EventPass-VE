@@ -21,10 +21,11 @@ export function SponsorTicker({ sponsors, mode, settings, preview }: { sponsors:
   const visible = mode === 'none' ? [] : sponsors;
   if (!visible.length && !settings.ticker_text?.trim()) return null;
   const animated = settings.ticker_animated !== false;
+  const staticAlign = settings.ticker_static_align === 'left' ? 'left' : 'center';
   const content = <>{settings.ticker_text?.trim() && <span className="agenda-ticker-message">{settings.ticker_text}</span>}{visible.map((sponsor, i) => <SponsorBadge key={`${sponsor.name}-${sponsor.logo_url}-${i}`} sponsor={sponsor} mode={mode} size={boundedNumber(settings.logo_size, 48, 32, 80)} />)}</>;
   return <footer className={`agenda-sponsor-footer ${preview ? 'is-preview' : ''} ${!animated ? 'is-static' : ''}`} aria-label="Cintillo del evento">
     {animated && <button type="button" className="agenda-motion-toggle" onClick={() => setPaused(value => !value)} aria-label={paused ? 'Reanudar cintillo' : 'Pausar cintillo'}>{paused ? <Play size={16} /> : <Pause size={16} />}</button>}
-    <div className={`agenda-marquee ${animated ? 'is-animated' : ''} ${paused ? 'is-paused' : ''}`} style={{ ['--ticker-duration' as string]: `${boundedNumber(settings.ticker_seconds, 45, 20, 120)}s`, ['--ticker-direction' as string]: settings.ticker_direction === 'right' ? 'reverse' : 'normal' }}>
+    <div className={`agenda-marquee ${animated ? 'is-animated' : `is-static is-${staticAlign}`} ${paused ? 'is-paused' : ''}`} style={{ ['--ticker-duration' as string]: `${boundedNumber(settings.ticker_seconds, 45, 20, 120)}s`, ['--ticker-direction' as string]: settings.ticker_direction === 'right' ? 'reverse' : 'normal' }}>
       <div className="agenda-marquee-track"><div className="agenda-marquee-group">{content}</div>{animated && <div className="agenda-marquee-group agenda-marquee-copy" aria-hidden="true">{content}</div>}</div>
     </div>
   </footer>;
