@@ -285,3 +285,22 @@ pero falta demostrar la operación integral sobre producción con datos de QA.
 inicializar el 28 de agosto; reintentar tras reiniciar Codex y Chrome con la
 extensión activa. Mientras tanto, la guía permite ejecutar QA manual desde los
 dispositivos autorizados.
+
+## Programa maestro y catálogo compartido — 8 de septiembre de 2026
+
+- Implementado localmente: cuando un programa vincula dos o más eventos, el
+  selector de patrocinantes de cada evento incluye empresas patrocinantes de la
+  organización y expositores de los eventos vinculados, señalando si el
+  expositor procede del evento actual o de otro evento del programa.
+- El centro del programa ahora expone un resumen único de empresas y de
+  participantes, siempre con el evento de origen. La identidad de participante
+  y los pases siguen siendo los ya definidos por el programa.
+- Regla deliberada: acuerdos, pagos, activaciones y entregables se conservan
+  en el evento elegido. No se crean contratos ni cobros compartidos de forma
+  implícita.
+- Sin migración nueva: se reutilizan `event_programs`, `program_events`,
+  `people`, `event_participations`, `companies` y `event_sponsorships` con sus
+  políticas RLS vigentes. Build de frontend correcto; falta prueba autenticada
+  de un programa con dos o más eventos antes de publicar.
+- Siguiente diseño: acuerdo a nivel de programa y distribución por evento,
+  solo después de decidir facturación, moneda, responsable y regla de reparto.

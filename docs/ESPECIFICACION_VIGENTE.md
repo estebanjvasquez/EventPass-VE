@@ -38,7 +38,14 @@ rol independiente de plataforma (`platform_admins`).
 3. **Programa y registro para octubre.** Un programa reúne uno o más eventos
    relacionados (por ejemplo, foro y exposición); el registro público perfila
    al participante y permite emitir pases con acceso por evento, día, sesión o
-   zona. La venta continúa fuera de la plataforma en esta versión.
+   zona. Cuando el programa vincula dos o más eventos, el catálogo comercial
+   de cada uno puede seleccionar patrocinantes de la organización y expositores
+   de los eventos vinculados, indicando siempre su origen. El acuerdo, pagos,
+   entregables y activaciones permanecen en el evento donde se asignan: no se
+   replican ni mezclan contablemente. El centro del programa ofrece la consulta
+   unificada de empresas y participantes, mientras que los pases mantienen los
+   permisos explícitos por evento, sesión o zona. La venta continúa fuera de la
+   plataforma en esta versión.
 4. **Registro y pago.** El visitante se registra, reserva asiento de forma
    atómica si corresponde y recibe un enlace para cargar el comprobante.
 5. **Verificación.** Un admin confirma o rechaza el comprobante. La

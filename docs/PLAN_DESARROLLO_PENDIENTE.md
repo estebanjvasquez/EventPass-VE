@@ -483,6 +483,29 @@ Métricas recomendadas:
 
 ## Orden recomendado
 
+## Programa maestro: contenido compartido y operación comercial
+
+**Estado:** primera entrega implementada localmente; pendiente de validación
+funcional antes de publicar.
+
+- Habilitar, solo para programas con dos o más eventos vinculados, la selección
+  de empresas patrocinantes y de expositores de los eventos hermanos al crear
+  un patrocinio para un evento.
+- Mantener cada `event_sponsorship`, cobro, entrega y activación en su evento
+  de origen; no duplicar contratos ni pagos automáticamente.
+- Mostrar en el centro del programa el catálogo compartido y las personas
+  registradas, conservando el evento de origen y los pases explícitos.
+- Fase siguiente: diseñar, con migración separada, un acuerdo comercial propio
+  del programa y una distribución visible por evento. No se implementará hasta
+  definir facturación, moneda, responsable y regla de reparto.
+- Fase siguiente: exportación consolidada de participantes y empresas, filtros
+  por evento y rol, y acciones masivas que respeten los permisos de cada pase.
+
+**Criterio de aceptación:** un evento fuera de un programa no puede ver ni
+asignar expositores de otros eventos; un evento dentro de un programa puede
+asignar un expositor de cualquier evento vinculado, identificado como tal, y
+la asignación resultante conserva únicamente el `event_id` elegido.
+
 ### Orden inmediato derivado de la revisión del cliente
 
 1. Corregir las plantillas según modalidad y eliminar toda referencia indebida a pago en eventos gratuitos.
