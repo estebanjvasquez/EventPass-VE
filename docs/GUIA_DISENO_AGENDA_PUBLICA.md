@@ -31,3 +31,12 @@ No requiere migración ni cambios del Worker. Se usa `events.config.public_agend
 Base anterior: `bcec00a`, etiqueta `rollback/pre-agenda-design-20260908`. Artefacto anterior de Pages: `256dcaa4-559b-4b29-870c-547d33fc9b2e` (https://256dcaa4.eventpass-d7d.pages.dev/).
 
 Para retorno inmediato seleccionar ese deployment en Cloudflare Pages y usar Rollback, evitando ejecuciones pendientes de CI. Luego revertir en Git el commit de esta entrega y verificar build antes de publicar nuevamente. No borrar configuraciones ni datos; los campos visuales adicionales son compatibles con la versión previa, que los ignora.
+
+## Entrega verificada
+
+- Commit de implementación: `5f70a9b` (para revertir esta entrega mediante `git revert`).
+- [Despliegue aprobado en GitHub Actions](https://github.com/estebanjvasquez/EventPass-VE/actions/runs/34195870281).
+- Artefacto: https://e07a74a9.eventpass-d7d.pages.dev/.
+- Smoke anónimo en https://eventosfacil.net/: portada y plano con canvas; 31 respuestas de JS/CSS correctas, sin excepciones JavaScript. El bundle servido `AgendaAdmin-Bv4o-lZ3.js` contiene el nuevo diseñador y sus controles.
+- La agenda del evento de la guía sigue indicando que no tiene sesiones públicas; no se alteraron sus datos para la prueba. El guardado se comprobó con API simulada, no con una escritura autenticada productiva.
+- Lint: sin errores, con la advertencia preexistente de dependencia `load` en `PlanoComercialAdmin.tsx`, fuera de esta entrega.
