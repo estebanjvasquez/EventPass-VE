@@ -46,6 +46,9 @@ rol independiente de plataforma (`platform_admins`).
    unificada de empresas y participantes, mientras que los pases mantienen los
    permisos explícitos por evento, sesión o zona. La venta continúa fuera de la
    plataforma en esta versión.
+   Los patrocinantes se hacen visibles en la agenda pública únicamente cuando
+   su acuerdo está Confirmado, Activo o Cumplido; el administrador puede cambiar
+   el estado de cada asignación desde el evento sin alterar su empresa de origen.
 4. **Registro y pago.** El visitante se registra, reserva asiento de forma
    atómica si corresponde y recibe un enlace para cargar el comprobante.
 5. **Verificación.** Un admin confirma o rechaza el comprobante. La

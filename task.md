@@ -304,3 +304,15 @@ dispositivos autorizados.
   de un programa con dos o más eventos antes de publicar.
 - Siguiente diseño: acuerdo a nivel de programa y distribución por evento,
   solo después de decidir facturación, moneda, responsable y regla de reparto.
+
+## Visibilidad pública de patrocinantes — 8 de septiembre de 2026
+
+- Hallazgo: la agenda pública muestra exclusivamente acuerdos con estado
+  `confirmed`, `active` o `fulfilled`. Las asignaciones nuevas del panel del
+  evento partían como `prospect`, por lo que podían existir y ser seleccionadas
+  sin aparecer en el cintillo público.
+- Corrección local: nuevas asignaciones desde el evento conservan Prospecto
+  como estado inicial. Cada asignación ya creada tiene un selector de estado
+  persistente, para avanzar a Confirmado/Activo/Cumplido solo cuando corresponda.
+- No requiere migración ni cambio de RLS. Falta validar en producción el
+  cintillo de agenda con expositores procedentes de un evento hermano.
