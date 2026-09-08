@@ -51,7 +51,11 @@ rol independiente de plataforma (`platform_admins`).
    el estado de cada asignación desde el evento sin alterar su empresa de origen.
    El cintillo de patrocinantes puede desplazarse en ambos sentidos, pausarse de
    forma manual y, cuando se desactiva su movimiento, alinearse al centro o a
-   la izquierda.
+   la izquierda. El ciclo se calcula con el ancho real de su contenido, por lo
+   que funciona también con un único logo o un único mensaje. Los módulos
+   abiertos desde un evento preservan retorno al administrador de ese evento,
+   que a su vez enlaza tanto a la lista de eventos como al inicio de la
+   organización.
 4. **Registro y pago.** El visitante se registra, reserva asiento de forma
    atómica si corresponde y recibe un enlace para cargar el comprobante.
 5. **Verificación.** Un admin confirma o rechaza el comprobante. La

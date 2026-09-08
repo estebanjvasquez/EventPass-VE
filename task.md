@@ -322,8 +322,16 @@ dispositivos autorizados.
 - Se elimina la pausa automática al pasar el cursor, que hacía parecer detenido
   el cintillo durante la revisión. El botón de pausa/reanudar conserva el
   control explícito.
-- La pista de movimiento se refuerza para desplazar dos grupos idénticos de
-  manera continua. Si se respeta `prefers-reduced-motion`, se presenta estática
-  y centrada.
+- La pista usa dos grupos idénticos y mide en el navegador el ancho real del
+  primero para animar exactamente esa distancia. Por ello se desplaza de forma
+  continua desde un solo patrocinante o mensaje, sin requerir un mínimo de
+  logos.
 - El diseñador de agenda incorpora alineación centrada o izquierda cuando el
   organizador desactiva el movimiento. No requiere migración.
+
+## Navegación contextual del evento — 8 de septiembre de 2026
+
+- Cuando el catálogo comercial se abre desde Patrocinantes, conserva el
+  identificador del evento y ofrece retorno directo a **Admin del evento**.
+- El administrador del evento ofrece enlaces claros a **Todos los eventos** e
+  **Inicio de la organización**.
