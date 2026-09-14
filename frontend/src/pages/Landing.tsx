@@ -14,6 +14,7 @@ import {
 import { supabase } from "../lib/supabase";
 import { useTenant } from "../lib/useTenant";
 import { brandColor, brandName, type Tenant } from "../lib/tenantCore";
+import EventPublicLanding, { type LandingEvent } from '../components/EventPublicLanding';
 
 const capabilities = [
   {
@@ -372,6 +373,8 @@ type PublicEvent = {
   name: string;
   description: string | null;
   start_date: string | null;
+  event_type: string;
+  config: Record<string, unknown> | null;
 };
 function TenantLanding({ tenant }: { tenant: Tenant }) {
   const [events, setEvents] = useState<PublicEvent[]>([]);
@@ -383,7 +386,7 @@ function TenantLanding({ tenant }: { tenant: Tenant }) {
     let active = true;
     supabase
       .from("events")
-      .select("id, name, description, start_date")
+      .select("id, name, description, start_date,event_type,config")
       .eq("organization_id", tenant.id)
       .eq("status", "published")
       .order("start_date", { ascending: true })
@@ -397,6 +400,7 @@ function TenantLanding({ tenant }: { tenant: Tenant }) {
       active = false;
     };
   }, [tenant.id]);
+  if (!loading && events.length === 1) return <EventPublicLanding event={events[0] as LandingEvent} tenant={tenant} />;
   return (
     <div className="min-h-[100dvh] bg-zinc-50">
       <header className="border-b border-zinc-200 bg-white">

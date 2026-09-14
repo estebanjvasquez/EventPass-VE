@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { BarChart3, CalendarCog, CheckSquare, ChevronLeft, ClipboardList, FileText, Handshake, LayoutDashboard, Map, ScanLine, Users } from 'lucide-react'
+import { BarChart3, CalendarCog, CheckSquare, ChevronLeft, ClipboardList, FileText, Handshake, LayoutDashboard, Map, MonitorSmartphone, ScanLine, Users } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { resolveActiveOrg } from '../lib/activeOrg'
 import { supabase } from '../lib/supabase'
@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabase'
 type EventInfo = { id: string; name: string; event_type: string; status: string }
 
 function eventIdFromPath(pathname: string) {
-  const match = pathname.match(/^\/admin\/(?:eventos\/([^/]+)\/(?:resumen|administrar|conversiones|registros|formularios|lanzamiento)|agenda\/([^/]+)|stands\/([^/]+)|expositores\/([^/]+)|patrocinantes\/([^/]+)|personal\/([^/]+)|operacion-plano\/([^/]+)|asientos\/([^/]+)|foro-plano\/([^/]+)|plano-comercial\/([^/]+)|plano-publicar\/([^/]+))/)
+  const match = pathname.match(/^\/admin\/(?:eventos\/([^/]+)\/(?:resumen|administrar|conversiones|registros|formularios|lanzamiento|landing)|agenda\/([^/]+)|stands\/([^/]+)|expositores\/([^/]+)|patrocinantes\/([^/]+)|personal\/([^/]+)|operacion-plano\/([^/]+)|asientos\/([^/]+)|foro-plano\/([^/]+)|plano-comercial\/([^/]+)|plano-publicar\/([^/]+))/)
   return match?.slice(1).find(Boolean) ?? null
 }
 
@@ -43,6 +43,7 @@ export default function EventAdminWorkspace({ children }: { children: ReactNode 
     { to: `${base}/conversiones`, label: 'Promoción y conversiones', icon: BarChart3 },
     { to: `${base}/formularios`, label: 'Formularios y leads', icon: FileText },
     { to: `${base}/lanzamiento`, label: 'Checklist de lanzamiento', icon: CheckSquare },
+    { to: `${base}/landing`, label: 'Landing pública', icon: MonitorSmartphone },
   ]
 
   return <div className="min-h-[calc(100dvh-4rem)] bg-zinc-50 lg:pl-72">
