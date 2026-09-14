@@ -25,6 +25,9 @@ const EventosAdmin = lazy(() => import('./pages/admin/EventosAdmin'))
 const EventoAdministracion = lazy(() => import('./pages/admin/EventoAdministracion'))
 const EventOverview = lazy(() => import('./pages/admin/EventOverview'))
 const EventConversions = lazy(() => import('./pages/admin/EventConversions'))
+const EventLeadForms = lazy(() => import('./pages/admin/EventLeadForms'))
+const EventLaunchChecklist = lazy(() => import('./pages/admin/EventLaunchChecklist'))
+const PublicLeadForm = lazy(() => import('./pages/PublicLeadForm'))
 const ProgramasAdmin = lazy(() => import('./pages/admin/ProgramasAdmin'))
 const ProgramaAccesosAdmin = lazy(() => import('./pages/admin/ProgramaAccesosAdmin'))
 const AgendaAdmin = lazy(() => import('./pages/admin/AgendaAdmin'))
@@ -63,6 +66,7 @@ function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/registro" element={<RegistroEvento />} />
         <Route path="/e/:eventId" element={<RegistroEvento />} />
+        <Route path="/e/:eventId/interes/:slug" element={<PublicLeadForm />} />
         <Route path="/p/:programId/registro" element={<RegistroPrograma />} />
         <Route path="/e/:eventId/agenda" element={<AgendaPublica />} />
         <Route path="/comprobante/:token" element={<CargarComprobante />} />
@@ -136,6 +140,8 @@ function App() {
         <Route path="/admin/eventos/:eventId/resumen" element={<RequireAuth><EventOverview /></RequireAuth>} />
         <Route path="/admin/eventos/:eventId/registros" element={<RequireAuth><AdminPanel /></RequireAuth>} />
         <Route path="/admin/eventos/:eventId/conversiones" element={<RequireAuth><EventConversions /></RequireAuth>} />
+        <Route path="/admin/eventos/:eventId/formularios" element={<RequireAuth><EventLeadForms /></RequireAuth>} />
+        <Route path="/admin/eventos/:eventId/lanzamiento" element={<RequireAuth><EventLaunchChecklist /></RequireAuth>} />
         <Route path="/admin/foro-plano/:eventId" element={<RequireAuth><PlanoForoAdmin /></RequireAuth>} />
         <Route path="/admin/plano-comercial/:eventId" element={<RequireAuth><PlanoComercialAdmin /></RequireAuth>} />
         <Route path="/admin/plano-publicar/:eventId" element={<RequireAuth><PlanoPublicarAdmin /></RequireAuth>} />
