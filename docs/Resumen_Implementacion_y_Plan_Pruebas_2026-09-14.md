@@ -4,11 +4,11 @@
 
 Hoy se creó el **centro de control por evento**, las métricas operativas y de conversión, y una base de captación con formularios públicos. La navegación ya no depende de recuadros rígidos para las áreas intervenidas: conserva el evento activo y muestra el menú contextual en escritorio y móvil.
 
-La única dependencia antes de habilitar las nuevas funciones de formularios es aplicar la migración de Supabase indicada en la sección 1. Hasta que se aplique, **no se debe desplegar el frontend de esta entrega**, porque la ruta de formularios depende de esas tablas y RPCs.
+La migración y el frontend ya están aplicados en producción. La sección 1 queda como referencia de recuperación y auditoría.
 
-## 1. Acción necesaria antes de publicar
+## 1. Migración aplicada en producción
 
-En Supabase SQL Editor del proyecto **Eventos Facil** ejecutar, completo y una sola vez:
+Aplicada el 14 de septiembre de 2026 en el proyecto **Eventos Facil**:
 
 `infra/supabase/migrations/20260914112812_event_leads_and_launch_checklist.sql`
 
@@ -126,6 +126,10 @@ Estas piezas no se declaran implementadas todavía porque requieren decisiones d
 
 - Frontend: `npm run build` correcto.
 - Frontend: `npm run lint` correcto, salvo una advertencia preexistente en `PlanoComercialAdmin.tsx` sobre dependencia de `useEffect`.
+- Supabase: tablas `event_lead_forms` y `event_lead_submissions`, y RPCs `submit_public_event_lead` y `get_event_lead_submissions`, verificadas directamente en producción.
+- Pages: despliegue de producción `c0cf1901.eventpass-d7d.pages.dev` verificado mediante `eventosfacil.net`.
+- Verificación visual: el menú muestra **Formularios y leads** y **Checklist de lanzamiento**; la administración carga sin error; un slug público inexistente devuelve “Formulario no disponible”.
+- El asesor de seguridad reporta que `event_lead_submissions` no tiene política RLS. Es intencional: no se concede acceso directo a `anon` ni `authenticated`; las lecturas administrativas pasan por la RPC autorizada. El mismo informe contiene advertencias históricas de funciones y vistas anteriores que no fueron modificadas en esta entrega.
 - No hay pruebas automatizadas en el repositorio; las pruebas anteriores son la verificación manual de aceptación.
 - Se preservaron los documentos locales existentes y no se incluyeron en los commits.
 
