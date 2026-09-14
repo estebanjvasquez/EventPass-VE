@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { CalendarCog, Check, CreditCard, FileText, IdCard, LogOut, MapPin, RefreshCw, ScanLine, ShieldCheck, Ticket, Users, BriefcaseBusiness, Handshake, X } from 'lucide-react'
-import { useAuth } from '../../lib/auth'
+import { useParams } from 'react-router-dom'
+import { Check, FileText, MapPin, RefreshCw, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { resolveActiveOrg, type ActiveOrg } from '../../lib/activeOrg'
 import ImpersonationBanner from '../../components/ImpersonationBanner'
@@ -52,7 +51,7 @@ const STATUS_STYLE: Record<Registration['status'], string> = {
 type Tab = 'por_revisar' | 'confirmed' | 'rejected'
 
 export default function AdminPanel() {
-  const { user, signOut } = useAuth()
+  const { eventId: routeEventId } = useParams()
   const [membership, setMembership] = useState<Membership | null>(null)
   const [rows, setRows] = useState<Registration[]>([])
   const [loading, setLoading] = useState(true)
@@ -62,11 +61,6 @@ export default function AdminPanel() {
   const [viewingId, setViewingId] = useState<string | null>(null)
   const [events, setEvents] = useState<EventOption[]>([])
   const [eventFilter, setEventFilter] = useState<string>('all')
-  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false)
-
-  useEffect(() => {
-    supabase.rpc('is_platform_admin').then(({ data }) => setIsPlatformAdmin(data === true))
-  }, [])
 
   const loadRegistrations = useCallback(async (orgId: string, eventId: string = 'all') => {
     let query = supabase
@@ -96,7 +90,9 @@ export default function AdminPanel() {
           .eq('organization_id', m.organization_id)
           .order('created_at', { ascending: false })
         if (active) setEvents((evs ?? []) as EventOption[])
-        await loadRegistrations(m.organization_id)
+        const selectedEvent = routeEventId ?? 'all'
+        if (active) setEventFilter(selectedEvent)
+        await loadRegistrations(m.organization_id, selectedEvent)
       }
       if (active) setLoading(false)
     }
@@ -104,7 +100,7 @@ export default function AdminPanel() {
     return () => {
       active = false
     }
-  }, [loadRegistrations])
+  }, [loadRegistrations, routeEventId])
 
   function onFilterChange(eventId: string) {
     setEventFilter(eventId)
@@ -205,76 +201,9 @@ export default function AdminPanel() {
   }, [rows, tab])
 
   return (
-    <div className="min-h-[100dvh] bg-[#fafafa]">
+    <div className="min-h-[calc(100dvh-4rem)] bg-[#fafafa]">
       <ImpersonationBanner />
-      <header className="border-b border-zinc-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-4">
-          <div className="flex items-center gap-3">
-            <span className="grid h-9 w-9 place-items-center rounded-lg bg-zinc-900 text-emerald-400">
-              <Ticket className="h-5 w-5" strokeWidth={2.2} />
-            </span>
-            <div>
-              <p className="text-sm font-semibold text-zinc-900">
-                {membership?.organizations?.name ?? 'EventPass VE'}
-              </p>
-              <p className="text-xs text-zinc-500">{user?.email}</p>
-            </div>
-          </div>
-          <div className="admin-desktop-nav flex flex-wrap items-center justify-end gap-2">
-            {isPlatformAdmin && (
-              <Link
-                to="/superadmin"
-                className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3.5 py-2 text-sm font-medium text-zinc-700 transition-colors hover:border-zinc-400"
-              >
-                <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                Superadmin
-              </Link>
-            )}
-            <Link
-              to="/admin/suscripcion"
-              className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3.5 py-2 text-sm font-medium text-zinc-700 transition-colors hover:border-zinc-400"
-            >
-              <CreditCard className="h-4 w-4" />
-              Suscripción
-            </Link>
-            <Link
-              to="/admin/eventos"
-              className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3.5 py-2 text-sm font-medium text-zinc-700 transition-colors hover:border-zinc-400"
-            >
-              <CalendarCog className="h-4 w-4" />
-              Eventos
-            </Link>
-            <Link
-              to="/admin/acreditacion"
-              className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3.5 py-2 text-sm font-medium text-zinc-700 transition-colors hover:border-zinc-400"
-            >
-              <IdCard className="h-4 w-4" />
-              Acreditación
-            </Link>
-            <Link
-              to="/admin/checkin"
-              className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-3.5 py-2 text-sm font-medium text-white transition-transform active:scale-[0.98]"
-            >
-              <ScanLine className="h-4 w-4" />
-              Check-in
-            </Link>
-            <Link to="/admin/equipo-operativo" className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3.5 py-2 text-sm font-medium text-zinc-700 transition-colors hover:border-zinc-400">
-              <Users className="h-4 w-4" /> Equipo
-            </Link>
-            <Link to="/admin/proveedores" className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3.5 py-2 text-sm font-medium text-zinc-700"><BriefcaseBusiness className="h-4 w-4" /> Proveedores</Link>
-            <Link to="/admin/patrocinantes" className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3.5 py-2 text-sm font-medium text-zinc-700"><Handshake className="h-4 w-4" /> Patrocinantes</Link>
-            <button
-              onClick={() => signOut()}
-              className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3.5 py-2 text-sm font-medium text-zinc-700 transition-colors hover:border-zinc-400"
-            >
-              <LogOut className="h-4 w-4" />
-              Salir
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-5xl px-5 py-10">
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-7">
         <div className="flex items-end justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Registros</h1>
@@ -284,7 +213,11 @@ export default function AdminPanel() {
           </div>
           {membership && (
             <div className="flex items-center gap-2">
-              <select
+              {routeEventId ? (
+                <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">
+                  {events.find((event) => event.id === routeEventId)?.name ?? 'Evento actual'}
+                </span>
+              ) : <select
                 aria-label="Filtrar por evento"
                 value={eventFilter}
                 onChange={(e) => onFilterChange(e.target.value)}
@@ -296,7 +229,7 @@ export default function AdminPanel() {
                     {ev.name}
                   </option>
                 ))}
-              </select>
+              </select>}
               <button
                 onClick={() => loadRegistrations(membership.organization_id, eventFilter)}
                 className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3.5 py-2 text-sm font-medium text-zinc-700 transition-colors hover:border-zinc-400"

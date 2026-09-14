@@ -24,6 +24,7 @@ const AcreditacionEvento = lazy(() => import('./pages/admin/AcreditacionEvento')
 const EventosAdmin = lazy(() => import('./pages/admin/EventosAdmin'))
 const EventoAdministracion = lazy(() => import('./pages/admin/EventoAdministracion'))
 const EventOverview = lazy(() => import('./pages/admin/EventOverview'))
+const EventConversions = lazy(() => import('./pages/admin/EventConversions'))
 const ProgramasAdmin = lazy(() => import('./pages/admin/ProgramasAdmin'))
 const ProgramaAccesosAdmin = lazy(() => import('./pages/admin/ProgramaAccesosAdmin'))
 const AgendaAdmin = lazy(() => import('./pages/admin/AgendaAdmin'))
@@ -133,7 +134,8 @@ function App() {
         />
         <Route path="/admin/eventos/:eventId/administrar" element={<RequireAuth><EventoAdministracion /></RequireAuth>} />
         <Route path="/admin/eventos/:eventId/resumen" element={<RequireAuth><EventOverview /></RequireAuth>} />
-        <Route path="/admin/eventos/:eventId/conversiones" element={<RequireAuth><EventOverview /></RequireAuth>} />
+        <Route path="/admin/eventos/:eventId/registros" element={<RequireAuth><AdminPanel /></RequireAuth>} />
+        <Route path="/admin/eventos/:eventId/conversiones" element={<RequireAuth><EventConversions /></RequireAuth>} />
         <Route path="/admin/foro-plano/:eventId" element={<RequireAuth><PlanoForoAdmin /></RequireAuth>} />
         <Route path="/admin/plano-comercial/:eventId" element={<RequireAuth><PlanoComercialAdmin /></RequireAuth>} />
         <Route path="/admin/plano-publicar/:eventId" element={<RequireAuth><PlanoPublicarAdmin /></RequireAuth>} />

@@ -12,7 +12,7 @@ export default function EventOverview() {
   useEffect(() => { void load() }, [load])
   const conversion = metrics.landing_views ? Math.round((metrics.registration_completions / metrics.landing_views) * 100) : 0
   const alerts = [
-    ...(metrics.pending_payments ? [{ label: `${metrics.pending_payments} pagos por revisar`, to: '/admin/registros' }] : []),
+    ...(metrics.pending_payments ? [{ label: `${metrics.pending_payments} pagos por revisar`, to: `/admin/eventos/${eventId}/registros` }] : []),
     ...(metrics.exhibitor_profiles_pending ? [{ label: `${metrics.exhibitor_profiles_pending} perfiles de expositores pendientes`, to: `/admin/expositores/${eventId}` }] : []),
     ...(metrics.stands_unassigned ? [{ label: `${metrics.stands_unassigned} stands sin asignar`, to: `/admin/stands/${eventId}` }] : []),
   ]
