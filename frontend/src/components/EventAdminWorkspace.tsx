@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { BarChart3, CalendarCog, CheckSquare, ChevronLeft, ClipboardList, FileText, Handshake, LayoutDashboard, Map, MonitorSmartphone, ScanLine, Users } from 'lucide-react'
+import { BarChart3, CalendarCog, CheckSquare, ChevronLeft, ClipboardList, FileText, Handshake, LayoutDashboard, Map, MonitorSmartphone, ScanLine, Settings2, Store, Users } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { resolveActiveOrg } from '../lib/activeOrg'
 import { supabase } from '../lib/supabase'
@@ -38,12 +38,15 @@ export default function EventAdminWorkspace({ children }: { children: ReactNode 
     { to: `${base}/registros`, label: 'Venta y registros', icon: ClipboardList },
     ...(forum ? [{ to: `/admin/agenda/${eventId}`, label: 'Programa y agenda', icon: CalendarCog }] : []),
     ...(exhibition ? [{ to: `/admin/stands/${eventId}`, label: 'Exposición', icon: Map }, { to: `/admin/expositores/${eventId}`, label: 'Expositores', icon: Users }] : []),
+    ...(exhibition ? [{ to: `/admin/plano-comercial/${eventId}`, label: 'Paquetes comerciales', icon: Store }, { to: `/admin/plano-publicar/${eventId}`, label: 'Publicar exposición', icon: MonitorSmartphone }] : []),
     { to: `/admin/patrocinantes/${eventId}`, label: 'Patrocinantes', icon: Handshake },
+    { to: `/admin/personal/${eventId}`, label: 'Personal', icon: Users },
     { to: `/admin/operacion-plano/${eventId}`, label: 'Operación', icon: ScanLine },
     { to: `${base}/conversiones`, label: 'Promoción y conversiones', icon: BarChart3 },
     { to: `${base}/formularios`, label: 'Formularios y leads', icon: FileText },
     { to: `${base}/lanzamiento`, label: 'Checklist de lanzamiento', icon: CheckSquare },
     { to: `${base}/landing`, label: 'Landing pública', icon: MonitorSmartphone },
+    { to: `${base}/administrar`, label: 'Configuración del evento', icon: Settings2 },
   ]
 
   return <div className="min-h-[calc(100dvh-4rem)] bg-zinc-50 lg:pl-72">
