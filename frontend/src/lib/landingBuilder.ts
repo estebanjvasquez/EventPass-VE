@@ -1,0 +1,10 @@
+export type LandingTemplate = 'summit' | 'expo' | 'minimal'
+export type LandingBlockType = 'event_intro' | 'program' | 'gallery' | 'cta'
+export type LandingBlock = { id: string; type: LandingBlockType; enabled: boolean; title?: string; body?: string }
+export type LandingConfig = { template?: LandingTemplate; eyebrow?: string; headline?: string; subheadline?: string; cta_label?: string; hero_image_url?: string; hero_images?: string[]; gallery_images?: string[]; logo_url?: string; primary_color?: string; location?: string; intro_title?: string; intro_body?: string; brochure_label?: string; brochure_url?: string; show_agenda?: boolean; show_exhibition?: boolean; show_interest?: boolean; blocks?: LandingBlock[] }
+
+export const templateBlocks: Record<LandingTemplate, LandingBlock[]> = {
+  summit: [{ id: 'intro', type: 'event_intro', enabled: true }, { id: 'program', type: 'program', enabled: true }, { id: 'gallery', type: 'gallery', enabled: true }, { id: 'cta', type: 'cta', enabled: true }],
+  expo: [{ id: 'intro', type: 'event_intro', enabled: true }, { id: 'program', type: 'program', enabled: true, title: 'Programa, empresas y oportunidades' }, { id: 'gallery', type: 'gallery', enabled: true }, { id: 'cta', type: 'cta', enabled: true }],
+  minimal: [{ id: 'intro', type: 'event_intro', enabled: true }, { id: 'cta', type: 'cta', enabled: true }],
+}
