@@ -88,7 +88,7 @@ begin
     (select count(*) from public.registrations r where r.event_id=p_event_id),
     (select count(*) from public.registrations r where r.event_id=p_event_id and r.status='pending_payment'),
     (select count(*) from public.registrations r where r.event_id=p_event_id and r.status='confirmed'),
-    (select count(*) from public.registrations r where r.event_id=p_event_id and r.attendance_status='attended'),
+    (select count(*) from public.registrations r where r.event_id=p_event_id and r.attendance_status='checked_in'),
     (select count(*) from public.event_conversion_events c where c.event_id=p_event_id and c.event_kind='landing_view'),
     (select count(*) from public.event_conversion_events c where c.event_id=p_event_id and c.event_kind='registration_started'),
     (select count(*) from public.event_conversion_events c where c.event_id=p_event_id and c.event_kind='registration_completed'),
