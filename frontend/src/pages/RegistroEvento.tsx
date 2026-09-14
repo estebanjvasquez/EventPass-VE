@@ -39,6 +39,16 @@ type FormValues = z.infer<typeof schema>
 type CreatedRegistration = { registration_id: string; credential_token: string; payment_required: boolean }
 type NotificationStatus = 'idle' | 'sending' | 'accepted' | 'failed'
 
+function attribution() {
+  const params = new URLSearchParams(window.location.search)
+  return {
+    campaign: params.get('utm_campaign') ?? undefined,
+    source: params.get('utm_source') ?? undefined,
+    medium: params.get('utm_medium') ?? undefined,
+    referrerHost: document.referrer ? new URL(document.referrer).hostname : undefined,
+  }
+}
+
 export default function RegistroEvento() {
   const { eventId } = useParams()
   const { tenant, loading: tenantLoading } = useTenant()
@@ -102,6 +112,19 @@ export default function RegistroEvento() {
     }
   }, [eventId, tenant, tenantLoading])
 
+  useEffect(() => {
+    if (!event?.id) return
+    const data = attribution()
+    void supabase.rpc('track_event_conversion', {
+      p_event_id: event.id,
+      p_event_kind: 'landing_view',
+      p_campaign: data.campaign,
+      p_source: data.source,
+      p_medium: data.medium,
+      p_referrer_host: data.referrerHost,
+    })
+  }, [event?.id])
+
   async function reloadSeats(evId: string) {
     const { data } = await supabase
       .from('seats')
@@ -146,6 +169,15 @@ export default function RegistroEvento() {
       return
     }
 
+    const campaign = attribution()
+    void supabase.rpc('track_event_conversion', {
+      p_event_id: event.id,
+      p_event_kind: 'registration_started',
+      p_campaign: campaign.campaign,
+      p_source: campaign.source,
+      p_medium: campaign.medium,
+      p_referrer_host: campaign.referrerHost,
+    })
     const { data, error } = await supabase.rpc('register_event_participant', {
       p_event_id: event.id,
       p_seat_id: hasSeats ? selectedSeat : null,
@@ -154,6 +186,9 @@ export default function RegistroEvento() {
       p_email: values.email,
       p_phone: values.phone,
       p_cedula: values.cedula || '',
+      p_campaign: campaign.campaign,
+      p_source: campaign.source,
+      p_medium: campaign.medium,
     })
     if (error) {
       if (error.code === '23505') {

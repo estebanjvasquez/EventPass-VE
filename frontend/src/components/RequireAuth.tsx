@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import AuthenticatedHeader from './AuthenticatedHeader'
+import EventAdminWorkspace from './EventAdminWorkspace'
 
 export default function RequireAuth({ children }: { children: ReactNode }) {
   const { session, loading } = useAuth()
@@ -16,5 +17,5 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
 
   if (!session) return <Navigate to="/admin/login" replace />
 
-  return <><AuthenticatedHeader />{children}</>
+  return <><AuthenticatedHeader /><EventAdminWorkspace>{children}</EventAdminWorkspace></>
 }
