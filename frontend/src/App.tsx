@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import RequireAuth from './components/RequireAuth'
+import EventLandingAdmin from './pages/admin/EventLandingAdmin'
 
 // Carga diferida por ruta: cada página es su propio chunk. Así el visitante
 // público no descarga el panel admin ni el escáner QR (html5-qrcode), que solo
@@ -27,7 +28,6 @@ const EventOverview = lazy(() => import('./pages/admin/EventOverview'))
 const EventConversions = lazy(() => import('./pages/admin/EventConversions'))
 const EventLeadForms = lazy(() => import('./pages/admin/EventLeadForms'))
 const EventLaunchChecklist = lazy(() => import('./pages/admin/EventLaunchChecklist'))
-const EventLandingAdmin = lazy(() => import('./pages/admin/EventLandingAdmin'))
 const PublicLeadForm = lazy(() => import('./pages/PublicLeadForm'))
 const ProgramasAdmin = lazy(() => import('./pages/admin/ProgramasAdmin'))
 const ProgramaAccesosAdmin = lazy(() => import('./pages/admin/ProgramaAccesosAdmin'))
