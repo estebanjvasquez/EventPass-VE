@@ -668,6 +668,27 @@ async function orgSlugForRole(
 }
 
 const provisionSchema = z.object({ organization_id: z.string().uuid() })
+const publicSiteProvisionSchema = z.object({ public_site_id: z.string().uuid() })
+
+app.post('/api/public-sites/provision-domain', async (c) => {
+  const cf = cfConfig(c.env)
+  if (!cf) return c.json({ error: 'Aprovisionamiento no configurado' }, 501)
+  const parsed = publicSiteProvisionSchema.safeParse(await c.req.json().catch(() => null))
+  if (!parsed.success) return c.json({ error: 'Datos inválidos' }, 400)
+  const supabase = createClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY)
+  const userId = await authUserId(supabase, c.req.header('Authorization'))
+  if (!userId) return c.json({ error: 'no autorizado' }, 401)
+  const { data: site } = await supabase.from('public_sites').select('id,organization_id,slug').eq('id', parsed.data.public_site_id).maybeSingle()
+  if (!site) return c.json({ error: 'Sitio público no encontrado' }, 404)
+  const info = await orgSlugForRole(supabase, site.organization_id, userId, ['owner', 'admin'])
+  if ('error' in info) return c.json({ error: info.error }, info.code)
+  const slug = normalizeSlug(site.slug)
+  if (!slug) return c.json({ error: 'El sitio necesita un subdominio válido' }, 400)
+  const result = await provisionDomain(cf, slug)
+  if (!result.ok) return c.json({ error: result.error, hostname: result.hostname }, 502)
+  await supabase.from('public_sites').update({ status: 'active' }).eq('id', site.id)
+  return c.json({ ok: true, hostname: result.hostname, status: result.status, dns: result.dns })
+})
 
 app.post('/api/tenants/provision-domain', async (c) => {
   const cf = cfConfig(c.env)

@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useTenant } from "../lib/useTenant";
-import { brandColor, brandName, type Tenant } from "../lib/tenantCore";
+import { brandColor, brandName, resolvePublicSite, type Tenant } from "../lib/tenantCore";
 import EventPublicLanding, { type LandingEvent } from '../components/EventPublicLanding';
 
 const capabilities = [
@@ -491,7 +491,12 @@ function TenantLanding({ tenant }: { tenant: Tenant }) {
 
 export default function Landing() {
   const { tenant, loading } = useTenant();
+  const [siteEvent, setSiteEvent] = useState<LandingEvent | null>(null);
+  const [siteChecked, setSiteChecked] = useState(false);
+  useEffect(() => { let active = true; void resolvePublicSite().then(async (site) => { if (!site?.event_id) return; const { data } = await supabase.from('events').select('id,name,description,event_type,start_date,config').eq('id', site.event_id).eq('status','published').maybeSingle(); if (active) setSiteEvent((data as LandingEvent | null) ?? null); }).finally(() => { if (active) setSiteChecked(true); }); return () => { active = false; }; }, []);
   if (loading) return <div className="min-h-[100dvh] bg-zinc-950" />;
+  if (!siteChecked) return <div className="min-h-[100dvh] bg-zinc-950" />;
+  if (siteEvent) return <EventPublicLanding event={siteEvent} />;
   if (tenant) return <TenantLanding tenant={tenant} />;
   return (
     <div className="min-h-[100dvh] bg-zinc-950">

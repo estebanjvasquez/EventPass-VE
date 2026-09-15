@@ -13,6 +13,7 @@ export type Tenant = {
   custom_hostname: string | null
   branding: Branding
 }
+export type PublicSite = { id: string; scope: 'event' | 'program'; event_id: string | null; program_id: string | null; landing_config: Record<string, unknown> }
 
 const ROOT_DOMAIN = 'eventosfacil.net'
 const RESERVED = new Set(['', 'www', 'app', 'admin', 'api'])
@@ -44,6 +45,15 @@ export async function resolveTenant(): Promise<Tenant | null> {
   query = target.slug ? query.eq('slug', target.slug) : query.eq('custom_hostname', target.customHost!)
   const { data } = await query.maybeSingle()
   return (data as Tenant | null) ?? null
+}
+
+export async function resolvePublicSite(): Promise<PublicSite | null> {
+  const target = parseHost(window.location.hostname)
+  if (!target.slug && !target.customHost) return null
+  let query = supabase.from('public_sites').select('id,scope,event_id,program_id,landing_config').eq('status', 'active')
+  query = target.slug ? query.eq('slug', target.slug) : query.eq('custom_hostname', target.customHost!)
+  const { data } = await query.maybeSingle()
+  return (data as PublicSite | null) ?? null
 }
 
 export function brandName(tenant: Tenant | null): string {
