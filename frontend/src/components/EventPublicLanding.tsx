@@ -322,7 +322,7 @@ export default function EventPublicLanding({
     return (
       <section key={item.id} className="py-18 sm:py-24" style={{ backgroundColor: palette.page }}>
         <div className="mx-auto max-w-7xl px-4 sm:px-7">
-          <div className="rounded-2xl border border-white/10 p-7 sm:p-12" style={{ backgroundColor: palette.hero }}>
+          <div className="rounded-2xl border border-white/10 p-7 sm:p-12" style={{ backgroundColor: palette.surface }}>
             <Sparkles className="h-6 w-6" style={{ color: accent }} />
             <h2 className="mt-8 max-w-2xl text-3xl font-semibold tracking-tight sm:text-5xl">
               {item.title || "Tu lugar en el evento empieza aquí."}
