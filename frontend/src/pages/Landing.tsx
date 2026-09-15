@@ -492,11 +492,13 @@ function TenantLanding({ tenant }: { tenant: Tenant }) {
 export default function Landing() {
   const { tenant, loading } = useTenant();
   const [siteEvent, setSiteEvent] = useState<LandingEvent | null>(null);
+  const [program, setProgram] = useState<{ name: string; description: string | null; events: PublicEvent[] } | null>(null);
   const [siteChecked, setSiteChecked] = useState(false);
-  useEffect(() => { let active = true; void resolvePublicSite().then(async (site) => { if (!site?.event_id) return; const { data } = await supabase.from('events').select('id,name,description,event_type,start_date,config').eq('id', site.event_id).eq('status','published').maybeSingle(); if (active) setSiteEvent((data as LandingEvent | null) ?? null); }).finally(() => { if (active) setSiteChecked(true); }); return () => { active = false; }; }, []);
+  useEffect(() => { let active = true; void resolvePublicSite().then(async (site) => { if (site?.event_id) { const { data } = await supabase.from('events').select('id,name,description,event_type,start_date,config').eq('id', site.event_id).eq('status','published').maybeSingle(); if (active) setSiteEvent((data as LandingEvent | null) ?? null); } if (site?.program_id) { const [{ data: p }, { data: links }] = await Promise.all([supabase.from('event_programs').select('name,description').eq('id',site.program_id).maybeSingle(), supabase.from('program_events').select('event:events(id,name,description,event_type,start_date,config)').eq('program_id',site.program_id)]); if (active && p) setProgram({ ...p, events: (links ?? []).map((x: any) => x.event).filter(Boolean) }); } }).finally(() => { if (active) setSiteChecked(true); }); return () => { active = false; }; }, []);
   if (loading) return <div className="min-h-[100dvh] bg-zinc-950" />;
   if (!siteChecked) return <div className="min-h-[100dvh] bg-zinc-950" />;
   if (siteEvent) return <EventPublicLanding event={siteEvent} />;
+  if (program) return <div className="min-h-[100dvh] bg-zinc-950 p-6 text-white"><main className="mx-auto max-w-6xl"><h1 className="text-5xl font-bold">{program.name}</h1><p className="mt-4 text-zinc-300">{program.description}</p><div className="mt-10 grid gap-4 sm:grid-cols-2">{program.events.map(event => <Link key={event.id} to={`/e/${event.id}`} className="rounded-2xl bg-white p-6 text-zinc-950"><h2 className="text-xl font-bold">{event.name}</h2><p className="mt-2 text-sm text-zinc-600">{event.description}</p></Link>)}</div></main></div>;
   if (tenant) return <TenantLanding tenant={tenant} />;
   return (
     <div className="min-h-[100dvh] bg-zinc-950">
