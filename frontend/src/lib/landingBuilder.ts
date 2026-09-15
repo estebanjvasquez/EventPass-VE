@@ -19,6 +19,13 @@ export type LandingConfig = {
   gallery_images?: string[];
   logo_url?: string;
   primary_color?: string;
+  page_background_color?: string;
+  hero_background_color?: string;
+  hero_glow_color?: string;
+  surface_color?: string;
+  text_color?: string;
+  muted_text_color?: string;
+  cta_text_color?: string;
   location?: string;
   intro_title?: string;
   intro_body?: string;

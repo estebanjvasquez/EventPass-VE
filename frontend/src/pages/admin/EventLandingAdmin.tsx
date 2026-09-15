@@ -32,6 +32,13 @@ const initial: LandingConfig = {
   hero_images: [],
   gallery_images: [],
   primary_color: "",
+  page_background_color: "",
+  hero_background_color: "",
+  hero_glow_color: "",
+  surface_color: "",
+  text_color: "",
+  muted_text_color: "",
+  cta_text_color: "",
   logo_url: "",
   location: "",
   brochure_label: "Descargar información",
@@ -70,6 +77,18 @@ const cloneBlocks = (template: LandingTemplate) =>
   templateBlocks[template].map((block) => ({ ...block }));
 const input =
   "mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 font-normal text-zinc-900 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100";
+const visualColorFields = [
+  { key: "primary_color", label: "Marca y botones", fallback: "#00875a", help: "Botones y enlaces principales." },
+  { key: "page_background_color", label: "Fondo general", fallback: "#11131b", help: "Secciones y pie de página." },
+  { key: "hero_background_color", label: "Fondo del hero", fallback: "#171a24", help: "Base detrás de la imagen principal." },
+  { key: "hero_glow_color", label: "Foco de luz del hero", fallback: "#00875a", help: "Luz decorativa cuando no hay imagen." },
+  { key: "surface_color", label: "Superficies y tarjetas", fallback: "#151821", help: "Bloques destacados y tarjetas." },
+  { key: "text_color", label: "Texto principal", fallback: "#ffffff", help: "Titulares y texto prioritario." },
+  { key: "muted_text_color", label: "Texto secundario", fallback: "#cbd5e1", help: "Descripciones y metadatos." },
+  { key: "cta_text_color", label: "Texto de botones", fallback: "#11131b", help: "Texto dentro de botones de marca." },
+] as const satisfies readonly { key: keyof LandingConfig; label: string; fallback: string; help: string }[];
+const validHex = (value: string | undefined, fallback: string) =>
+  /^#[0-9a-f]{6}$/i.test(value ?? "") ? value! : fallback;
 
 export default function EventLandingAdmin() {
   const { eventId } = useParams();
@@ -503,12 +522,7 @@ export default function EventLandingAdmin() {
                 className={`${input} min-h-24`}
               />
             </label>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <label className="text-sm font-semibold">
-                Color principal
-                <span className="mt-2 flex items-center gap-2"><input type="color" value={draft.primary_color || "#00875a"} onChange={(e) => set("primary_color", e.target.value)} className="h-10 w-14 cursor-pointer rounded-lg border p-1" /><input value={draft.primary_color || "#00875a"} onChange={(e) => set("primary_color", e.target.value)} className="h-10 min-w-0 flex-1 rounded-lg border border-zinc-300 px-3 font-mono text-sm" aria-label="Código hexadecimal del color principal" /></span>
-                <span className="mt-2 block rounded-md px-3 py-2 text-xs font-medium text-white" style={{ backgroundColor: draft.primary_color || "#00875a" }}>Color público activo: {draft.primary_color || "#00875a"}</span>
-              </label>
+            <div className="mt-4">
               <label className="text-sm font-semibold">
                 Ubicación
                 <input
@@ -518,6 +532,26 @@ export default function EventLandingAdmin() {
                 />
               </label>
             </div>
+            <section className="mt-5 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+              <div>
+                <h3 className="text-sm font-bold text-zinc-900">Paleta visual pública</h3>
+                <p className="mt-1 text-xs leading-5 text-zinc-600">Esta paleta es propia del evento: controla el fondo, hero, foco de luz, textos, superficies y botones de la página pública.</p>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {visualColorFields.map((field) => {
+                  const value = validHex(draft[field.key] as string | undefined, field.fallback);
+                  return <label key={field.key} className="rounded-lg border border-zinc-200 bg-white p-3 text-sm font-semibold text-zinc-900">
+                    <span>{field.label}</span>
+                    <span className="mt-1 block text-xs font-normal text-zinc-500">{field.help}</span>
+                    <span className="mt-2 flex items-center gap-2">
+                      <input type="color" value={value} onChange={(e) => set(field.key, e.target.value)} className="h-9 w-12 cursor-pointer rounded-md border p-1" aria-label={`Selector de ${field.label.toLowerCase()}`} />
+                      <input value={draft[field.key] || value} onChange={(e) => set(field.key, e.target.value)} className="h-9 min-w-0 flex-1 rounded-md border border-zinc-300 px-2 font-mono text-xs" aria-label={`Código hexadecimal de ${field.label.toLowerCase()}`} />
+                      <span className="h-9 w-9 shrink-0 rounded-md border border-black/10" style={{ backgroundColor: value }} aria-hidden="true" />
+                    </span>
+                  </label>;
+                })}
+              </div>
+            </section>
             <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
               <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold">
                 <ImagePlus className="h-4 w-4" />
