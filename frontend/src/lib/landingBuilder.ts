@@ -26,6 +26,17 @@ export type LandingConfig = {
   text_color?: string;
   muted_text_color?: string;
   cta_text_color?: string;
+  hero_gradient_start?: string;
+  hero_gradient_end?: string;
+  hero_gradient_angle?: number;
+  hero_heading_color?: string;
+  hero_body_color?: string;
+  hero_heading_size?: "md" | "lg" | "xl";
+  card_text_color?: string;
+  card_muted_text_color?: string;
+  show_sponsors?: boolean;
+  sponsors_mode?: "static" | "carousel";
+  sponsors_title?: string;
   location?: string;
   intro_title?: string;
   intro_body?: string;

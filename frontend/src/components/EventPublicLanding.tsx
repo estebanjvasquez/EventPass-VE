@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import {
   ArrowRight,
   CalendarDays,
@@ -18,6 +18,7 @@ import {
   type LandingConfig,
 } from "../lib/landingBuilder";
 import { resolvePublicEventBrand } from "../lib/eventBranding";
+import { supabase } from "../lib/supabase";
 
 export type {
   LandingTemplate,
@@ -46,6 +47,16 @@ const defaults: Required<
     | "text_color"
     | "muted_text_color"
     | "cta_text_color"
+    | "hero_gradient_start"
+    | "hero_gradient_end"
+    | "hero_gradient_angle"
+    | "hero_heading_color"
+    | "hero_body_color"
+    | "hero_heading_size"
+    | "card_text_color"
+    | "card_muted_text_color"
+    | "sponsors_mode"
+    | "sponsors_title"
     | "brochure_url"
   >
 > = {
@@ -64,6 +75,7 @@ const defaults: Required<
   show_agenda: true,
   show_exhibition: true,
   show_interest: true,
+  show_sponsors: false,
   blocks: templateBlocks.summit,
 };
 const validImages = (items: unknown) =>
@@ -124,6 +136,7 @@ export default function EventPublicLanding({
 }) {
   const content = contentFor(event);
   const [slide, setSlide] = useState(0);
+  const [sponsors, setSponsors] = useState<{ id: string; name: string; logo_url: string | null }[]>([]);
   const brand = resolvePublicEventBrand(event);
   const accent = brand.color;
   const palette = {
@@ -135,6 +148,12 @@ export default function EventPublicLanding({
     muted: content.muted_text_color || "#cbd5e1",
     ctaText: content.cta_text_color || "#11131b",
   };
+  const heroHeadingColor = content.hero_heading_color || palette.text;
+  const heroBodyColor = content.hero_body_color || palette.muted;
+  const cardTextColor = content.card_text_color || palette.text;
+  const cardMutedColor = content.card_muted_text_color || palette.muted;
+  const heroSize = content.hero_heading_size === "xl" ? "sm:text-7xl lg:text-8xl" : content.hero_heading_size === "md" ? "sm:text-5xl lg:text-6xl" : "sm:text-6xl lg:text-7xl";
+  const heroGradient = `linear-gradient(${content.hero_gradient_angle ?? 120}deg, ${content.hero_gradient_start || palette.hero}, ${content.hero_gradient_end || palette.page})`;
   const organization = brand.name;
   const logoUrl = brand.logo_url;
   const date = event.start_date
@@ -158,6 +177,14 @@ export default function EventPublicLanding({
     "--event-muted": palette.muted,
   } as CSSProperties;
   const registration = `/e/${event.id}`;
+  useEffect(() => {
+    if (!content.show_sponsors) return;
+    let active = true;
+    void supabase.rpc("get_public_event_sponsors", { p_event_id: event.id }).then(({ data }) => {
+      if (active) setSponsors((data ?? []) as { id: string; name: string; logo_url: string | null }[]);
+    });
+    return () => { active = false; };
+  }, [content.show_sponsors, event.id]);
   const go = (direction: number) =>
     setSlide((current) =>
       content.hero_images.length
@@ -224,8 +251,8 @@ export default function EventPublicLanding({
                       className="h-6 w-6"
                       style={{ color: accent }}
                     />
-                    <h3 className="mt-12 text-xl font-semibold">Agenda</h3>
-                    <p className="mt-2 text-sm leading-6" style={{ color: palette.muted }}>
+                    <h3 className="mt-12 text-xl font-semibold" style={{ color: cardTextColor }}>Agenda</h3>
+                    <p className="mt-2 text-sm leading-6" style={{ color: cardMutedColor }}>
                       Sesiones, actividades y horarios en un solo lugar.
                     </p>
                     <span
@@ -243,8 +270,8 @@ export default function EventPublicLanding({
                   style={{ backgroundColor: palette.surface }}
                 >
                   <Ticket className="h-6 w-6" style={{ color: accent }} />
-                  <h3 className="mt-12 text-xl font-semibold">Registro</h3>
-                  <p className="mt-2 text-sm leading-6" style={{ color: palette.muted }}>
+                  <h3 className="mt-12 text-xl font-semibold" style={{ color: cardTextColor }}>Registro</h3>
+                  <p className="mt-2 text-sm leading-6" style={{ color: cardMutedColor }}>
                     Confirma tu participación desde cualquier dispositivo.
                   </p>
                   <span
@@ -263,10 +290,10 @@ export default function EventPublicLanding({
                       style={{ backgroundColor: palette.surface }}
                     >
                       <Users className="h-6 w-6" style={{ color: accent }} />
-                      <h3 className="mt-8 text-xl font-semibold">
+                      <h3 className="mt-8 text-xl font-semibold" style={{ color: cardTextColor }}>
                         Empresas y exposición
                       </h3>
-                      <p className="mt-2 max-w-lg text-sm leading-6" style={{ color: palette.muted }}>
+                      <p className="mt-2 max-w-lg text-sm leading-6" style={{ color: cardMutedColor }}>
                         Recorre el plano, encuentra expositores y descubre
                         oportunidades de colaboración.
                       </p>
@@ -324,10 +351,10 @@ export default function EventPublicLanding({
         <div className="mx-auto max-w-7xl px-4 sm:px-7">
           <div className="rounded-2xl border border-white/10 p-7 sm:p-12" style={{ backgroundColor: palette.surface }}>
             <Sparkles className="h-6 w-6" style={{ color: accent }} />
-            <h2 className="mt-8 max-w-2xl text-3xl font-semibold tracking-tight sm:text-5xl">
+            <h2 className="mt-8 max-w-2xl text-3xl font-semibold tracking-tight sm:text-5xl" style={{ color: cardTextColor }}>
               {item.title || "Tu lugar en el evento empieza aquí."}
             </h2>
-            <p className="mt-5 max-w-xl text-lg leading-8" style={{ color: palette.muted }}>
+            <p className="mt-5 max-w-xl text-lg leading-8" style={{ color: cardMutedColor }}>
               {item.body ||
                 "Consulta la información, organiza tu visita y completa tu registro."}
             </p>
@@ -391,7 +418,7 @@ export default function EventPublicLanding({
                 className="h-full w-full object-cover"
               />
             ) : (
-              <div className="h-full" style={{ backgroundImage: `radial-gradient(circle at 76% 22%, ${palette.glow} 0%, transparent 38%), linear-gradient(120deg, ${palette.hero}, ${palette.page})` }} />
+              <div className="h-full" style={{ backgroundImage: `radial-gradient(circle at 76% 22%, ${palette.glow} 0%, transparent 38%), ${heroGradient}` }} />
             )}
             {heroImage && (
               <div className="absolute inset-0" style={{ background: `linear-gradient(90deg, color-mix(in srgb, ${palette.hero} 97%, transparent) 0%, color-mix(in srgb, ${palette.hero} 85%, transparent) 38%, color-mix(in srgb, ${palette.hero} 30%, transparent) 72%, color-mix(in srgb, ${palette.hero} 42%, transparent) 100%)` }} />
@@ -405,10 +432,10 @@ export default function EventPublicLanding({
               >
                 {content.eyebrow}
               </p>
-              <h1 className="mt-5 max-w-3xl text-4xl font-semibold leading-[1.03] tracking-[-.045em] sm:text-6xl lg:text-7xl">
+              <h1 className={`mt-5 max-w-3xl text-4xl font-semibold leading-[1.03] tracking-[-.045em] ${heroSize}`} style={{ color: heroHeadingColor }}>
                 {content.headline}
               </h1>
-              <p className="mt-6 max-w-xl text-lg leading-8 sm:text-xl" style={{ color: palette.muted }}>
+              <p className="mt-6 max-w-xl text-lg leading-8 sm:text-xl" style={{ color: heroBodyColor }}>
                 {content.subheadline}
               </p>
               <div className="mt-9 flex flex-wrap gap-3">
@@ -486,6 +513,7 @@ export default function EventPublicLanding({
             </div>
           </div>
         </section>
+        {content.show_sponsors && sponsors.length > 0 && <section className="overflow-hidden py-14 sm:py-18" style={{ backgroundColor: palette.surface }}><div className="mx-auto max-w-7xl px-4 sm:px-7"><h2 className="text-2xl font-semibold" style={{ color: palette.text }}>{content.sponsors_title || "Patrocinantes"}</h2><div className={content.sponsors_mode === "carousel" ? "mt-7 flex gap-5 overflow-x-auto pb-3" : "mt-7 flex flex-wrap gap-5"}>{sponsors.map((sponsor) => <div key={sponsor.id} className="flex h-24 min-w-44 items-center justify-center rounded-xl border border-black/10 bg-white p-4"><img src={sponsor.logo_url || ""} alt={sponsor.name} className="max-h-full max-w-full object-contain" onError={(e) => { e.currentTarget.style.display = "none"; }} />{!sponsor.logo_url && <span className="text-sm font-semibold text-zinc-700">{sponsor.name}</span>}</div>)}</div></div></section>}
         {content.blocks.map(renderBlock)}
       </main>
       <footer className="border-t border-white/10 px-4 py-9 text-sm sm:px-7" style={{ backgroundColor: palette.page, color: palette.muted }}>
