@@ -218,7 +218,7 @@ export default function EventPublicLanding({
                   <Link
                     to={`/e/${event.id}/agenda`}
                     className="group p-6 transition hover:brightness-110"
-                    style={{ backgroundColor: palette.hero }}
+                    style={{ backgroundColor: palette.surface }}
                   >
                     <CalendarDays
                       className="h-6 w-6"
@@ -240,7 +240,7 @@ export default function EventPublicLanding({
                 <Link
                   to={registration}
                   className="group p-6 transition hover:brightness-110"
-                  style={{ backgroundColor: palette.hero }}
+                  style={{ backgroundColor: palette.surface }}
                 >
                   <Ticket className="h-6 w-6" style={{ color: accent }} />
                   <h3 className="mt-12 text-xl font-semibold">Registro</h3>
@@ -260,7 +260,7 @@ export default function EventPublicLanding({
                     <Link
                       to={`/expo/${event.id}/plano`}
                       className="group p-6 transition hover:brightness-110 sm:col-span-2"
-                      style={{ backgroundColor: palette.hero }}
+                      style={{ backgroundColor: palette.surface }}
                     >
                       <Users className="h-6 w-6" style={{ color: accent }} />
                       <h3 className="mt-8 text-xl font-semibold">
