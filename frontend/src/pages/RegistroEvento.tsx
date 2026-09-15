@@ -1,220 +1,263 @@
-import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { ArrowRight, CalendarDays, CheckCircle2, RefreshCw, Ticket } from 'lucide-react'
-import { supabase } from '../lib/supabase'
-import { useTenant } from '../lib/useTenant'
-import { brandColor, brandName } from '../lib/tenantCore'
+import { useEffect, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import {
+  ArrowRight,
+  CalendarDays,
+  CheckCircle2,
+  RefreshCw,
+  Ticket,
+} from "lucide-react";
+import { supabase } from "../lib/supabase";
+import { useTenant } from "../lib/useTenant";
+import { resolvePublicEventBrand } from "../lib/eventBranding";
 
 type EventRow = {
-  id: string
-  organization_id: string
-  name: string
-  description: string | null
-  start_date: string | null
-  config: Record<string, unknown>
-  organizations: { name: string | null } | null
-}
+  id: string;
+  organization_id: string;
+  name: string;
+  description: string | null;
+  start_date: string | null;
+  config: Record<string, unknown>;
+  organizations: { name: string | null } | null;
+};
 
 type Seat = {
-  id: string
-  row_label: string | null
-  column_number: number | null
-  seat_number: string | null
-  price: number | null
-  status: 'available' | 'reserved' | 'confirmed'
-}
+  id: string;
+  row_label: string | null;
+  column_number: number | null;
+  seat_number: string | null;
+  price: number | null;
+  status: "available" | "reserved" | "confirmed";
+};
 
 const schema = z.object({
-  first_name: z.string().min(2, 'Ingresa tu nombre'),
+  first_name: z.string().min(2, "Ingresa tu nombre"),
   last_name: z.string().optional(),
-  email: z.string().email('Correo inválido'),
-  phone: z.string().min(7, 'Teléfono inválido'),
+  email: z.string().email("Correo inválido"),
+  phone: z.string().min(7, "Teléfono inválido"),
   cedula: z.string().optional(),
-})
+});
 
-type FormValues = z.infer<typeof schema>
-type CreatedRegistration = { registration_id: string; credential_token: string; payment_required: boolean }
-type NotificationStatus = 'idle' | 'sending' | 'accepted' | 'failed'
+type FormValues = z.infer<typeof schema>;
+type CreatedRegistration = {
+  registration_id: string;
+  credential_token: string;
+  payment_required: boolean;
+};
+type NotificationStatus = "idle" | "sending" | "accepted" | "failed";
 
 function attribution() {
-  const params = new URLSearchParams(window.location.search)
+  const params = new URLSearchParams(window.location.search);
   return {
-    campaign: params.get('utm_campaign') ?? undefined,
-    source: params.get('utm_source') ?? undefined,
-    medium: params.get('utm_medium') ?? undefined,
-    referrerHost: document.referrer ? new URL(document.referrer).hostname : undefined,
-  }
+    campaign: params.get("utm_campaign") ?? undefined,
+    source: params.get("utm_source") ?? undefined,
+    medium: params.get("utm_medium") ?? undefined,
+    referrerHost: document.referrer
+      ? new URL(document.referrer).hostname
+      : undefined,
+  };
 }
 
 export default function RegistroEvento() {
-  const { eventId } = useParams()
-  const { tenant, loading: tenantLoading } = useTenant()
-  const [event, setEvent] = useState<EventRow | null>(null)
-  const [seats, setSeats] = useState<Seat[]>([])
-  const [selectedSeat, setSelectedSeat] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [submitError, setSubmitError] = useState<string | null>(null)
-  const [done, setDone] = useState(false)
-  const [credentialToken, setCredentialToken] = useState<string | null>(null)
-  const [paymentRequired, setPaymentRequired] = useState(false)
-  const [createdRegistration, setCreatedRegistration] = useState<CreatedRegistration | null>(null)
-  const [notificationStatus, setNotificationStatus] = useState<NotificationStatus>('idle')
-  const [notificationError, setNotificationError] = useState<string | null>(null)
+  const { eventId } = useParams();
+  const { tenant, loading: tenantLoading } = useTenant();
+  const [event, setEvent] = useState<EventRow | null>(null);
+  const [seats, setSeats] = useState<Seat[]>([]);
+  const [selectedSeat, setSelectedSeat] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+  const [credentialToken, setCredentialToken] = useState<string | null>(null);
+  const [paymentRequired, setPaymentRequired] = useState(false);
+  const [createdRegistration, setCreatedRegistration] =
+    useState<CreatedRegistration | null>(null);
+  const [notificationStatus, setNotificationStatus] =
+    useState<NotificationStatus>("idle");
+  const [notificationError, setNotificationError] = useState<string | null>(
+    null,
+  );
 
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<FormValues>({ resolver: zodResolver(schema) })
+  } = useForm<FormValues>({ resolver: zodResolver(schema) });
 
   useEffect(() => {
-    if (tenantLoading) return
-    let active = true
+    if (tenantLoading) return;
+    let active = true;
     async function load() {
-      setLoading(true)
-      setLoadError(null)
+      setLoading(true);
+      setLoadError(null);
       let query = supabase
-        .from('events')
-        .select('id, organization_id, name, description, start_date, config, organizations(name)')
-        .eq('status', 'published')
+        .from("events")
+        .select(
+          "id, organization_id, name, description, start_date, config, organizations(name)",
+        )
+        .eq("status", "published");
       // Aísla por organización cuando se resuelve un tenant por subdominio.
-      if (tenant) query = query.eq('organization_id', tenant.id)
+      if (tenant) query = query.eq("organization_id", tenant.id);
       query = eventId
-        ? query.eq('id', eventId)
-        : query.order('created_at', { ascending: false })
-      const { data, error } = await query.limit(1).maybeSingle()
-      if (!active) return
+        ? query.eq("id", eventId)
+        : query.order("created_at", { ascending: false });
+      const { data, error } = await query.limit(1).maybeSingle();
+      if (!active) return;
       if (error) {
-        setLoadError(error.message)
-        setLoading(false)
-        return
+        setLoadError(error.message);
+        setLoading(false);
+        return;
       }
-      const ev = data as unknown as EventRow | null
-      setEvent(ev)
-      if (ev?.config?.public_seat_selection_enabled === true && ev.config?.seat_assignment_mode === 'attendee') {
+      const ev = data as unknown as EventRow | null;
+      setEvent(ev);
+      if (
+        ev?.config?.public_seat_selection_enabled === true &&
+        ev.config?.seat_assignment_mode === "attendee"
+      ) {
         const { data: seatData } = await supabase
-          .from('seats')
-          .select('id, row_label, column_number, seat_number, price, status')
-          .eq('event_id', ev.id)
-          .order('row_label', { ascending: true })
-          .order('column_number', { ascending: true })
-        if (active) setSeats((seatData ?? []) as Seat[])
+          .from("seats")
+          .select("id, row_label, column_number, seat_number, price, status")
+          .eq("event_id", ev.id)
+          .order("row_label", { ascending: true })
+          .order("column_number", { ascending: true });
+        if (active) setSeats((seatData ?? []) as Seat[]);
       }
-      setLoading(false)
+      setLoading(false);
     }
-    load()
+    load();
     return () => {
-      active = false
-    }
-  }, [eventId, tenant, tenantLoading])
+      active = false;
+    };
+  }, [eventId, tenant, tenantLoading]);
 
   useEffect(() => {
-    if (!event?.id) return
-    const data = attribution()
-    void supabase.rpc('track_event_conversion', {
+    if (!event?.id) return;
+    const data = attribution();
+    void supabase.rpc("track_event_conversion", {
       p_event_id: event.id,
-      p_event_kind: 'landing_view',
+      p_event_kind: "landing_view",
       p_campaign: data.campaign,
       p_source: data.source,
       p_medium: data.medium,
       p_referrer_host: data.referrerHost,
-    })
-  }, [event?.id])
+    });
+  }, [event?.id]);
 
   async function reloadSeats(evId: string) {
     const { data } = await supabase
-      .from('seats')
-      .select('id, row_label, column_number, seat_number, price, status')
-      .eq('event_id', evId)
-      .order('row_label', { ascending: true })
-      .order('column_number', { ascending: true })
-    setSeats((data ?? []) as Seat[])
+      .from("seats")
+      .select("id, row_label, column_number, seat_number, price, status")
+      .eq("event_id", evId)
+      .order("row_label", { ascending: true })
+      .order("column_number", { ascending: true });
+    setSeats((data ?? []) as Seat[]);
   }
 
   async function sendRegistrationEmail(registration: CreatedRegistration) {
-    const apiUrl = import.meta.env.VITE_API_URL
+    const apiUrl = import.meta.env.VITE_API_URL;
     if (!apiUrl) {
-      setNotificationStatus('failed')
-      setNotificationError('El servicio de correo no está configurado.')
-      return
+      setNotificationStatus("failed");
+      setNotificationError("El servicio de correo no está configurado.");
+      return;
     }
-    setNotificationStatus('sending')
-    setNotificationError(null)
+    setNotificationStatus("sending");
+    setNotificationError(null);
     try {
-      const response = await fetch(`${apiUrl}${registration.payment_required ? '/api/registrations/notify' : '/api/registrations/confirm-notify'}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ registration_id: registration.registration_id, credential_token: registration.credential_token }),
-      })
-      const body = await response.json().catch(() => null) as { error?: string; status?: string } | null
-      if (!response.ok || body?.status !== 'accepted') throw new Error(body?.error ?? 'El proveedor no aceptó el correo.')
-      setNotificationStatus('accepted')
+      const response = await fetch(
+        `${apiUrl}${registration.payment_required ? "/api/registrations/notify" : "/api/registrations/confirm-notify"}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            registration_id: registration.registration_id,
+            credential_token: registration.credential_token,
+          }),
+        },
+      );
+      const body = (await response.json().catch(() => null)) as {
+        error?: string;
+        status?: string;
+      } | null;
+      if (!response.ok || body?.status !== "accepted")
+        throw new Error(body?.error ?? "El proveedor no aceptó el correo.");
+      setNotificationStatus("accepted");
     } catch (emailError) {
-      setNotificationStatus('failed')
-      setNotificationError(emailError instanceof Error ? emailError.message : 'No se pudo enviar el correo.')
+      setNotificationStatus("failed");
+      setNotificationError(
+        emailError instanceof Error
+          ? emailError.message
+          : "No se pudo enviar el correo.",
+      );
     }
   }
 
   async function onSubmit(values: FormValues) {
-    if (!event) return
-    setSubmitError(null)
+    if (!event) return;
+    setSubmitError(null);
 
-    const hasSeats = event.config?.public_seat_selection_enabled === true && event.config?.seat_assignment_mode === 'attendee' && seats.length > 0
+    const hasSeats =
+      event.config?.public_seat_selection_enabled === true &&
+      event.config?.seat_assignment_mode === "attendee" &&
+      seats.length > 0;
     if (hasSeats && !selectedSeat) {
-      setSubmitError('Selecciona un asiento disponible.')
-      return
+      setSubmitError("Selecciona un asiento disponible.");
+      return;
     }
 
-    const campaign = attribution()
-    void supabase.rpc('track_event_conversion', {
+    const campaign = attribution();
+    void supabase.rpc("track_event_conversion", {
       p_event_id: event.id,
-      p_event_kind: 'registration_started',
+      p_event_kind: "registration_started",
       p_campaign: campaign.campaign,
       p_source: campaign.source,
       p_medium: campaign.medium,
       p_referrer_host: campaign.referrerHost,
-    })
-    const { data, error } = await supabase.rpc('register_event_participant', {
+    });
+    const { data, error } = await supabase.rpc("register_event_participant", {
       p_event_id: event.id,
       p_seat_id: hasSeats ? selectedSeat : null,
       p_first_name: values.first_name,
-      p_last_name: values.last_name || '',
+      p_last_name: values.last_name || "",
       p_email: values.email,
       p_phone: values.phone,
-      p_cedula: values.cedula || '',
+      p_cedula: values.cedula || "",
       p_campaign: campaign.campaign,
       p_source: campaign.source,
       p_medium: campaign.medium,
-    })
+    });
     if (error) {
-      if (error.code === '23505') {
-        setSubmitError('Ya existe un registro con ese correo para este evento.')
+      if (error.code === "23505") {
+        setSubmitError(
+          "Ya existe un registro con ese correo para este evento.",
+        );
       } else {
-        setSubmitError(error.message)
+        setSubmitError(error.message);
         // Si el asiento fue tomado por otra persona, refresca el mapa.
         if (hasSeats) {
-          setSelectedSeat(null)
-          await reloadSeats(event.id)
+          setSelectedSeat(null);
+          await reloadSeats(event.id);
         }
       }
-      return
+      return;
     }
 
-    const registration = Array.isArray(data) ? data[0] as CreatedRegistration | undefined : undefined
-    setCredentialToken(registration?.credential_token ?? null)
-    setPaymentRequired(registration?.payment_required === true)
-    setCreatedRegistration(registration ?? null)
-    setDone(true)
-    if (registration) await sendRegistrationEmail(registration)
+    const registration = Array.isArray(data)
+      ? (data[0] as CreatedRegistration | undefined)
+      : undefined;
+    setCredentialToken(registration?.credential_token ?? null);
+    setPaymentRequired(registration?.payment_required === true);
+    setCreatedRegistration(registration ?? null);
+    setDone(true);
+    if (registration) await sendRegistrationEmail(registration);
   }
 
-  const color = brandColor(tenant)
-  const name = brandName(tenant)
-  const logoUrl = tenant?.branding?.logo_url ?? null
+  const brand = resolvePublicEventBrand(event, tenant);
+  const color = brand.color;
+  const name = brand.name;
+  const logoUrl = brand.logo_url;
 
   return (
     <div className="min-h-[100dvh] bg-[#fafafa]">
@@ -222,18 +265,24 @@ export default function RegistroEvento() {
         <div className="mx-auto flex max-w-3xl items-center gap-2 px-5 py-4">
           {logoUrl ? (
             <span className="flex h-11 w-28 shrink-0 items-center justify-center rounded-lg bg-white p-1.5">
-              <img src={logoUrl} alt={name} className="h-full w-full object-contain" />
+              <img
+                src={logoUrl}
+                alt={name}
+                className="h-full w-full object-contain"
+              />
             </span>
           ) : (
             <span
               className="grid h-9 w-9 place-items-center rounded-lg text-emerald-400"
-              style={{ backgroundColor: color ?? '#18181b' }}
+              style={{ backgroundColor: color ?? "#18181b" }}
             >
               <Ticket className="h-5 w-5 text-white" strokeWidth={2.2} />
             </span>
           )}
           <span className="text-lg font-semibold tracking-tight text-zinc-900">
-            {tenant ? name : (
+            {tenant ? (
+              name
+            ) : (
               <>
                 EventPass <span className="text-emerald-600">VE</span>
               </>
@@ -246,10 +295,7 @@ export default function RegistroEvento() {
         {loading && <SkeletonForm />}
 
         {!loading && loadError && (
-          <Notice
-            title="No pudimos cargar el evento"
-            body={loadError}
-          />
+          <Notice title="No pudimos cargar el evento" body={loadError} />
         )}
 
         {!loading && !loadError && !event && (
@@ -259,97 +305,193 @@ export default function RegistroEvento() {
           />
         )}
 
-        {!loading && event && !done && event.config?.registration_mode === 'invitation' && (
-          <Notice title="Registro por invitación" body="Este evento no admite registros públicos. Solicita tu invitación al organizador." />
-        )}
+        {!loading &&
+          event &&
+          !done &&
+          event.config?.registration_mode === "invitation" && (
+            <Notice
+              title="Registro por invitación"
+              body="Este evento no admite registros públicos. Solicita tu invitación al organizador."
+            />
+          )}
 
-        {!loading && event && !done && event.config?.registration_mode !== 'invitation' && (
-          <div className="animate-float-up">
-            <p className="text-sm font-medium uppercase tracking-wider text-emerald-600">
-              {event.organizations?.name ?? 'Registro'}
-            </p>
-            <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-              {event.name}
-            </h1>
-            {event.start_date && (
-              <p className="mt-3 inline-flex items-center gap-2 text-sm text-zinc-600">
-                <CalendarDays className="h-4 w-4 text-zinc-400" />
-                {new Date(event.start_date).toLocaleDateString('es-VE', {
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric',
-                })}
+        {!loading &&
+          event &&
+          !done &&
+          event.config?.registration_mode !== "invitation" && (
+            <div className="animate-float-up">
+              <p className="text-sm font-medium uppercase tracking-wider text-emerald-600">
+                {event.organizations?.name ?? "Registro"}
               </p>
-            )}
-            {event.description && (
-              <p className="mt-4 max-w-xl leading-relaxed text-zinc-600">{event.description}</p>
-            )}
-            {event.config?.public_floorplan_visible === true && <Link to={`/expo/${event.id}/plano`} target="_blank" className="mt-5 inline-flex text-sm font-semibold text-emerald-700 underline underline-offset-4">Consultar plano público del evento</Link>}
-
-            <form onSubmit={handleSubmit(onSubmit)} className="mt-10 grid gap-5 sm:grid-cols-2">
-              <FieldText label="Nombre" error={errors.first_name?.message} {...register('first_name')} />
-              <FieldText label="Apellido" error={errors.last_name?.message} {...register('last_name')} />
-              <FieldText label="Correo electrónico" type="email" error={errors.email?.message} {...register('email')} />
-              <FieldText label="Teléfono" error={errors.phone?.message} {...register('phone')} />
-              <div className="sm:col-span-2">
-                <FieldText label="Cédula o pasaporte (opcional)" error={errors.cedula?.message} {...register('cedula')} />
-              </div>
-
-              {seats.length > 0 && (
-                <div className="sm:col-span-2">
-                  <SeatPicker seats={seats} selected={selectedSeat} onSelect={setSelectedSeat} />
-                </div>
-              )}
-
-              {submitError && (
-                <p className="sm:col-span-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                  {submitError}
+              <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
+                {event.name}
+              </h1>
+              {event.start_date && (
+                <p className="mt-3 inline-flex items-center gap-2 text-sm text-zinc-600">
+                  <CalendarDays className="h-4 w-4 text-zinc-400" />
+                  {new Date(event.start_date).toLocaleDateString("es-VE", {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })}
                 </p>
               )}
-
-              <div className="sm:col-span-2">
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  style={color ? { backgroundColor: color } : undefined}
-                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition-transform active:scale-[0.98] disabled:opacity-60"
+              {event.description && (
+                <p className="mt-4 max-w-xl leading-relaxed text-zinc-600">
+                  {event.description}
+                </p>
+              )}
+              {event.config?.public_floorplan_visible === true && (
+                <Link
+                  to={`/expo/${event.id}/plano`}
+                  target="_blank"
+                  className="mt-5 inline-flex text-sm font-semibold text-emerald-700 underline underline-offset-4"
                 >
-                  {isSubmitting ? 'Enviando…' : event.config?.registration_mode === 'free' ? 'Confirmar mi registro' : 'Reservar mi plaza'}
-                  {!isSubmitting && <ArrowRight className="h-4 w-4" />}
-                </button>
-                <p className="mt-3 text-xs text-zinc-500">
-                  {event.config?.registration_mode === 'free' ? 'Tu registro quedará confirmado inmediatamente y recibirás tu credencial.' : 'Recibirás un correo con los datos de pago y el plazo para completar tu registro.'}
-                </p>
-              </div>
-            </form>
-          </div>
-        )}
+                  Consultar plano público del evento
+                </Link>
+              )}
+
+              <form
+                onSubmit={handleSubmit(onSubmit)}
+                className="mt-10 grid gap-5 sm:grid-cols-2"
+              >
+                <FieldText
+                  label="Nombre"
+                  error={errors.first_name?.message}
+                  {...register("first_name")}
+                />
+                <FieldText
+                  label="Apellido"
+                  error={errors.last_name?.message}
+                  {...register("last_name")}
+                />
+                <FieldText
+                  label="Correo electrónico"
+                  type="email"
+                  error={errors.email?.message}
+                  {...register("email")}
+                />
+                <FieldText
+                  label="Teléfono"
+                  error={errors.phone?.message}
+                  {...register("phone")}
+                />
+                <div className="sm:col-span-2">
+                  <FieldText
+                    label="Cédula o pasaporte (opcional)"
+                    error={errors.cedula?.message}
+                    {...register("cedula")}
+                  />
+                </div>
+
+                {seats.length > 0 && (
+                  <div className="sm:col-span-2">
+                    <SeatPicker
+                      seats={seats}
+                      selected={selectedSeat}
+                      onSelect={setSelectedSeat}
+                    />
+                  </div>
+                )}
+
+                {submitError && (
+                  <p className="sm:col-span-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {submitError}
+                  </p>
+                )}
+
+                <div className="sm:col-span-2">
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    style={color ? { backgroundColor: color } : undefined}
+                    className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition-transform active:scale-[0.98] disabled:opacity-60"
+                  >
+                    {isSubmitting
+                      ? "Enviando…"
+                      : event.config?.registration_mode === "free"
+                        ? "Confirmar mi registro"
+                        : "Reservar mi plaza"}
+                    {!isSubmitting && <ArrowRight className="h-4 w-4" />}
+                  </button>
+                  <p className="mt-3 text-xs text-zinc-500">
+                    {event.config?.registration_mode === "free"
+                      ? "Tu registro quedará confirmado inmediatamente y recibirás tu credencial."
+                      : "Recibirás un correo con los datos de pago y el plazo para completar tu registro."}
+                  </p>
+                </div>
+              </form>
+            </div>
+          )}
 
         {done && (
           <div className="animate-float-up rounded-2xl border border-emerald-200 bg-white p-8 text-center">
             <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-emerald-50 text-emerald-600">
               <CheckCircle2 className="h-8 w-8" />
             </span>
-            <h2 className="mt-5 text-2xl font-bold text-zinc-900">{paymentRequired ? '¡Plaza reservada!' : '¡Registro confirmado!'}</h2>
+            <h2 className="mt-5 text-2xl font-bold text-zinc-900">
+              {paymentRequired ? "¡Plaza reservada!" : "¡Registro confirmado!"}
+            </h2>
             <p className="mx-auto mt-3 max-w-md text-zinc-600">
-              {paymentRequired ? 'Tu plaza está reservada mientras completas el pago.' : 'Tu acceso está confirmado. Puedes abrir ahora tu credencial y presentarla en el ingreso.'}
+              {paymentRequired
+                ? "Tu plaza está reservada mientras completas el pago."
+                : "Tu acceso está confirmado. Puedes abrir ahora tu credencial y presentarla en el ingreso."}
             </p>
-            {notificationStatus === 'sending' && <p role="status" className="mt-4 text-sm text-zinc-600">Enviando el correo de confirmación…</p>}
-            {notificationStatus === 'accepted' && <p role="status" className="mt-4 text-sm font-medium text-emerald-700">Correo aceptado para envío. Revisa también la carpeta de spam.</p>}
-            {notificationStatus === 'failed' && (
+            {notificationStatus === "sending" && (
+              <p role="status" className="mt-4 text-sm text-zinc-600">
+                Enviando el correo de confirmación…
+              </p>
+            )}
+            {notificationStatus === "accepted" && (
+              <p
+                role="status"
+                className="mt-4 text-sm font-medium text-emerald-700"
+              >
+                Correo aceptado para envío. Revisa también la carpeta de spam.
+              </p>
+            )}
+            {notificationStatus === "failed" && (
               <div className="mx-auto mt-4 max-w-lg rounded-lg border border-amber-300 bg-amber-50 p-4 text-left text-sm text-amber-900">
-                <p className="font-semibold">Tu registro sí quedó guardado, pero el correo no pudo enviarse.</p>
+                <p className="font-semibold">
+                  Tu registro sí quedó guardado, pero el correo no pudo
+                  enviarse.
+                </p>
                 <p className="mt-1">{notificationError}</p>
-                {createdRegistration && <button type="button" onClick={() => void sendRegistrationEmail(createdRegistration)} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-amber-400 bg-white px-3 py-2 font-semibold"><RefreshCw className="h-4 w-4"/>Reintentar correo</button>}
+                {createdRegistration && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void sendRegistrationEmail(createdRegistration)
+                    }
+                    className="mt-3 inline-flex items-center gap-2 rounded-lg border border-amber-400 bg-white px-3 py-2 font-semibold"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    Reintentar correo
+                  </button>
+                )}
               </div>
             )}
-            {paymentRequired && credentialToken && <Link to={`/comprobante/${credentialToken}`} className="mt-5 inline-flex rounded-lg bg-emerald-600 px-5 py-3 text-sm font-semibold text-white">Cargar comprobante ahora</Link>}
-            {!paymentRequired && credentialToken && <Link to={`/credencial/${credentialToken}`} className="mt-5 inline-flex rounded-lg bg-emerald-600 px-5 py-3 text-sm font-semibold text-white">Ver mi credencial</Link>}
+            {paymentRequired && credentialToken && (
+              <Link
+                to={`/comprobante/${credentialToken}`}
+                className="mt-5 inline-flex rounded-lg bg-emerald-600 px-5 py-3 text-sm font-semibold text-white"
+              >
+                Cargar comprobante ahora
+              </Link>
+            )}
+            {!paymentRequired && credentialToken && (
+              <Link
+                to={`/credencial/${credentialToken}`}
+                className="mt-5 inline-flex rounded-lg bg-emerald-600 px-5 py-3 text-sm font-semibold text-white"
+              >
+                Ver mi credencial
+              </Link>
+            )}
           </div>
         )}
       </main>
     </div>
-  )
+  );
 }
 
 function SeatPicker({
@@ -357,22 +499,24 @@ function SeatPicker({
   selected,
   onSelect,
 }: {
-  seats: Seat[]
-  selected: string | null
-  onSelect: (id: string) => void
+  seats: Seat[];
+  selected: string | null;
+  onSelect: (id: string) => void;
 }) {
-  const rows = new Map<string, Seat[]>()
+  const rows = new Map<string, Seat[]>();
   for (const s of seats) {
-    const key = s.row_label ?? '—'
-    const list = rows.get(key) ?? []
-    list.push(s)
-    rows.set(key, list)
+    const key = s.row_label ?? "—";
+    const list = rows.get(key) ?? [];
+    list.push(s);
+    rows.set(key, list);
   }
-  const selectedSeat = seats.find((s) => s.id === selected)
+  const selectedSeat = seats.find((s) => s.id === selected);
 
   return (
     <div>
-      <span className="text-sm font-medium text-zinc-800">Elige tu asiento</span>
+      <span className="text-sm font-medium text-zinc-800">
+        Elige tu asiento
+      </span>
       <div className="mt-3 overflow-x-auto rounded-xl border border-zinc-200 bg-white p-4">
         <div className="mx-auto mb-4 w-full rounded bg-zinc-900 py-1.5 text-center text-xs font-medium uppercase tracking-widest text-zinc-300">
           Escenario
@@ -380,29 +524,31 @@ function SeatPicker({
         <div className="flex flex-col gap-2">
           {[...rows.entries()].map(([label, rowSeats]) => (
             <div key={label} className="flex items-center gap-2">
-              <span className="w-5 text-xs font-semibold text-zinc-400">{label}</span>
+              <span className="w-5 text-xs font-semibold text-zinc-400">
+                {label}
+              </span>
               <div className="flex flex-wrap gap-1.5">
                 {rowSeats.map((s) => {
-                  const available = s.status === 'available'
-                  const isSelected = s.id === selected
+                  const available = s.status === "available";
+                  const isSelected = s.id === selected;
                   return (
                     <button
                       key={s.id}
                       type="button"
                       disabled={!available}
                       onClick={() => onSelect(s.id)}
-                      title={`${s.seat_number ?? ''}${s.price ? ` · $${s.price}` : ''}`}
+                      title={`${s.seat_number ?? ""}${s.price ? ` · $${s.price}` : ""}`}
                       className={`grid h-8 w-8 place-items-center rounded-md border text-[10px] font-semibold transition-colors ${
                         isSelected
-                          ? 'border-emerald-600 bg-emerald-600 text-white'
+                          ? "border-emerald-600 bg-emerald-600 text-white"
                           : available
-                            ? 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:border-emerald-500'
-                            : 'cursor-not-allowed border-zinc-200 bg-zinc-100 text-zinc-300'
+                            ? "border-emerald-300 bg-emerald-50 text-emerald-700 hover:border-emerald-500"
+                            : "cursor-not-allowed border-zinc-200 bg-zinc-100 text-zinc-300"
                       }`}
                     >
                       {s.column_number}
                     </button>
-                  )
+                  );
                 })}
               </div>
             </div>
@@ -411,17 +557,17 @@ function SeatPicker({
       </div>
       <p className="mt-2 text-xs text-zinc-500">
         {selectedSeat
-          ? `Seleccionado: ${selectedSeat.seat_number}${selectedSeat.price ? ` · $${selectedSeat.price}` : ''}`
-          : 'Toca un asiento disponible (verde).'}
+          ? `Seleccionado: ${selectedSeat.seat_number}${selectedSeat.price ? ` · $${selectedSeat.price}` : ""}`
+          : "Toca un asiento disponible (verde)."}
       </p>
     </div>
-  )
+  );
 }
 
 type FieldProps = React.InputHTMLAttributes<HTMLInputElement> & {
-  label: string
-  error?: string
-}
+  label: string;
+  error?: string;
+};
 
 function FieldText({ label, error, ...props }: FieldProps) {
   return (
@@ -433,7 +579,7 @@ function FieldText({ label, error, ...props }: FieldProps) {
       />
       {error && <span className="text-xs text-red-600">{error}</span>}
     </label>
-  )
+  );
 }
 
 function Notice({ title, body }: { title: string; body: string }) {
@@ -442,7 +588,7 @@ function Notice({ title, body }: { title: string; body: string }) {
       <h1 className="text-xl font-semibold text-zinc-900">{title}</h1>
       <p className="mt-2 text-sm text-zinc-600">{body}</p>
     </div>
-  )
+  );
 }
 
 function SkeletonForm() {
@@ -456,5 +602,5 @@ function SkeletonForm() {
         ))}
       </div>
     </div>
-  )
+  );
 }

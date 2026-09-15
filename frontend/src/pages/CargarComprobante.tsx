@@ -1,136 +1,153 @@
-import { useEffect, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { CheckCircle2, FileUp, Ticket, UploadCloud } from 'lucide-react'
-import { supabase } from '../lib/supabase'
-import { useTenant } from '../lib/useTenant'
-import { brandColor, brandName } from '../lib/tenantCore'
+import { useEffect, useRef, useState } from "react";
+import { useParams } from "react-router-dom";
+import { CheckCircle2, FileUp, Ticket, UploadCloud } from "lucide-react";
+import { supabase } from "../lib/supabase";
+import { useTenant } from "../lib/useTenant";
+import { resolvePublicEventBrand } from "../lib/eventBranding";
 
 type RegistrationByToken = {
-  registration_id: string
-  organization_id: string
-  event_id: string
-  first_name: string
-  status: 'pending_payment' | 'payment_submitted' | 'confirmed' | 'rejected'
-  has_comprobante: boolean
-  payment_deadline: string | null
-  event_name: string
-}
+  registration_id: string;
+  organization_id: string;
+  event_id: string;
+  first_name: string;
+  status: "pending_payment" | "payment_submitted" | "confirmed" | "rejected";
+  has_comprobante: boolean;
+  payment_deadline: string | null;
+  event_name: string;
+};
 
 type PaymentMethod = {
-  id: string
-  name: string
-  details: Record<string, unknown>
-}
+  id: string;
+  name: string;
+  details: Record<string, unknown>;
+};
 
-const MAX_SIZE = 5 * 1024 * 1024 // 5 MiB
-const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+const MAX_SIZE = 5 * 1024 * 1024; // 5 MiB
+const ACCEPTED = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
 
 export default function CargarComprobante() {
-  const { token } = useParams()
-  const { tenant } = useTenant()
-  const [reg, setReg] = useState<RegistrationByToken | null>(null)
-  const [methods, setMethods] = useState<PaymentMethod[]>([])
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const { token } = useParams();
+  const { tenant } = useTenant();
+  const [reg, setReg] = useState<RegistrationByToken | null>(null);
+  const [methods, setMethods] = useState<PaymentMethod[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [file, setFile] = useState<File | null>(null)
-  const [method, setMethod] = useState('')
-  const [amount, setAmount] = useState('')
-  const [submitError, setSubmitError] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
-  const [done, setDone] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
-  const color = brandColor(tenant)
-  const name = brandName(tenant)
-  const logoUrl = tenant?.branding?.logo_url ?? null
+  const [file, setFile] = useState<File | null>(null);
+  const [method, setMethod] = useState("");
+  const [amount, setAmount] = useState("");
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(false);
+  const [eventIdentity, setEventIdentity] = useState<{
+    name: string;
+    config: Record<string, unknown> | null;
+  } | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const brand = resolvePublicEventBrand(eventIdentity, tenant);
+  const color = brand.color;
+  const name = brand.name;
+  const logoUrl = brand.logo_url;
 
   useEffect(() => {
-    let active = true
+    let active = true;
     async function load() {
-      setLoading(true)
-      setLoadError(null)
+      setLoading(true);
+      setLoadError(null);
       if (!token) {
-        setLoadError('Enlace inválido.')
-        setLoading(false)
-        return
+        setLoadError("Enlace inválido.");
+        setLoading(false);
+        return;
       }
-      const { data, error } = await supabase.rpc('get_registration_by_token', {
+      const { data, error } = await supabase.rpc("get_registration_by_token", {
         p_token: token,
-      })
-      if (!active) return
+      });
+      if (!active) return;
       if (error) {
-        setLoadError(error.message)
-        setLoading(false)
-        return
+        setLoadError(error.message);
+        setLoading(false);
+        return;
       }
-      const row = (data as RegistrationByToken[] | null)?.[0] ?? null
-      setReg(row)
+      const row = (data as RegistrationByToken[] | null)?.[0] ?? null;
+      setReg(row);
       if (row) {
+        const { data: event } = await supabase
+          .from("events")
+          .select("name,config")
+          .eq("id", row.event_id)
+          .maybeSingle();
+        if (active)
+          setEventIdentity(
+            event as {
+              name: string;
+              config: Record<string, unknown> | null;
+            } | null,
+          );
         const { data: pm } = await supabase
-          .from('payment_methods')
-          .select('id, name, details')
-          .eq('organization_id', row.organization_id)
-          .eq('is_active', true)
+          .from("payment_methods")
+          .select("id, name, details")
+          .eq("organization_id", row.organization_id)
+          .eq("is_active", true);
         if (active && pm) {
-          const list = pm as PaymentMethod[]
-          setMethods(list)
-          if (list.length === 1) setMethod(list[0].name)
+          const list = pm as PaymentMethod[];
+          setMethods(list);
+          if (list.length === 1) setMethod(list[0].name);
         }
       }
-      setLoading(false)
+      setLoading(false);
     }
-    load()
+    load();
     return () => {
-      active = false
-    }
-  }, [token])
+      active = false;
+    };
+  }, [token]);
 
   function pickFile(f: File | null) {
-    setSubmitError(null)
-    if (!f) return setFile(null)
+    setSubmitError(null);
+    if (!f) return setFile(null);
     if (!ACCEPTED.includes(f.type)) {
-      setSubmitError('Formato no admitido. Usa JPG, PNG, WEBP o PDF.')
-      return
+      setSubmitError("Formato no admitido. Usa JPG, PNG, WEBP o PDF.");
+      return;
     }
     if (f.size > MAX_SIZE) {
-      setSubmitError('El archivo supera el límite de 5 MB.')
-      return
+      setSubmitError("El archivo supera el límite de 5 MB.");
+      return;
     }
-    setFile(f)
+    setFile(f);
   }
 
   async function onSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!reg || !file || !token) return
-    setSubmitError(null)
-    setSubmitting(true)
+    e.preventDefault();
+    if (!reg || !file || !token) return;
+    setSubmitError(null);
+    setSubmitting(true);
 
-    const ext = file.name.split('.').pop()?.toLowerCase() ?? 'bin'
-    const path = `${reg.organization_id}/${reg.registration_id}/${Date.now()}.${ext}`
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "bin";
+    const path = `${reg.organization_id}/${reg.registration_id}/${Date.now()}.${ext}`;
 
     const { error: upErr } = await supabase.storage
-      .from('comprobantes')
-      .upload(path, file, { contentType: file.type, upsert: true })
+      .from("comprobantes")
+      .upload(path, file, { contentType: file.type, upsert: true });
     if (upErr) {
-      setSubmitError(`No pudimos subir el archivo: ${upErr.message}`)
-      setSubmitting(false)
-      return
+      setSubmitError(`No pudimos subir el archivo: ${upErr.message}`);
+      setSubmitting(false);
+      return;
     }
 
-    const { error: rpcErr } = await supabase.rpc('submit_comprobante', {
+    const { error: rpcErr } = await supabase.rpc("submit_comprobante", {
       p_token: token,
       p_path: path,
       p_method: method || null,
       p_amount: amount ? Number(amount) : null,
-      p_currency: 'USD',
-    })
+      p_currency: "USD",
+    });
     if (rpcErr) {
-      setSubmitError(rpcErr.message)
-      setSubmitting(false)
-      return
+      setSubmitError(rpcErr.message);
+      setSubmitting(false);
+      return;
     }
-    setDone(true)
-    setSubmitting(false)
+    setDone(true);
+    setSubmitting(false);
   }
 
   return (
@@ -139,14 +156,23 @@ export default function CargarComprobante() {
         <div className="mx-auto flex max-w-2xl items-center gap-2 px-5 py-4">
           {logoUrl ? (
             <span className="flex h-11 w-28 shrink-0 items-center justify-center rounded-lg bg-white p-1.5">
-              <img src={logoUrl} alt={name} className="h-full w-full object-contain" />
+              <img
+                src={logoUrl}
+                alt={name}
+                className="h-full w-full object-contain"
+              />
             </span>
           ) : (
-            <span className="grid h-9 w-9 place-items-center rounded-lg text-white" style={{ backgroundColor: color ?? '#18181b' }}>
+            <span
+              className="grid h-9 w-9 place-items-center rounded-lg text-white"
+              style={{ backgroundColor: color ?? "#18181b" }}
+            >
               <Ticket className="h-5 w-5" strokeWidth={2.2} />
             </span>
           )}
-          <span className="text-lg font-semibold tracking-tight text-zinc-900">{name}</span>
+          <span className="text-lg font-semibold tracking-tight text-zinc-900">
+            {name}
+          </span>
         </div>
       </header>
 
@@ -164,12 +190,14 @@ export default function CargarComprobante() {
           />
         )}
 
-        {!loading && reg && reg.status === 'confirmed' && !done && (
+        {!loading && reg && reg.status === "confirmed" && !done && (
           <div className="animate-float-up rounded-2xl border border-emerald-200 bg-white p-8 text-center">
             <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-emerald-50 text-emerald-600">
               <CheckCircle2 className="h-8 w-8" />
             </span>
-            <h2 className="mt-5 text-2xl font-bold text-zinc-900">Pago confirmado</h2>
+            <h2 className="mt-5 text-2xl font-bold text-zinc-900">
+              Pago confirmado
+            </h2>
             <p className="mx-auto mt-3 max-w-md text-zinc-600">
               Tu inscripción ya está confirmada. Ya puedes ver tu credencial con
               el código QR de ingreso.
@@ -183,7 +211,7 @@ export default function CargarComprobante() {
           </div>
         )}
 
-        {!loading && reg && reg.status !== 'confirmed' && !done && (
+        {!loading && reg && reg.status !== "confirmed" && !done && (
           <div className="animate-float-up">
             <p className="text-sm font-medium uppercase tracking-wider text-emerald-600">
               {reg.event_name}
@@ -195,20 +223,24 @@ export default function CargarComprobante() {
               Carga tu comprobante de pago para que verifiquemos tu inscripción.
               {reg.payment_deadline && (
                 <>
-                  {' '}Tienes plazo hasta el{' '}
+                  {" "}
+                  Tienes plazo hasta el{" "}
                   <span className="font-medium text-zinc-800">
-                    {new Date(reg.payment_deadline).toLocaleDateString('es-VE', {
-                      day: 'numeric',
-                      month: 'long',
-                      year: 'numeric',
-                    })}
+                    {new Date(reg.payment_deadline).toLocaleDateString(
+                      "es-VE",
+                      {
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                      },
+                    )}
                   </span>
                   .
                 </>
               )}
             </p>
 
-            {reg.status === 'payment_submitted' && (
+            {reg.status === "payment_submitted" && (
               <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
                 Ya recibimos un comprobante y está en revisión. Si necesitas
                 reemplazarlo, puedes cargar otro aquí.
@@ -217,11 +249,15 @@ export default function CargarComprobante() {
 
             {methods.length > 0 && (
               <div className="mt-8 rounded-2xl border border-zinc-200 bg-white p-5">
-                <p className="text-sm font-semibold text-zinc-900">Datos de pago</p>
+                <p className="text-sm font-semibold text-zinc-900">
+                  Datos de pago
+                </p>
                 <ul className="mt-3 grid gap-3">
                   {methods.map((m) => (
                     <li key={m.id} className="rounded-lg bg-zinc-50 px-4 py-3">
-                      <p className="text-sm font-medium text-zinc-800">{m.name}</p>
+                      <p className="text-sm font-medium text-zinc-800">
+                        {m.name}
+                      </p>
                       <dl className="mt-1 grid gap-0.5 text-xs text-zinc-600">
                         {Object.entries(m.details ?? {}).map(([k, v]) => (
                           <div key={k} className="flex gap-1.5">
@@ -239,7 +275,9 @@ export default function CargarComprobante() {
             <form onSubmit={onSubmit} className="mt-8 grid gap-5">
               {methods.length > 0 && (
                 <label className="flex flex-col gap-2">
-                  <span className="text-sm font-medium text-zinc-800">Método utilizado</span>
+                  <span className="text-sm font-medium text-zinc-800">
+                    Método utilizado
+                  </span>
                   <select
                     value={method}
                     onChange={(e) => setMethod(e.target.value)}
@@ -256,7 +294,9 @@ export default function CargarComprobante() {
               )}
 
               <label className="flex flex-col gap-2">
-                <span className="text-sm font-medium text-zinc-800">Monto pagado (USD, opcional)</span>
+                <span className="text-sm font-medium text-zinc-800">
+                  Monto pagado (USD, opcional)
+                </span>
                 <input
                   type="number"
                   step="0.01"
@@ -268,7 +308,9 @@ export default function CargarComprobante() {
               </label>
 
               <div>
-                <span className="text-sm font-medium text-zinc-800">Comprobante</span>
+                <span className="text-sm font-medium text-zinc-800">
+                  Comprobante
+                </span>
                 <button
                   type="button"
                   onClick={() => inputRef.current?.click()}
@@ -277,8 +319,12 @@ export default function CargarComprobante() {
                   {file ? (
                     <>
                       <FileUp className="h-6 w-6 text-emerald-600" />
-                      <span className="text-sm font-medium text-zinc-800">{file.name}</span>
-                      <span className="text-xs text-zinc-500">Toca para cambiar</span>
+                      <span className="text-sm font-medium text-zinc-800">
+                        {file.name}
+                      </span>
+                      <span className="text-xs text-zinc-500">
+                        Toca para cambiar
+                      </span>
                     </>
                   ) : (
                     <>
@@ -286,7 +332,9 @@ export default function CargarComprobante() {
                       <span className="text-sm font-medium text-zinc-700">
                         Toca para seleccionar tu comprobante
                       </span>
-                      <span className="text-xs text-zinc-500">JPG, PNG, WEBP o PDF · máx. 5 MB</span>
+                      <span className="text-xs text-zinc-500">
+                        JPG, PNG, WEBP o PDF · máx. 5 MB
+                      </span>
                     </>
                   )}
                 </button>
@@ -294,7 +342,7 @@ export default function CargarComprobante() {
                   ref={inputRef}
                   type="file"
                   aria-label="Comprobante de pago"
-                  accept={ACCEPTED.join(',')}
+                  accept={ACCEPTED.join(",")}
                   className="hidden"
                   onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
                 />
@@ -311,7 +359,7 @@ export default function CargarComprobante() {
                 disabled={!file || submitting}
                 className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition-transform active:scale-[0.98] disabled:opacity-50"
               >
-                {submitting ? 'Enviando…' : 'Enviar comprobante'}
+                {submitting ? "Enviando…" : "Enviar comprobante"}
               </button>
             </form>
           </div>
@@ -325,7 +373,7 @@ export default function CargarComprobante() {
         )}
       </main>
     </div>
-  )
+  );
 }
 
 function SuccessCard({ title, body }: { title: string; body: string }) {
@@ -337,7 +385,7 @@ function SuccessCard({ title, body }: { title: string; body: string }) {
       <h2 className="mt-5 text-2xl font-bold text-zinc-900">{title}</h2>
       <p className="mx-auto mt-3 max-w-md text-zinc-600">{body}</p>
     </div>
-  )
+  );
 }
 
 function Notice({ title, body }: { title: string; body: string }) {
@@ -346,7 +394,7 @@ function Notice({ title, body }: { title: string; body: string }) {
       <h1 className="text-xl font-semibold text-zinc-900">{title}</h1>
       <p className="mt-2 text-sm text-zinc-600">{body}</p>
     </div>
-  )
+  );
 }
 
 function Skeleton() {
@@ -357,5 +405,5 @@ function Skeleton() {
       <div className="mt-8 h-32 rounded-2xl bg-zinc-200" />
       <div className="mt-6 h-40 rounded-xl bg-zinc-200" />
     </div>
-  )
+  );
 }

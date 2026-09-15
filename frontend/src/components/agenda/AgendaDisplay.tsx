@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, Clock3, MapPin, Mic2 } from "lucide-react";
 import { type AgendaSettings, sponsorMode } from "../../lib/publicAgendaDesign";
 import { AgendaSponsors, SponsorTicker } from "./AgendaSponsors";
-import './agenda-design.css';
+import "./agenda-design.css";
 
 type Speaker = {
   id: string;
@@ -92,17 +92,24 @@ function SessionCard({
           <div className="min-w-0">
             <p className="text-sm font-medium text-white/55">
               {typeLabel[item.session_type] ?? "Actividad"}
-              {settings.show_locations !== false && item.stage_name ? ` · ${item.stage_name}` : ""}
+              {settings.show_locations !== false && item.stage_name
+                ? ` · ${item.stage_name}`
+                : ""}
             </p>
             <h2 className="agenda-session-title mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
               {item.session_name}
             </h2>
-            {settings.show_speakers !== false && <p className="mt-3 flex items-start gap-2 text-sm leading-relaxed text-white/70">
-              <Mic2 className="mt-0.5 h-4 w-4 shrink-0" />
-              {item.speakers.map((speaker) => speaker.full_name).join(", ") ||
-                "Información de participantes por confirmar"}
-            </p>}
-            <AgendaSponsors sponsors={item.sponsors ?? []} mode={sponsorMode(settings, "activity")} />
+            {settings.show_speakers !== false && (
+              <p className="mt-3 flex items-start gap-2 text-sm leading-relaxed text-white/70">
+                <Mic2 className="mt-0.5 h-4 w-4 shrink-0" />
+                {item.speakers.map((speaker) => speaker.full_name).join(", ") ||
+                  "Información de participantes por confirmar"}
+              </p>
+            )}
+            <AgendaSponsors
+              sponsors={item.sponsors ?? []}
+              mode={sponsorMode(settings, "activity")}
+            />
           </div>
         </div>
       ) : (
@@ -116,12 +123,28 @@ function SessionCard({
   );
 }
 
-
-export function AgendaDisplay({ items, settings: override, preview = false, error = null, loading = false }: { items: AgendaItem[]; settings?: AgendaSettings; preview?: boolean; error?: string | null; loading?: boolean }) {
+export function AgendaDisplay({
+  items,
+  settings: override,
+  preview = false,
+  error = null,
+  loading = false,
+}: {
+  items: AgendaItem[];
+  settings?: AgendaSettings;
+  preview?: boolean;
+  error?: string | null;
+  loading?: boolean;
+}) {
   const [now, setNow] = useState(() => new Date());
   const [day, setDay] = useState("");
-  useEffect(() => { const timer = window.setInterval(() => setNow(new Date()), 30000); return () => window.clearInterval(timer); }, []);
-  const refreshEvery = refreshSeconds((override ?? items[0]?.public_agenda_config)?.refresh_seconds);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const refreshEvery = refreshSeconds(
+    (override ?? items[0]?.public_agenda_config)?.refresh_seconds,
+  );
   const settings = override ?? items[0]?.public_agenda_config ?? {};
   const branding = items[0]?.event_branding ?? {};
   const accent = settings.accent_color || branding.color || "#34d399";
@@ -152,7 +175,15 @@ export function AgendaDisplay({ items, settings: override, preview = false, erro
       );
   }, [day, days, now]);
   const visible = useMemo(
-    () => items.filter((item) => (!day || item.starts_at?.startsWith(day)) && (!settings.stage_filter || item.stage_name === settings.stage_filter) && (settings.show_cancelled !== false || item.session_status !== "cancelled")),
+    () =>
+      items.filter(
+        (item) =>
+          (!day || item.starts_at?.startsWith(day)) &&
+          (!settings.stage_filter ||
+            item.stage_name === settings.stage_filter) &&
+          (settings.show_cancelled !== false ||
+            item.session_status !== "cancelled"),
+      ),
     [items, day, settings.stage_filter, settings.show_cancelled],
   );
   const current = useMemo(
@@ -245,18 +276,20 @@ export function AgendaDisplay({ items, settings: override, preview = false, erro
               </h1>
             </div>
           </div>
-          {settings.show_clock !== false && <div className="text-right">
-            <p className="hidden text-xs font-semibold text-white/50 sm:block">
-              Hora local
-            </p>
-            <time className="agenda-primary font-mono text-2xl font-semibold tabular-nums sm:text-3xl">
-              {now.toLocaleTimeString("es-VE", {
-                hour: "2-digit",
-                minute: "2-digit",
-                hourCycle: "h23",
-              })}
-            </time>
-          </div>}
+          {settings.show_clock !== false && (
+            <div className="text-right">
+              <p className="hidden text-xs font-semibold text-white/50 sm:block">
+                Hora local
+              </p>
+              <time className="agenda-primary font-mono text-2xl font-semibold tabular-nums sm:text-3xl">
+                {now.toLocaleTimeString("es-VE", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hourCycle: "h23",
+                })}
+              </time>
+            </div>
+          )}
         </div>
       </header>
       <div className="mx-auto max-w-[1440px] px-5 py-6 sm:px-8">
@@ -293,88 +326,110 @@ export function AgendaDisplay({ items, settings: override, preview = false, erro
             Se actualiza cada {refreshEvery} segundos
           </p>
         </div>
-        <div className="agenda-program-layout"><section className="agenda-highlights mt-6 grid gap-4 lg:grid-cols-2">
-          {settings.show_current !== false && (
-            <SessionCard item={current} state="now" accent={accent} settings={settings} />
-          )}
-          {settings.show_next !== false && (
-            <SessionCard item={next} state="next" accent={accent} settings={settings} />
-          )}
-        </section>
-        {settings.show_schedule !== false && (
-          <section className="agenda-schedule mt-6">
-            <div className="mb-4 flex items-center gap-3">
-              <Clock3 className="h-5 w-5" style={{ color: accent }} />
-              <h2 className="text-xl font-semibold tracking-tight">
-                Programa del día
-              </h2>
-            </div>
-            <div className="grid gap-3">
-              {visible.map((item) => (
-                <article
-                  key={item.session_id}
-                  className={`group grid gap-4 rounded-[20px] border p-4 transition-colors sm:grid-cols-[100px_minmax(0,1fr)_auto] sm:items-center sm:p-5 ${item.session_status === "cancelled" ? "border-red-300/25 bg-red-500/10 opacity-75" : item.session_id === current?.session_id ? "border-white/25 bg-white/[.12]" : "border-white/10 bg-white/[.045] hover:bg-white/[.08]"}`}
-                >
-                  <div
-                    className="font-mono text-xl font-semibold tabular-nums"
-                    style={{
-                      color:
-                        item.session_id === current?.session_id
-                          ? accent
-                          : undefined,
-                    }}
-                  >
-                    {time(item.starts_at)}
-                    <span className="block text-xs font-normal opacity-70">
-                      {item.ends_at
-                        ? `hasta ${time(item.ends_at)}`
-                        : "Fin por confirmar"}
-                    </span>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold tracking-[0.1em] text-white/50">
-                      {typeLabel[item.session_type] ?? "ACTIVIDAD"}
-                      {item.session_status === "cancelled"
-                        ? " · CANCELADA"
-                        : item.session_status === "completed"
-                          ? " · FINALIZADA"
-                          : item.session_id === current?.session_id
-                            ? " · EN CURSO"
-                            : " · PROGRAMADA"}
-                    </p>
-                    <h3
-                      className={`agenda-session-title mt-1 text-lg font-semibold ${item.session_status === "cancelled" ? "line-through" : ""}`}
-                    >
-                      {item.session_name}
-                    </h3>
-                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-white/65">
-                      {settings.show_locations !== false && <span className="inline-flex items-center gap-1">
-                        <MapPin className="h-3.5 w-3.5" />
-                        {item.stage_name || "Ubicación por confirmar"}
-                      </span>}
-                      {settings.show_speakers !== false && item.speakers.length > 0 && (
-                        <span>
-                          {item.speakers
-                            .map((speaker) => speaker.full_name)
-                            .join(", ")}
-                        </span>
-                      )}
-                    </div>
-                    <AgendaSponsors sponsors={item.sponsors ?? []} mode={sponsorMode(settings, "activity")} />
-                  </div>
-                </article>
-              ))}
-              {!visible.length && (
-                <div className="rounded-[20px] border border-white/10 bg-white/[.045] p-10 text-center text-white/60">
-                  No hay actividades para este día.
-                </div>
-              )}
-            </div>
+        <div className="agenda-program-layout">
+          <section className="agenda-highlights mt-6 grid gap-4 lg:grid-cols-2">
+            {settings.show_current !== false && (
+              <SessionCard
+                item={current}
+                state="now"
+                accent={accent}
+                settings={settings}
+              />
+            )}
+            {settings.show_next !== false && (
+              <SessionCard
+                item={next}
+                state="next"
+                accent={accent}
+                settings={settings}
+              />
+            )}
           </section>
-        )}
+          {settings.show_schedule !== false && (
+            <section className="agenda-schedule mt-6">
+              <div className="mb-4 flex items-center gap-3">
+                <Clock3 className="h-5 w-5" style={{ color: accent }} />
+                <h2 className="text-xl font-semibold tracking-tight">
+                  Programa del día
+                </h2>
+              </div>
+              <div className="grid gap-3">
+                {visible.map((item) => (
+                  <article
+                    key={item.session_id}
+                    className={`group grid gap-4 rounded-[20px] border p-4 transition-colors sm:grid-cols-[100px_minmax(0,1fr)_auto] sm:items-center sm:p-5 ${item.session_status === "cancelled" ? "border-red-300/25 bg-red-500/10 opacity-75" : item.session_id === current?.session_id ? "border-white/25 bg-white/[.12]" : "border-white/10 bg-white/[.045] hover:bg-white/[.08]"}`}
+                  >
+                    <div
+                      className="font-mono text-xl font-semibold tabular-nums"
+                      style={{
+                        color:
+                          item.session_id === current?.session_id
+                            ? accent
+                            : undefined,
+                      }}
+                    >
+                      {time(item.starts_at)}
+                      <span className="block text-xs font-normal opacity-70">
+                        {item.ends_at
+                          ? `hasta ${time(item.ends_at)}`
+                          : "Fin por confirmar"}
+                      </span>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold tracking-[0.1em] text-white/50">
+                        {typeLabel[item.session_type] ?? "ACTIVIDAD"}
+                        {item.session_status === "cancelled"
+                          ? " · CANCELADA"
+                          : item.session_status === "completed"
+                            ? " · FINALIZADA"
+                            : item.session_id === current?.session_id
+                              ? " · EN CURSO"
+                              : " · PROGRAMADA"}
+                      </p>
+                      <h3
+                        className={`agenda-session-title mt-1 text-lg font-semibold ${item.session_status === "cancelled" ? "line-through" : ""}`}
+                      >
+                        {item.session_name}
+                      </h3>
+                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-white/65">
+                        {settings.show_locations !== false && (
+                          <span className="inline-flex items-center gap-1">
+                            <MapPin className="h-3.5 w-3.5" />
+                            {item.stage_name || "Ubicación por confirmar"}
+                          </span>
+                        )}
+                        {settings.show_speakers !== false &&
+                          item.speakers.length > 0 && (
+                            <span>
+                              {item.speakers
+                                .map((speaker) => speaker.full_name)
+                                .join(", ")}
+                            </span>
+                          )}
+                      </div>
+                      <AgendaSponsors
+                        sponsors={item.sponsors ?? []}
+                        mode={sponsorMode(settings, "activity")}
+                      />
+                    </div>
+                  </article>
+                ))}
+                {!visible.length && (
+                  <div className="rounded-[20px] border border-white/10 bg-white/[.045] p-10 text-center text-white/60">
+                    No hay actividades para este día.
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
         </div>
       </div>
-      <SponsorTicker sponsors={sponsors} mode={sponsorMode(settings, "event")} settings={settings} preview={preview} />
+      <SponsorTicker
+        sponsors={sponsors}
+        mode={sponsorMode(settings, "event")}
+        settings={settings}
+        preview={preview}
+      />
     </main>
   );
 }

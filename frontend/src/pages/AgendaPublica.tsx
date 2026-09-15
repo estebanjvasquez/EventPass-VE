@@ -1,8 +1,19 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "../lib/supabase";
-import { AgendaDisplay, type AgendaItem } from "../components/agenda/AgendaDisplay";
-const refreshSeconds = (value: unknown) => Math.min(300, Math.max(10, Number.isFinite(Number(value)) ? Math.round(Number(value)) : 15));
+import {
+  AgendaDisplay,
+  type AgendaItem,
+} from "../components/agenda/AgendaDisplay";
+import { resolvePublicEventBrand } from "../lib/eventBranding";
+const refreshSeconds = (value: unknown) =>
+  Math.min(
+    300,
+    Math.max(
+      10,
+      Number.isFinite(Number(value)) ? Math.round(Number(value)) : 15,
+    ),
+  );
 export default function AgendaPublica() {
   const { eventId } = useParams();
   return <AgendaScreen key={eventId} />;
@@ -14,14 +25,21 @@ function AgendaScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshEvery, setRefreshEvery] = useState(15);
+  const [eventBranding, setEventBranding] =
+    useState<AgendaItem["event_branding"]>(null);
   useEffect(() => {
     if (!eventId) return;
     let alive = true;
     const load = async () => {
-      const { data, error: requestError } = await supabase.rpc(
-        "get_public_forum_agenda",
-        { p_event_id: eventId },
-      );
+      const [{ data, error: requestError }, { data: event }] =
+        await Promise.all([
+          supabase.rpc("get_public_forum_agenda", { p_event_id: eventId }),
+          supabase
+            .from("events")
+            .select("name,config,organizations(name,branding)")
+            .eq("id", eventId)
+            .maybeSingle(),
+        ]);
       if (!alive) return;
       setLoading(false);
       if (requestError) {
@@ -29,6 +47,14 @@ function AgendaScreen() {
         return;
       }
       const next = (data ?? []) as AgendaItem[];
+      const organization = Array.isArray(event?.organizations)
+        ? event.organizations[0]
+        : event?.organizations;
+      const brand = resolvePublicEventBrand(event, organization ?? null);
+      setEventBranding({
+        logo_url: brand.logo_url ?? undefined,
+        color: brand.color,
+      });
       setItems(next);
       setRefreshEvery((current) => {
         const configured = refreshSeconds(
@@ -49,5 +75,14 @@ function AgendaScreen() {
       window.clearInterval(refresh);
     };
   }, [eventId, refreshEvery]);
-  return <AgendaDisplay items={items} error={error} loading={loading} />;
+  return (
+    <AgendaDisplay
+      items={items.map((item) => ({
+        ...item,
+        event_branding: eventBranding ?? item.event_branding,
+      }))}
+      error={error}
+      loading={loading}
+    />
+  );
 }

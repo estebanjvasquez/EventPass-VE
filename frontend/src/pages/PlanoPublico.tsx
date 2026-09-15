@@ -14,6 +14,7 @@ import {
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import { supabase } from "../lib/supabase";
+import { resolvePublicEventBrand } from "../lib/eventBranding";
 import PublicExhibitionCanvas from "./PublicExhibitionCanvas";
 import type { SceneElement } from "./admin/exhibition/ExhibitionKonvaStage";
 import { renderBlueprint } from "./admin/exhibition/blueprint";
@@ -100,16 +101,14 @@ const readFavorites = (eventId?: string): string[] => {
 async function recordVisit(map: MapRow, eventId: string) {
   // Analytics must never prevent the public plan from rendering.
   try {
-    await supabase
-      .from("floor_plan_analytics")
-      .insert({
-        organization_id: map.organization_id,
-        event_id: eventId,
-        map_id: map.id,
-        event_type: "view",
-        session_id: sessionKey(),
-        metadata: {},
-      });
+    await supabase.from("floor_plan_analytics").insert({
+      organization_id: map.organization_id,
+      event_id: eventId,
+      map_id: map.id,
+      event_type: "view",
+      session_id: sessionKey(),
+      metadata: {},
+    });
   } catch {
     /* Best-effort telemetry only. */
   }
@@ -334,7 +333,7 @@ export default function PlanoPublico() {
     async function load() {
       const eventResult = await supabase
         .from("events")
-        .select("config")
+        .select("name,config")
         .eq("id", eventId)
         .eq("status", "published")
         .maybeSingle();
@@ -396,7 +395,12 @@ export default function PlanoPublico() {
         return;
       }
       setMap(next);
-      setBranding((orgResult.data?.branding as Branding | null) ?? {});
+      setBranding(
+        resolvePublicEventBrand(eventResult.data, {
+          name: orgResult.data?.name ?? null,
+          branding: (orgResult.data?.branding as Branding | null) ?? {},
+        }),
+      );
       setRoutes((routeResult.data ?? []) as PublicRoute[]);
       const backgroundPath =
         typeof next.metadata?.background_path === "string" &&
@@ -414,10 +418,12 @@ export default function PlanoPublico() {
         if (!signed.error && signed.data?.signedUrl) {
           const mime = backgroundMime;
           if (mime.includes("pdf") || mime.includes("dxf")) {
-            const buffer = await fetch(signed.data.signedUrl).then((response) => {
-              if (!response.ok) throw new Error("Blueprint no disponible");
-              return response.arrayBuffer();
-            });
+            const buffer = await fetch(signed.data.signedUrl).then(
+              (response) => {
+                if (!response.ok) throw new Error("Blueprint no disponible");
+                return response.arrayBuffer();
+              },
+            );
             const rendered = await renderBlueprint(buffer, mime);
             if (active) setBackgroundUrl(rendered);
           } else if (active) setBackgroundUrl(signed.data.signedUrl);

@@ -1,138 +1,176 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowLeft, CalendarCog, Pencil, Plus, Trash2 } from 'lucide-react'
-import { useAuth } from '../../lib/auth'
-import { supabase } from '../../lib/supabase'
-import { resolveActiveOrg } from '../../lib/activeOrg'
-import ImpersonationBanner from '../../components/ImpersonationBanner'
+import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { ArrowLeft, CalendarCog, Pencil, Plus, Trash2 } from "lucide-react";
+import { useAuth } from "../../lib/auth";
+import { supabase } from "../../lib/supabase";
+import { resolveActiveOrg } from "../../lib/activeOrg";
+import ImpersonationBanner from "../../components/ImpersonationBanner";
 
-type EventType = 'forum' | 'exhibition' | 'workshop' | 'social'
-type EventStatus = 'draft' | 'published' | 'closed' | 'archived'
+type EventType = "forum" | "exhibition" | "workshop" | "social";
+type EventStatus = "draft" | "published" | "closed" | "archived";
 
 type EventRow = {
-  id: string
-  name: string
-  description: string | null
-  event_type: EventType
-  status: EventStatus
-  start_date: string | null
-  end_date: string | null
-  registration_deadline: string | null
-  payment_timeout_days: number
-  total_slots: number
-  config: Record<string, unknown>
-}
+  id: string;
+  name: string;
+  description: string | null;
+  event_type: EventType;
+  status: EventStatus;
+  start_date: string | null;
+  end_date: string | null;
+  registration_deadline: string | null;
+  payment_timeout_days: number;
+  total_slots: number;
+  config: Record<string, unknown>;
+};
 
-type RegistrationMode = 'free' | 'paid' | 'invitation'
-type SeatAssignmentMode = 'none' | 'admin' | 'attendee'
+type RegistrationMode = "free" | "paid" | "invitation";
+type SeatAssignmentMode = "none" | "admin" | "attendee";
 
 const TYPE_LABEL: Record<EventType, string> = {
-  forum: 'Foro',
-  exhibition: 'Exposición',
-  workshop: 'Taller',
-  social: 'Social',
-}
+  forum: "Foro",
+  exhibition: "Exposición",
+  workshop: "Taller",
+  social: "Social",
+};
 const STATUS_LABEL: Record<EventStatus, string> = {
-  draft: 'Borrador',
-  published: 'Publicado',
-  closed: 'Cerrado',
-  archived: 'Archivado',
-}
+  draft: "Borrador",
+  published: "Publicado",
+  closed: "Cerrado",
+  archived: "Archivado",
+};
 const STATUS_STYLE: Record<EventStatus, string> = {
-  draft: 'bg-zinc-100 text-zinc-600',
-  published: 'bg-emerald-100 text-emerald-700',
-  closed: 'bg-amber-100 text-amber-700',
-  archived: 'bg-zinc-100 text-zinc-400',
-}
+  draft: "bg-zinc-100 text-zinc-600",
+  published: "bg-emerald-100 text-emerald-700",
+  closed: "bg-amber-100 text-amber-700",
+  archived: "bg-zinc-100 text-zinc-400",
+};
 
 function toLocalInput(iso: string | null): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 function fromLocalInput(v: string): string | null {
-  return v ? new Date(v).toISOString() : null
+  return v ? new Date(v).toISOString() : null;
 }
 
 export default function EventosAdmin() {
-  const { user } = useAuth()
-  const [orgId, setOrgId] = useState<string | null>(null)
-  const [orgName, setOrgName] = useState<string>('')
-  const [events, setEvents] = useState<EventRow[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [editing, setEditing] = useState<EventRow | 'new' | null>(null)
+  const { user } = useAuth();
+  const [orgId, setOrgId] = useState<string | null>(null);
+  const [orgName, setOrgName] = useState<string>("");
+  const [events, setEvents] = useState<EventRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<EventRow | "new" | null>(null);
 
   const loadEvents = useCallback(async (org: string) => {
     const { data, error } = await supabase
-      .from('events')
+      .from("events")
       .select(
-        'id, name, description, event_type, status, start_date, end_date, registration_deadline, payment_timeout_days, total_slots, config',
+        "id, name, description, event_type, status, start_date, end_date, registration_deadline, payment_timeout_days, total_slots, config",
       )
-      .eq('organization_id', org)
-      .order('created_at', { ascending: false })
-    if (error) setError(error.message)
-    else setEvents((data ?? []) as EventRow[])
-  }, [])
+      .eq("organization_id", org)
+      .order("created_at", { ascending: false });
+    if (error) setError(error.message);
+    else setEvents((data ?? []) as EventRow[]);
+  }, []);
 
   useEffect(() => {
-    let active = true
+    let active = true;
     async function init() {
-      setLoading(true)
-      setError(null)
-      const m = await resolveActiveOrg()
-      if (!active) return
+      setLoading(true);
+      setError(null);
+      const m = await resolveActiveOrg();
+      if (!active) return;
       if (!m) {
-        setError('Sin organización asociada.')
-        setLoading(false)
-        return
+        setError("Sin organización asociada.");
+        setLoading(false);
+        return;
       }
-      setOrgId(m.organization_id)
-      setOrgName(m.organizations?.name ?? 'Mi organización')
-      await loadEvents(m.organization_id)
-      if (active) setLoading(false)
+      setOrgId(m.organization_id);
+      setOrgName(m.organizations?.name ?? "Mi organización");
+      await loadEvents(m.organization_id);
+      if (active) setLoading(false);
     }
-    init()
+    init();
     return () => {
-      active = false
-    }
-  }, [loadEvents])
+      active = false;
+    };
+  }, [loadEvents]);
 
   async function changeStatus(ev: EventRow, status: EventStatus) {
-    if (!orgId) return
-    if (status === 'published') {
-      if (ev.event_type === 'forum') {
+    if (!orgId) return;
+    if (status === "published") {
+      if (ev.event_type === "forum") {
         const [stageResult, sessionResult] = await Promise.all([
-          supabase.from('event_stages').select('id', { count: 'exact', head: true }).eq('event_id', ev.id),
-          supabase.from('event_sessions').select('id', { count: 'exact', head: true }).eq('event_id', ev.id),
-        ])
-        if (stageResult.error || sessionResult.error) { setError(stageResult.error?.message ?? sessionResult.error?.message ?? 'No se pudo comprobar la preparación del foro.'); return }
-        if (!stageResult.count || !sessionResult.count) { setError('Antes de publicar el foro crea al menos un escenario y una sesión en Agenda.'); return }
+          supabase
+            .from("event_stages")
+            .select("id", { count: "exact", head: true })
+            .eq("event_id", ev.id),
+          supabase
+            .from("event_sessions")
+            .select("id", { count: "exact", head: true })
+            .eq("event_id", ev.id),
+        ]);
+        if (stageResult.error || sessionResult.error) {
+          setError(
+            stageResult.error?.message ??
+              sessionResult.error?.message ??
+              "No se pudo comprobar la preparación del foro.",
+          );
+          return;
+        }
+        if (!stageResult.count || !sessionResult.count) {
+          setError(
+            "Antes de publicar el foro crea al menos un escenario y una sesión en Agenda.",
+          );
+          return;
+        }
       }
-      if (ev.event_type === 'exhibition') {
-        const { count, error: mapError } = await supabase.from('venue_maps').select('id', { count: 'exact', head: true }).eq('event_id', ev.id)
-        if (mapError) { setError(mapError.message); return }
-        if (!count) { setError('Antes de publicar la exposición crea su Plano y confirma los espacios disponibles.'); return }
+      if (ev.event_type === "exhibition") {
+        const { count, error: mapError } = await supabase
+          .from("venue_maps")
+          .select("id", { count: "exact", head: true })
+          .eq("event_id", ev.id);
+        if (mapError) {
+          setError(mapError.message);
+          return;
+        }
+        if (!count) {
+          setError(
+            "Antes de publicar la exposición crea su Plano y confirma los espacios disponibles.",
+          );
+          return;
+        }
       }
     }
-    const { error } = await supabase.from('events').update({ status }).eq('id', ev.id)
-    if (error) setError(error.message)
-    else await loadEvents(orgId)
+    const { error } = await supabase
+      .from("events")
+      .update({ status })
+      .eq("id", ev.id);
+    if (error) setError(error.message);
+    else await loadEvents(orgId);
   }
 
   async function deleteEvent(ev: EventRow) {
-    if (!orgId) return
-    const confirmed = window.confirm(`¿Eliminar el evento “${ev.name}”? Se eliminarán también su agenda, plano, asientos y configuraciones relacionadas.`)
-    if (!confirmed) return
-    setError(null)
-    const { error: deleteError } = await supabase.from('events').delete().eq('id', ev.id).eq('organization_id', orgId)
+    if (!orgId) return;
+    const confirmed = window.confirm(
+      `¿Eliminar el evento “${ev.name}”? Se eliminarán también su agenda, plano, asientos y configuraciones relacionadas.`,
+    );
+    if (!confirmed) return;
+    setError(null);
+    const { error: deleteError } = await supabase
+      .from("events")
+      .delete()
+      .eq("id", ev.id)
+      .eq("organization_id", orgId);
     if (deleteError) {
-      setError(`No se pudo eliminar el evento: ${deleteError.message}`)
-      return
+      setError(`No se pudo eliminar el evento: ${deleteError.message}`);
+      return;
     }
-    setEditing((current) => current === ev ? null : current)
-    setEvents((current) => current.filter((item) => item.id !== ev.id))
+    setEditing((current) => (current === ev ? null : current));
+    setEvents((current) => current.filter((item) => item.id !== ev.id));
   }
 
   return (
@@ -140,7 +178,10 @@ export default function EventosAdmin() {
       <ImpersonationBanner />
       <header className="border-b border-zinc-200 bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-4">
-          <Link to="/admin" className="inline-flex items-center gap-2 text-sm font-medium text-zinc-600 hover:text-zinc-900">
+          <Link
+            to="/admin"
+            className="inline-flex items-center gap-2 text-sm font-medium text-zinc-600 hover:text-zinc-900"
+          >
             <ArrowLeft className="h-4 w-4" />
             Registros
           </Link>
@@ -154,12 +195,14 @@ export default function EventosAdmin() {
       <main className="mx-auto max-w-5xl px-5 py-8">
         <div className="flex items-end justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Eventos</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
+              Eventos
+            </h1>
             <p className="mt-1 text-sm text-zinc-600">{orgName}</p>
           </div>
           <button
             type="button"
-            onClick={() => setEditing('new')}
+            onClick={() => setEditing("new")}
             disabled={!orgId}
             className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-transform active:scale-[0.98] disabled:opacity-50"
           >
@@ -167,41 +210,100 @@ export default function EventosAdmin() {
             Nuevo evento
           </button>
         </div>
-        <Link to="/admin/programas" className="mt-4 inline-flex rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-zinc-400">
+        <Link
+          to="/admin/programas"
+          className="mt-4 inline-flex rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-zinc-400"
+        >
           Gestionar programas, foro y exposición
         </Link>
 
-        {events.some((event) => event.status === 'draft') && (
-          <section aria-label="Siguientes pasos de eventos en borrador" className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
-            <h2 className="font-semibold text-emerald-950">Continúa la configuración antes de publicar</h2>
-            <p className="mt-1 text-sm text-emerald-900/80">Completa el contenido operativo del borrador y publica únicamente cuando esté listo para recibir registros.</p>
+        {events.some((event) => event.status === "draft") && (
+          <section
+            aria-label="Siguientes pasos de eventos en borrador"
+            className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-5"
+          >
+            <h2 className="font-semibold text-emerald-950">
+              Continúa la configuración antes de publicar
+            </h2>
+            <p className="mt-1 text-sm text-emerald-900/80">
+              Completa el contenido operativo del borrador y publica únicamente
+              cuando esté listo para recibir registros.
+            </p>
             <div className="mt-4 space-y-3">
-              {events.filter((event) => event.status === 'draft').map((event) => (
-                <div key={event.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-white p-3">
-                  <div><p className="text-sm font-semibold text-zinc-900">{event.name}</p><p className="text-xs text-zinc-600">Paso 1: {event.event_type === 'forum' ? 'agenda y asientos' : event.event_type === 'exhibition' ? 'plano y empresas expositoras' : 'aforo y configuración operativa'} · Paso 2: publicar</p></div>
-                  <div className="flex flex-wrap gap-2"><Link to={`/admin/eventos/${event.id}/resumen`} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white">Administrar evento</Link><button type="button" onClick={() => changeStatus(event, 'published')} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white">Publicar cuando esté listo</button><button type="button" onClick={() => void deleteEvent(event)} aria-label={`Eliminar ${event.name}`} className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"><Trash2 className="h-3.5 w-3.5" />Eliminar</button></div>
-                </div>
-              ))}
+              {events
+                .filter((event) => event.status === "draft")
+                .map((event) => (
+                  <div
+                    key={event.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-white p-3"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-zinc-900">
+                        {event.name}
+                      </p>
+                      <p className="text-xs text-zinc-600">
+                        Paso 1:{" "}
+                        {event.event_type === "forum"
+                          ? "agenda y asientos"
+                          : event.event_type === "exhibition"
+                            ? "plano y empresas expositoras"
+                            : "aforo y configuración operativa"}{" "}
+                        · Paso 2: publicar
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Link
+                        to={`/admin/eventos/${event.id}/resumen`}
+                        className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white"
+                      >
+                        Administrar evento
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => changeStatus(event, "published")}
+                        className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white"
+                      >
+                        Publicar cuando esté listo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void deleteEvent(event)}
+                        aria-label={`Eliminar ${event.name}`}
+                        className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Eliminar
+                      </button>
+                    </div>
+                  </div>
+                ))}
             </div>
           </section>
         )}
 
         {error && (
-          <p className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
+          <p className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </p>
         )}
 
         {editing && orgId && (
           <EventForm
             orgId={orgId}
             userId={user?.id ?? null}
-            event={editing === 'new' ? null : editing}
+            event={editing === "new" ? null : editing}
             onClose={() => setEditing(null)}
             onSaved={async (saved) => {
-              setEditing(null)
+              setEditing(null);
               if (saved) {
-                setEvents((current) => [saved, ...current.filter((item) => item.id !== saved.id)])
-                window.setTimeout(() => { void loadEvents(orgId) }, 2000)
-              } else await loadEvents(orgId)
+                setEvents((current) => [
+                  saved,
+                  ...current.filter((item) => item.id !== saved.id),
+                ]);
+                window.setTimeout(() => {
+                  void loadEvents(orgId);
+                }, 2000);
+              } else await loadEvents(orgId);
             }}
           />
         )}
@@ -229,33 +331,39 @@ export default function EventosAdmin() {
               </thead>
               <tbody className="divide-y divide-zinc-100">
                 {events.map((ev) => (
-                  <tr key={ev.id} className="transition-colors hover:bg-zinc-50">
+                  <tr
+                    key={ev.id}
+                    className="transition-colors hover:bg-zinc-50"
+                  >
                     <td className="px-5 py-3.5">
                       <p className="font-medium text-zinc-900">{ev.name}</p>
                       <p className="text-xs text-zinc-500">
-                        {TYPE_LABEL[ev.event_type]} · {ev.total_slots || '∞'} cupos
+                        {TYPE_LABEL[ev.event_type]} · {ev.total_slots || "∞"}{" "}
+                        cupos
                       </p>
                     </td>
                     <td className="px-5 py-3.5 text-zinc-600">
                       {ev.start_date
-                        ? new Date(ev.start_date).toLocaleDateString('es-VE', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric',
+                        ? new Date(ev.start_date).toLocaleDateString("es-VE", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
                           })
-                        : '—'}
+                        : "—"}
                     </td>
                     <td className="px-5 py-3.5">
-                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLE[ev.status]}`}>
+                      <span
+                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLE[ev.status]}`}
+                      >
                         {STATUS_LABEL[ev.status]}
                       </span>
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center justify-end gap-2">
-                        {ev.status !== 'published' ? (
+                        {ev.status !== "published" ? (
                           <button
                             type="button"
-                            onClick={() => changeStatus(ev, 'published')}
+                            onClick={() => changeStatus(ev, "published")}
                             className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-transform active:scale-[0.98]"
                           >
                             Publicar
@@ -263,13 +371,18 @@ export default function EventosAdmin() {
                         ) : (
                           <button
                             type="button"
-                            onClick={() => changeStatus(ev, 'closed')}
+                            onClick={() => changeStatus(ev, "closed")}
                             className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 transition-colors hover:border-amber-300 hover:text-amber-700"
                           >
                             Cerrar
                           </button>
                         )}
-                        <Link to={`/admin/eventos/${ev.id}/resumen`} className="inline-flex items-center rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white">Administrar</Link>
+                        <Link
+                          to={`/admin/eventos/${ev.id}/resumen`}
+                          className="inline-flex items-center rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white"
+                        >
+                          Administrar
+                        </Link>
                         <button
                           type="button"
                           onClick={() => setEditing(ev)}
@@ -302,92 +415,141 @@ export default function EventosAdmin() {
         {orgId && <SubdomainSection orgId={orgId} onError={setError} />}
       </main>
     </div>
-  )
+  );
 }
 
 // ---------------------------------------------------------------------------
 // Marca de la organización (branding): nombre comercial, logo y color.
 // Se aplica en el subdominio público (<slug>.eventosfacil.net).
 // ---------------------------------------------------------------------------
-function BrandingSection({ orgId, onError }: { orgId: string; onError: (m: string) => void }) {
-  const [name, setName] = useState('')
-  const [logoUrl, setLogoUrl] = useState('')
-  const [color, setColor] = useState('#059669')
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
+function BrandingSection({
+  orgId,
+  onError,
+}: {
+  orgId: string;
+  onError: (m: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [logoUrl, setLogoUrl] = useState("");
+  const [color, setColor] = useState("#059669");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    let active = true
+    let active = true;
     supabase
-      .from('organizations')
-      .select('branding')
-      .eq('id', orgId)
+      .from("organizations")
+      .select("branding")
+      .eq("id", orgId)
       .maybeSingle()
       .then(({ data }) => {
-        if (!active) return
-        const b = (data?.branding as { name?: string; logo_url?: string; color?: string } | null) ?? {}
-        setName(b.name ?? '')
-        setLogoUrl(b.logo_url ?? '')
-        setColor(b.color ?? '#059669')
-        setLoading(false)
-      })
+        if (!active) return;
+        const b =
+          (data?.branding as {
+            name?: string;
+            logo_url?: string;
+            color?: string;
+          } | null) ?? {};
+        setName(b.name ?? "");
+        setLogoUrl(b.logo_url ?? "");
+        setColor(b.color ?? "#059669");
+        setLoading(false);
+      });
     return () => {
-      active = false
-    }
-  }, [orgId])
+      active = false;
+    };
+  }, [orgId]);
 
   async function save() {
-    setSaving(true)
-    setSaved(false)
+    setSaving(true);
+    setSaved(false);
     const branding = {
       name: name.trim() || null,
       logo_url: logoUrl.trim() || null,
       color: color || null,
-    }
-    const { error } = await supabase.from('organizations').update({ branding }).eq('id', orgId)
-    setSaving(false)
-    if (error) onError(error.message)
+    };
+    const { error } = await supabase
+      .from("organizations")
+      .update({ branding })
+      .eq("id", orgId);
+    setSaving(false);
+    if (error) onError(error.message);
     else {
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2500)
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
     }
   }
 
-  if (loading) return null
+  if (loading) return null;
 
   return (
     <section className="mt-10">
-      <h2 className="text-lg font-semibold text-zinc-900">Marca</h2>
+      <h2 className="text-lg font-semibold text-zinc-900">Marca predeterminada de la organización</h2>
       <p className="mt-1 text-sm text-zinc-600">
-        Se aplica en tu subdominio público y en las páginas de registro.
+        Se usa solamente cuando un evento todavía no tiene identidad publicada. Configura el logo y color de cada evento desde su página pública.
       </p>
 
       <div className="mt-4 grid gap-4 rounded-xl border border-zinc-200 bg-white p-5 sm:grid-cols-2">
         <label className="flex flex-col gap-2">
-          <span className="text-sm font-medium text-zinc-800">Nombre comercial</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Cómo se muestra tu organización" className={inputCls} />
+          <span className="text-sm font-medium text-zinc-800">
+            Nombre comercial
+          </span>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Cómo se muestra tu organización"
+            className={inputCls}
+          />
         </label>
         <label className="flex flex-col gap-2">
-          <span className="text-sm font-medium text-zinc-800">URL del logo</span>
-          <input value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://…/logo.png" className={inputCls} />
+          <span className="text-sm font-medium text-zinc-800">
+            URL del logo
+          </span>
+          <input
+            value={logoUrl}
+            onChange={(e) => setLogoUrl(e.target.value)}
+            placeholder="https://…/logo.png"
+            className={inputCls}
+          />
         </label>
         <label className="flex flex-col gap-2">
-          <span className="text-sm font-medium text-zinc-800">Color principal</span>
+          <span className="text-sm font-medium text-zinc-800">
+            Color principal
+          </span>
           <div className="flex items-center gap-3">
-            <input type="color" aria-label="Color principal" value={color} onChange={(e) => setColor(e.target.value)} className="h-10 w-14 cursor-pointer rounded-lg border border-zinc-300 bg-white" />
-            <input value={color} onChange={(e) => setColor(e.target.value)} className={inputCls} />
+            <input
+              type="color"
+              aria-label="Color principal"
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+              className="h-10 w-14 cursor-pointer rounded-lg border border-zinc-300 bg-white"
+            />
+            <input
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+              className={inputCls}
+            />
           </div>
         </label>
         <div className="flex items-end gap-3">
-          <button type="button" onClick={save} disabled={saving} className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition-transform active:scale-[0.98] disabled:opacity-50">
-            {saving ? 'Guardando…' : 'Guardar marca'}
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving}
+            className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition-transform active:scale-[0.98] disabled:opacity-50"
+          >
+            {saving ? "Guardando…" : "Guardar marca"}
           </button>
-          {saved && <span className="text-sm font-medium text-emerald-700">Guardado ✓</span>}
+          {saved && (
+            <span className="text-sm font-medium text-emerald-700">
+              Guardado ✓
+            </span>
+          )}
         </div>
       </div>
     </section>
-  )
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -395,129 +557,154 @@ function BrandingSection({ orgId, onError }: { orgId: string; onError: (m: strin
 // Guarda el slug y activa el subdominio llamando al Worker, que lo registra
 // como custom domain del proyecto Pages vía la API de Cloudflare.
 // ---------------------------------------------------------------------------
-const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? ''
-const ROOT_DOMAIN = 'eventosfacil.net'
+const API_URL =
+  (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ??
+  "";
+const ROOT_DOMAIN = "eventosfacil.net";
 
 const STATUS_TEXT: Record<string, string> = {
-  active: 'Activo',
-  pending: 'Validando…',
-  initializing: 'Inicializando…',
-  none: 'Sin activar',
-}
+  active: "Activo",
+  pending: "Validando…",
+  initializing: "Inicializando…",
+  none: "Sin activar",
+};
 const STATUS_BADGE: Record<string, string> = {
-  active: 'bg-emerald-100 text-emerald-700',
-  pending: 'bg-amber-100 text-amber-700',
-  initializing: 'bg-amber-100 text-amber-700',
-  none: 'bg-zinc-100 text-zinc-500',
-}
+  active: "bg-emerald-100 text-emerald-700",
+  pending: "bg-amber-100 text-amber-700",
+  initializing: "bg-amber-100 text-amber-700",
+  none: "bg-zinc-100 text-zinc-500",
+};
 
 async function authFetch(path: string, init?: RequestInit): Promise<Response> {
   const {
     data: { session },
-  } = await supabase.auth.getSession()
+  } = await supabase.auth.getSession();
   return fetch(`${API_URL}${path}`, {
     ...init,
     headers: {
-      'Content-Type': 'application/json',
-      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      "Content-Type": "application/json",
+      ...(session?.access_token
+        ? { Authorization: `Bearer ${session.access_token}` }
+        : {}),
       ...(init?.headers ?? {}),
     },
-  })
+  });
 }
 
-function SubdomainSection({ orgId, onError }: { orgId: string; onError: (m: string) => void }) {
-  const [slug, setSlug] = useState('')
-  const [savedSlug, setSavedSlug] = useState('')
-  const [status, setStatus] = useState<string>('none')
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [activating, setActivating] = useState(false)
+function SubdomainSection({
+  orgId,
+  onError,
+}: {
+  orgId: string;
+  onError: (m: string) => void;
+}) {
+  const [slug, setSlug] = useState("");
+  const [savedSlug, setSavedSlug] = useState("");
+  const [status, setStatus] = useState<string>("none");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [activating, setActivating] = useState(false);
 
   const loadStatus = useCallback(async () => {
-    if (!API_URL) return
+    if (!API_URL) return;
     try {
-      const res = await authFetch(`/api/tenants/domain-status?organization_id=${orgId}`)
+      const res = await authFetch(
+        `/api/tenants/domain-status?organization_id=${orgId}`,
+      );
       if (res.ok) {
-        const j = (await res.json()) as { status?: string }
-        setStatus(j.status ?? 'none')
+        const j = (await res.json()) as { status?: string };
+        setStatus(j.status ?? "none");
       }
     } catch {
       /* estado no disponible: se muestra "sin activar" */
     }
-  }, [orgId])
+  }, [orgId]);
 
   useEffect(() => {
-    let active = true
+    let active = true;
     supabase
-      .from('organizations')
-      .select('slug')
-      .eq('id', orgId)
+      .from("organizations")
+      .select("slug")
+      .eq("id", orgId)
       .maybeSingle()
       .then(async ({ data }) => {
-        if (!active) return
-        const s = (data?.slug as string | null) ?? ''
-        setSlug(s)
-        setSavedSlug(s)
-        await loadStatus()
-        if (active) setLoading(false)
-      })
+        if (!active) return;
+        const s = (data?.slug as string | null) ?? "";
+        setSlug(s);
+        setSavedSlug(s);
+        await loadStatus();
+        if (active) setLoading(false);
+      });
     return () => {
-      active = false
-    }
-  }, [orgId, loadStatus])
+      active = false;
+    };
+  }, [orgId, loadStatus]);
 
-  const cleanSlug = slug.trim().toLowerCase()
-  const slugValid = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(cleanSlug)
+  const cleanSlug = slug.trim().toLowerCase();
+  const slugValid = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(cleanSlug);
 
   async function saveSlug() {
     if (!slugValid) {
-      onError('El subdominio solo admite minúsculas, números y guiones.')
-      return
+      onError("El subdominio solo admite minúsculas, números y guiones.");
+      return;
     }
-    setSaving(true)
-    const { error } = await supabase.from('organizations').update({ slug: cleanSlug }).eq('id', orgId)
-    setSaving(false)
-    if (error) return onError(error.message)
-    setSavedSlug(cleanSlug)
+    setSaving(true);
+    const { error } = await supabase
+      .from("organizations")
+      .update({ slug: cleanSlug })
+      .eq("id", orgId);
+    setSaving(false);
+    if (error) return onError(error.message);
+    setSavedSlug(cleanSlug);
   }
 
   async function activate() {
     if (!API_URL) {
-      onError('VITE_API_URL no está configurada.')
-      return
+      onError("VITE_API_URL no está configurada.");
+      return;
     }
-    setActivating(true)
+    setActivating(true);
     try {
-      const res = await authFetch('/api/tenants/provision-domain', {
-        method: 'POST',
+      const res = await authFetch("/api/tenants/provision-domain", {
+        method: "POST",
         body: JSON.stringify({ organization_id: orgId }),
-      })
-      const j = (await res.json().catch(() => ({}))) as { status?: string; error?: string }
-      if (!res.ok) onError(j.error ?? 'No se pudo activar el subdominio.')
-      else setStatus(j.status ?? 'initializing')
+      });
+      const j = (await res.json().catch(() => ({}))) as {
+        status?: string;
+        error?: string;
+      };
+      if (!res.ok) onError(j.error ?? "No se pudo activar el subdominio.");
+      else setStatus(j.status ?? "initializing");
     } catch (e) {
-      onError(e instanceof Error ? e.message : 'Error de red al activar el subdominio.')
+      onError(
+        e instanceof Error
+          ? e.message
+          : "Error de red al activar el subdominio.",
+      );
     } finally {
-      setActivating(false)
+      setActivating(false);
     }
   }
 
-  if (loading) return null
+  if (loading) return null;
 
-  const host = `${cleanSlug || 'tu-org'}.${ROOT_DOMAIN}`
-  const dirty = cleanSlug !== savedSlug
+  const host = `${cleanSlug || "tu-org"}.${ROOT_DOMAIN}`;
+  const dirty = cleanSlug !== savedSlug;
 
   return (
     <section className="mt-10">
       <h2 className="text-lg font-semibold text-zinc-900">Subdominio</h2>
       <p className="mt-1 text-sm text-zinc-600">
-        La dirección pública de tu organización. Al activarla se registra en Cloudflare automáticamente.
+        La dirección pública de tu organización. Al activarla se registra en
+        Cloudflare automáticamente.
       </p>
 
       <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-5">
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-1 flex-col gap-2">
-            <span className="text-sm font-medium text-zinc-800">Nombre del subdominio</span>
+            <span className="text-sm font-medium text-zinc-800">
+              Nombre del subdominio
+            </span>
             <div className="flex items-stretch overflow-hidden rounded-lg border border-zinc-300 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20">
               <input
                 value={slug}
@@ -536,19 +723,23 @@ function SubdomainSection({ orgId, onError }: { orgId: string; onError: (m: stri
             disabled={saving || !dirty || !slugValid}
             className="rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 transition-colors hover:border-zinc-400 disabled:opacity-50"
           >
-            {saving ? 'Guardando subdominio…' : 'Guardar subdominio'}
+            {saving ? "Guardando subdominio…" : "Guardar subdominio"}
           </button>
         </div>
 
-        {!slugValid && cleanSlug !== '' && (
-          <p className="mt-2 text-xs text-red-600">Solo minúsculas, números y guiones (sin espacios ni puntos).</p>
+        {!slugValid && cleanSlug !== "" && (
+          <p className="mt-2 text-xs text-red-600">
+            Solo minúsculas, números y guiones (sin espacios ni puntos).
+          </p>
         )}
 
         <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-zinc-100 pt-4">
-          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_BADGE[status] ?? STATUS_BADGE.none}`}>
+          <span
+            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_BADGE[status] ?? STATUS_BADGE.none}`}
+          >
             {STATUS_TEXT[status] ?? status}
           </span>
-          {status === 'active' ? (
+          {status === "active" ? (
             <a
               href={`https://${host}`}
               target="_blank"
@@ -561,7 +752,7 @@ function SubdomainSection({ orgId, onError }: { orgId: string; onError: (m: stri
             <span className="text-sm text-zinc-500">{host}</span>
           )}
           <div className="ml-auto flex items-center gap-2">
-            {(status === 'pending' || status === 'initializing') && (
+            {(status === "pending" || status === "initializing") && (
               <button
                 type="button"
                 onClick={loadStatus}
@@ -570,28 +761,31 @@ function SubdomainSection({ orgId, onError }: { orgId: string; onError: (m: stri
                 Actualizar estado
               </button>
             )}
-            {status !== 'active' && (
+            {status !== "active" && (
               <button
                 type="button"
                 onClick={activate}
                 disabled={activating || dirty || !savedSlug || !slugValid}
-                title={dirty ? 'Guarda el subdominio antes de activarlo' : undefined}
+                title={
+                  dirty ? "Guarda el subdominio antes de activarlo" : undefined
+                }
                 className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-transform active:scale-[0.98] disabled:opacity-50"
               >
-                {activating ? 'Activando…' : 'Activar subdominio'}
+                {activating ? "Activando…" : "Activar subdominio"}
               </button>
             )}
           </div>
         </div>
 
-        {(status === 'pending' || status === 'initializing') && (
+        {(status === "pending" || status === "initializing") && (
           <p className="mt-3 text-xs text-zinc-500">
-            La validación del certificado puede tardar 1–2 minutos. Pulsa “Actualizar estado” para comprobar.
+            La validación del certificado puede tardar 1–2 minutos. Pulsa
+            “Actualizar estado” para comprobar.
           </p>
         )}
       </div>
     </section>
-  )
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -604,41 +798,46 @@ function EventForm({
   onClose,
   onSaved,
 }: {
-  orgId: string
-  userId: string | null
-  event: EventRow | null
-  onClose: () => void
-  onSaved: (saved?: EventRow) => void | Promise<void>
+  orgId: string;
+  userId: string | null;
+  event: EventRow | null;
+  onClose: () => void;
+  onSaved: (saved?: EventRow) => void | Promise<void>;
 }) {
   const [form, setForm] = useState({
-    name: event?.name ?? '',
-    description: event?.description ?? '',
-    event_type: event?.event_type ?? ('forum' as EventType),
-    status: event?.status ?? ('draft' as EventStatus),
+    name: event?.name ?? "",
+    description: event?.description ?? "",
+    event_type: event?.event_type ?? ("forum" as EventType),
+    status: event?.status ?? ("draft" as EventStatus),
     start_date: toLocalInput(event?.start_date ?? null),
     end_date: toLocalInput(event?.end_date ?? null),
     registration_deadline: toLocalInput(event?.registration_deadline ?? null),
     payment_timeout_days: event?.payment_timeout_days ?? 10,
     total_slots: event?.total_slots ?? 0,
-    registration_mode: (event?.config?.registration_mode as RegistrationMode | undefined) ?? 'paid',
+    registration_mode:
+      (event?.config?.registration_mode as RegistrationMode | undefined) ??
+      "paid",
     public_floorplan_visible: event?.config?.public_floorplan_visible === true,
-    public_seat_selection_enabled: event?.config?.public_seat_selection_enabled === true,
-    seat_assignment_mode: (event?.config?.seat_assignment_mode as SeatAssignmentMode | undefined) ?? 'admin',
-  })
-  const [saving, setSaving] = useState(false)
-  const [formError, setFormError] = useState<string | null>(null)
+    public_seat_selection_enabled:
+      event?.config?.public_seat_selection_enabled === true,
+    seat_assignment_mode:
+      (event?.config?.seat_assignment_mode as SeatAssignmentMode | undefined) ??
+      "admin",
+  });
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   function set<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
-    setForm((f) => ({ ...f, [key]: value }))
+    setForm((f) => ({ ...f, [key]: value }));
   }
 
   async function save() {
     if (!form.name.trim()) {
-      setFormError('El nombre es obligatorio.')
-      return
+      setFormError("El nombre es obligatorio.");
+      return;
     }
-    setSaving(true)
-    setFormError(null)
+    setSaving(true);
+    setFormError(null);
     const payload = {
       name: form.name.trim(),
       description: form.description.trim() || null,
@@ -653,30 +852,63 @@ function EventForm({
         ...(event?.config ?? {}),
         registration_mode: form.registration_mode,
         public_floorplan_visible: form.public_floorplan_visible,
-        public_seat_selection_enabled: form.public_floorplan_visible && form.public_seat_selection_enabled,
-        seat_assignment_mode: form.public_floorplan_visible && form.public_seat_selection_enabled ? 'attendee' : form.seat_assignment_mode,
+        public_seat_selection_enabled:
+          form.public_floorplan_visible && form.public_seat_selection_enabled,
+        seat_assignment_mode:
+          form.public_floorplan_visible && form.public_seat_selection_enabled
+            ? "attendee"
+            : form.seat_assignment_mode,
       },
-    }
+    };
     const result = event
-      ? await supabase.from('events').update(payload).eq('id', event.id).select('id, name, description, event_type, status, start_date, end_date, registration_deadline, payment_timeout_days, total_slots, config').single()
-      : await supabase.from('events').insert({ ...payload, organization_id: orgId, created_by: userId }).select('id, name, description, event_type, status, start_date, end_date, registration_deadline, payment_timeout_days, total_slots, config').single()
-    setSaving(false)
-    if (result.error || !result.data) setFormError(result.error?.message ?? 'No se pudo guardar el evento.')
-    else onSaved(result.data as EventRow)
+      ? await supabase
+          .from("events")
+          .update(payload)
+          .eq("id", event.id)
+          .select(
+            "id, name, description, event_type, status, start_date, end_date, registration_deadline, payment_timeout_days, total_slots, config",
+          )
+          .single()
+      : await supabase
+          .from("events")
+          .insert({ ...payload, organization_id: orgId, created_by: userId })
+          .select(
+            "id, name, description, event_type, status, start_date, end_date, registration_deadline, payment_timeout_days, total_slots, config",
+          )
+          .single();
+    setSaving(false);
+    if (result.error || !result.data)
+      setFormError(result.error?.message ?? "No se pudo guardar el evento.");
+    else onSaved(result.data as EventRow);
   }
 
   return (
     <div className="mt-6 rounded-2xl border border-zinc-200 bg-white p-6">
-      <h2 className="text-lg font-semibold text-zinc-900">{event ? 'Editar evento' : 'Nuevo evento'}</h2>
+      <h2 className="text-lg font-semibold text-zinc-900">
+        {event ? "Editar evento" : "Nuevo evento"}
+      </h2>
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         <Field label="Nombre del evento" className="sm:col-span-2">
-          <input value={form.name} onChange={(e) => set('name', e.target.value)} className={inputCls} />
+          <input
+            value={form.name}
+            onChange={(e) => set("name", e.target.value)}
+            className={inputCls}
+          />
         </Field>
         <Field label="Descripción" className="sm:col-span-2">
-          <textarea value={form.description} onChange={(e) => set('description', e.target.value)} rows={3} className={inputCls} />
+          <textarea
+            value={form.description}
+            onChange={(e) => set("description", e.target.value)}
+            rows={3}
+            className={inputCls}
+          />
         </Field>
         <Field label="Tipo">
-          <select value={form.event_type} onChange={(e) => set('event_type', e.target.value as EventType)} className={inputCls}>
+          <select
+            value={form.event_type}
+            onChange={(e) => set("event_type", e.target.value as EventType)}
+            className={inputCls}
+          >
             <option value="forum">Foro</option>
             <option value="exhibition">Exposición</option>
             <option value="workshop">Taller</option>
@@ -684,7 +916,11 @@ function EventForm({
           </select>
         </Field>
         <Field label="Estado">
-          <select value={form.status} onChange={(e) => set('status', e.target.value as EventStatus)} className={inputCls}>
+          <select
+            value={form.status}
+            onChange={(e) => set("status", e.target.value as EventStatus)}
+            className={inputCls}
+          >
             <option value="draft">Borrador</option>
             <option value="published">Publicado</option>
             <option value="closed">Cerrado</option>
@@ -692,133 +928,258 @@ function EventForm({
           </select>
         </Field>
         <Field label="Inicio">
-          <input type="datetime-local" value={form.start_date} onChange={(e) => set('start_date', e.target.value)} className={inputCls} />
+          <input
+            type="datetime-local"
+            value={form.start_date}
+            onChange={(e) => set("start_date", e.target.value)}
+            className={inputCls}
+          />
         </Field>
         <Field label="Fin">
-          <input type="datetime-local" value={form.end_date} onChange={(e) => set('end_date', e.target.value)} className={inputCls} />
+          <input
+            type="datetime-local"
+            value={form.end_date}
+            onChange={(e) => set("end_date", e.target.value)}
+            className={inputCls}
+          />
         </Field>
         <Field label="Cierre de inscripción">
-          <input type="datetime-local" value={form.registration_deadline} onChange={(e) => set('registration_deadline', e.target.value)} className={inputCls} />
+          <input
+            type="datetime-local"
+            value={form.registration_deadline}
+            onChange={(e) => set("registration_deadline", e.target.value)}
+            className={inputCls}
+          />
         </Field>
         <Field label="Modalidad del registro">
-          <select value={form.registration_mode} onChange={(e) => set('registration_mode', e.target.value as RegistrationMode)} className={inputCls}>
+          <select
+            value={form.registration_mode}
+            onChange={(e) =>
+              set("registration_mode", e.target.value as RegistrationMode)
+            }
+            className={inputCls}
+          >
             <option value="free">Gratuito · confirma inmediatamente</option>
             <option value="paid">Pago · requiere comprobante</option>
-            <option value="invitation">Solo invitación · sin registro público</option>
+            <option value="invitation">
+              Solo invitación · sin registro público
+            </option>
           </select>
         </Field>
-        {form.registration_mode === 'paid' && <Field label="Plazo de pago (días)">
-          <input type="number" min={1} value={form.payment_timeout_days} onChange={(e) => set('payment_timeout_days', Number(e.target.value))} className={inputCls} />
-        </Field>}
+        {form.registration_mode === "paid" && (
+          <Field label="Plazo de pago (días)">
+            <input
+              type="number"
+              min={1}
+              value={form.payment_timeout_days}
+              onChange={(e) =>
+                set("payment_timeout_days", Number(e.target.value))
+              }
+              className={inputCls}
+            />
+          </Field>
+        )}
         <Field label="Cupos (0 = ilimitado)">
-          <input type="number" min={0} value={form.total_slots} onChange={(e) => set('total_slots', Number(e.target.value))} className={inputCls} />
+          <input
+            type="number"
+            min={0}
+            value={form.total_slots}
+            onChange={(e) => set("total_slots", Number(e.target.value))}
+            className={inputCls}
+          />
         </Field>
         <fieldset className="sm:col-span-2 rounded-xl border border-zinc-200 p-4">
-          <legend className="px-1 text-sm font-semibold text-zinc-900">Plano y selección de puestos</legend>
+          <legend className="px-1 text-sm font-semibold text-zinc-900">
+            Plano y selección de puestos
+          </legend>
           <label className="mt-2 flex items-start gap-3 text-sm text-zinc-700">
-            <input type="checkbox" checked={form.public_floorplan_visible} onChange={(e) => set('public_floorplan_visible', e.target.checked)} className="mt-0.5" />
-            <span><b>Publicar el plano</b><span className="block text-xs text-zinc-500">Permite que visitantes y registrados consulten el plano publicado.</span></span>
+            <input
+              type="checkbox"
+              checked={form.public_floorplan_visible}
+              onChange={(e) =>
+                set("public_floorplan_visible", e.target.checked)
+              }
+              className="mt-0.5"
+            />
+            <span>
+              <b>Publicar el plano</b>
+              <span className="block text-xs text-zinc-500">
+                Permite que visitantes y registrados consulten el plano
+                publicado.
+              </span>
+            </span>
           </label>
           <label className="mt-3 flex items-start gap-3 text-sm text-zinc-700">
-            <input type="checkbox" checked={form.public_seat_selection_enabled} disabled={!form.public_floorplan_visible} onChange={(e) => set('public_seat_selection_enabled', e.target.checked)} className="mt-0.5" />
-            <span><b>Permitir selección pública de puestos</b><span className="block text-xs text-zinc-500">Los puestos disponibles aparecerán durante el registro. Requiere publicar el plano.</span></span>
+            <input
+              type="checkbox"
+              checked={form.public_seat_selection_enabled}
+              disabled={!form.public_floorplan_visible}
+              onChange={(e) =>
+                set("public_seat_selection_enabled", e.target.checked)
+              }
+              className="mt-0.5"
+            />
+            <span>
+              <b>Permitir selección pública de puestos</b>
+              <span className="block text-xs text-zinc-500">
+                Los puestos disponibles aparecerán durante el registro. Requiere
+                publicar el plano.
+              </span>
+            </span>
           </label>
-          {!form.public_seat_selection_enabled && <label className="mt-3 grid gap-1 text-sm font-medium text-zinc-700">Asignación de puestos
-            <select value={form.seat_assignment_mode} onChange={(e) => set('seat_assignment_mode', e.target.value as SeatAssignmentMode)} className={inputCls}>
-              <option value="none">Sin puestos</option><option value="admin">Por el administrador</option>
-            </select>
-          </label>}
+          {!form.public_seat_selection_enabled && (
+            <label className="mt-3 grid gap-1 text-sm font-medium text-zinc-700">
+              Asignación de puestos
+              <select
+                value={form.seat_assignment_mode}
+                onChange={(e) =>
+                  set(
+                    "seat_assignment_mode",
+                    e.target.value as SeatAssignmentMode,
+                  )
+                }
+                className={inputCls}
+              >
+                <option value="none">Sin puestos</option>
+                <option value="admin">Por el administrador</option>
+              </select>
+            </label>
+          )}
         </fieldset>
       </div>
 
-      {formError && <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{formError}</p>}
+      {formError && (
+        <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {formError}
+        </p>
+      )}
 
       <div className="mt-6 flex gap-2">
-        <button type="button" onClick={save} disabled={saving} className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition-transform active:scale-[0.98] disabled:opacity-50">
-          {saving ? 'Guardando evento…' : 'Guardar evento'}
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving}
+          className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition-transform active:scale-[0.98] disabled:opacity-50"
+        >
+          {saving ? "Guardando evento…" : "Guardar evento"}
         </button>
-        <button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 bg-white px-5 py-2.5 text-sm font-semibold text-zinc-700 transition-colors hover:border-zinc-400">
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-lg border border-zinc-300 bg-white px-5 py-2.5 text-sm font-semibold text-zinc-700 transition-colors hover:border-zinc-400"
+        >
           Cancelar
         </button>
       </div>
     </div>
-  )
+  );
 }
 
 // ---------------------------------------------------------------------------
 // Métodos de pago de la organización
 // ---------------------------------------------------------------------------
-type PMRow = { id: string; name: string; details: Record<string, string>; is_active: boolean }
+type PMRow = {
+  id: string;
+  name: string;
+  details: Record<string, string>;
+  is_active: boolean;
+};
 
-function PaymentMethodsSection({ orgId, onError }: { orgId: string; onError: (m: string) => void }) {
-  const [methods, setMethods] = useState<PMRow[]>([])
-  const [name, setName] = useState('')
-  const [rows, setRows] = useState<{ key: string; value: string }[]>([{ key: '', value: '' }])
-  const [saving, setSaving] = useState(false)
+function PaymentMethodsSection({
+  orgId,
+  onError,
+}: {
+  orgId: string;
+  onError: (m: string) => void;
+}) {
+  const [methods, setMethods] = useState<PMRow[]>([]);
+  const [name, setName] = useState("");
+  const [rows, setRows] = useState<{ key: string; value: string }[]>([
+    { key: "", value: "" },
+  ]);
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     const { data, error } = await supabase
-      .from('payment_methods')
-      .select('id, name, details, is_active')
-      .eq('organization_id', orgId)
-      .order('created_at', { ascending: true })
-    if (error) onError(error.message)
-    else setMethods((data ?? []) as PMRow[])
-  }, [orgId, onError])
+      .from("payment_methods")
+      .select("id, name, details, is_active")
+      .eq("organization_id", orgId)
+      .order("created_at", { ascending: true });
+    if (error) onError(error.message);
+    else setMethods((data ?? []) as PMRow[]);
+  }, [orgId, onError]);
 
   useEffect(() => {
-    void load()
-  }, [load])
+    void load();
+  }, [load]);
 
   async function add() {
-    if (!name.trim()) return
-    setSaving(true)
-    const details: Record<string, string> = {}
-    for (const r of rows) if (r.key.trim() && r.value.trim()) details[r.key.trim()] = r.value.trim()
-    const { error } = await supabase.from('payment_methods').insert({
+    if (!name.trim()) return;
+    setSaving(true);
+    const details: Record<string, string> = {};
+    for (const r of rows)
+      if (r.key.trim() && r.value.trim())
+        details[r.key.trim()] = r.value.trim();
+    const { error } = await supabase.from("payment_methods").insert({
       organization_id: orgId,
       name: name.trim(),
       details,
       is_active: true,
-    })
-    setSaving(false)
-    if (error) return onError(error.message)
-    setName('')
-    setRows([{ key: '', value: '' }])
-    await load()
+    });
+    setSaving(false);
+    if (error) return onError(error.message);
+    setName("");
+    setRows([{ key: "", value: "" }]);
+    await load();
   }
 
   async function toggle(m: PMRow) {
-    const { error } = await supabase.from('payment_methods').update({ is_active: !m.is_active }).eq('id', m.id)
-    if (error) onError(error.message)
-    else await load()
+    const { error } = await supabase
+      .from("payment_methods")
+      .update({ is_active: !m.is_active })
+      .eq("id", m.id);
+    if (error) onError(error.message);
+    else await load();
   }
 
   async function remove(m: PMRow) {
-    const { error } = await supabase.from('payment_methods').delete().eq('id', m.id)
-    if (error) onError(error.message)
-    else await load()
+    const { error } = await supabase
+      .from("payment_methods")
+      .delete()
+      .eq("id", m.id);
+    if (error) onError(error.message);
+    else await load();
   }
 
   return (
     <section className="mt-10">
       <h2 className="text-lg font-semibold text-zinc-900">Métodos de pago</h2>
-      <p className="mt-1 text-sm text-zinc-600">Se muestran al asistente en la página de carga de comprobante.</p>
+      <p className="mt-1 text-sm text-zinc-600">
+        Se muestran al asistente en la página de carga de comprobante.
+      </p>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         {methods.map((m) => (
-          <div key={m.id} className="rounded-xl border border-zinc-200 bg-white p-4">
+          <div
+            key={m.id}
+            className="rounded-xl border border-zinc-200 bg-white p-4"
+          >
             <div className="flex items-start justify-between">
               <p className="font-medium text-zinc-900">{m.name}</p>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => toggle(m)}
-                  className={`rounded-full px-2.5 py-1 text-xs font-medium ${m.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-500'}`}
+                  className={`rounded-full px-2.5 py-1 text-xs font-medium ${m.is_active ? "bg-emerald-100 text-emerald-700" : "bg-zinc-100 text-zinc-500"}`}
                 >
-                  {m.is_active ? 'Activo' : 'Inactivo'}
+                  {m.is_active ? "Activo" : "Inactivo"}
                 </button>
-                <button type="button" onClick={() => remove(m)} aria-label="Eliminar método" className="text-zinc-400 hover:text-red-600">
+                <button
+                  type="button"
+                  onClick={() => remove(m)}
+                  aria-label="Eliminar método"
+                  className="text-zinc-400 hover:text-red-600"
+                >
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
@@ -848,13 +1209,25 @@ function PaymentMethodsSection({ orgId, onError }: { orgId: string; onError: (m:
             <div key={i} className="flex gap-2">
               <input
                 value={r.key}
-                onChange={(e) => setRows((rs) => rs.map((x, j) => (j === i ? { ...x, key: e.target.value } : x)))}
+                onChange={(e) =>
+                  setRows((rs) =>
+                    rs.map((x, j) =>
+                      j === i ? { ...x, key: e.target.value } : x,
+                    ),
+                  )
+                }
                 placeholder="Dato (Banco, Cuenta, Titular…)"
                 className={`${inputCls} flex-1`}
               />
               <input
                 value={r.value}
-                onChange={(e) => setRows((rs) => rs.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))}
+                onChange={(e) =>
+                  setRows((rs) =>
+                    rs.map((x, j) =>
+                      j === i ? { ...x, value: e.target.value } : x,
+                    ),
+                  )
+                }
                 placeholder="Valor"
                 className={`${inputCls} flex-1`}
               />
@@ -862,7 +1235,7 @@ function PaymentMethodsSection({ orgId, onError }: { orgId: string; onError: (m:
           ))}
           <button
             type="button"
-            onClick={() => setRows((rs) => [...rs, { key: '', value: '' }])}
+            onClick={() => setRows((rs) => [...rs, { key: "", value: "" }])}
             className="justify-self-start text-xs font-medium text-emerald-700 hover:underline"
           >
             + Otro dato
@@ -874,21 +1247,29 @@ function PaymentMethodsSection({ orgId, onError }: { orgId: string; onError: (m:
           disabled={saving || !name.trim()}
           className="mt-4 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition-transform active:scale-[0.98] disabled:opacity-50"
         >
-          {saving ? 'Guardando…' : 'Agregar método'}
+          {saving ? "Guardando…" : "Agregar método"}
         </button>
       </div>
     </section>
-  )
+  );
 }
 
 const inputCls =
-  'w-full rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20'
+  "w-full rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20";
 
-function Field({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) {
+function Field({
+  label,
+  className,
+  children,
+}: {
+  label: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <label className={`flex flex-col gap-2 ${className ?? ''}`}>
+    <label className={`flex flex-col gap-2 ${className ?? ""}`}>
       <span className="text-sm font-medium text-zinc-800">{label}</span>
       {children}
     </label>
-  )
+  );
 }
