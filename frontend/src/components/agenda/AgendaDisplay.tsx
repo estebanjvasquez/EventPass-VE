@@ -147,7 +147,9 @@ export function AgendaDisplay({
   );
   const settings = override ?? items[0]?.public_agenda_config ?? {};
   const branding = items[0]?.event_branding ?? {};
-  const accent = settings.accent_color || branding.color || "#34d399";
+  // La identidad publicada del evento prevalece; la pantalla conserva sus
+  // modos, fondo, texto, tipografía y distribución como preferencias locales.
+  const accent = branding.color || settings.accent_color || "#34d399";
   const background = settings.background_color || "#09090b";
   const textColor = settings.text_color || "#ffffff";
   const fontFamily = {

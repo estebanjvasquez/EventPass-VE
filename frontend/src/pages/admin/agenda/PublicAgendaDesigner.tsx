@@ -267,6 +267,9 @@ export function PublicAgendaDesigner({ event, items, onSaved }: Props) {
             <summary className="cursor-pointer text-sm font-semibold">
               Colores personalizados
             </summary>
+            <p className="mt-2 text-xs text-zinc-500">
+              El acento visible se toma de la identidad publicada del evento. Aquí puedes conservar el fondo y contraste propios de esta pantalla.
+            </p>
             <div className="mt-3 grid grid-cols-3 gap-2">
               {(
                 [
