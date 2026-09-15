@@ -26,7 +26,6 @@ export type LandingConfig = {
   text_color?: string;
   muted_text_color?: string;
   cta_text_color?: string;
-  hero_gradient_start?: string;
   hero_gradient_end?: string;
   hero_gradient_angle?: number;
   hero_heading_color?: string;

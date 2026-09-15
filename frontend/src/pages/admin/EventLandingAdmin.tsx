@@ -554,19 +554,19 @@ export default function EventLandingAdmin() {
             </section>
             <section className="mt-5 rounded-xl border border-zinc-200 bg-white p-4">
               <h3 className="text-sm font-bold text-zinc-900">Hero: degradado y tipografía</h3>
+              <p className="mt-1 text-xs text-zinc-600">El color inicial del degradado es el “Fondo del hero” de la paleta. Aquí solo defines su color final, ángulo y tipografía.</p>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                {([['hero_gradient_start','Inicio del degradado','#171a24'],['hero_gradient_end','Final del degradado','#11131b'],['hero_heading_color','Color del titular','#ffffff'],['hero_body_color','Color del texto','#cbd5e1']] as const).map(([key,label,fallback]) => <label key={key} className="text-sm font-semibold">{label}<span className="mt-1 flex gap-2"><input type="color" value={validHex(draft[key],fallback)} onChange={(e) => set(key,e.target.value)} className="h-9 w-12 rounded border p-1" /><input className="min-w-0 flex-1 rounded-md border border-zinc-300 px-2 font-mono text-xs" value={draft[key] || fallback} onChange={(e) => set(key,e.target.value)} /></span></label>)}
+                {([['hero_gradient_end','Final del degradado','#11131b'],['hero_heading_color','Color del titular','#ffffff'],['hero_body_color','Color del texto','#cbd5e1']] as const).map(([key,label,fallback]) => <label key={key} className="text-sm font-semibold">{label}<span className="mt-1 flex gap-2"><input type="color" value={validHex(draft[key],fallback)} onChange={(e) => set(key,e.target.value)} className="h-9 w-12 rounded border p-1" /><input className="min-w-0 flex-1 rounded-md border border-zinc-300 px-2 font-mono text-xs" value={draft[key] || fallback} onChange={(e) => set(key,e.target.value)} /></span></label>)}
                 <label className="text-sm font-semibold">Tamaño del titular<select value={draft.hero_heading_size || 'lg'} onChange={(e) => set('hero_heading_size', e.target.value as 'md' | 'lg' | 'xl')} className={input}><option value="md">Mediano</option><option value="lg">Grande</option><option value="xl">Extra grande</option></select></label>
                 <label className="text-sm font-semibold">Ángulo del degradado<input type="number" min="0" max="360" value={draft.hero_gradient_angle ?? 120} onChange={(e) => set('hero_gradient_angle', Number(e.target.value))} className={input} /></label>
               </div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            </section>
+            <section className="mt-5 rounded-xl border border-zinc-200 bg-white p-4">
+              <h3 className="text-sm font-bold text-zinc-900">Tipografía de tarjetas</h3>
+              <p className="mt-1 text-xs text-zinc-600">Solo afecta las tarjetas de programa, registro, exposición y llamada final.</p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 {([['card_text_color','Texto de tarjetas','#ffffff'],['card_muted_text_color','Texto secundario de tarjetas','#cbd5e1']] as const).map(([key,label,fallback]) => <label key={key} className="text-sm font-semibold">{label}<span className="mt-1 flex gap-2"><input type="color" value={validHex(draft[key],fallback)} onChange={(e) => set(key,e.target.value)} className="h-9 w-12 rounded border p-1" /><input className="min-w-0 flex-1 rounded-md border border-zinc-300 px-2 font-mono text-xs" value={draft[key] || fallback} onChange={(e) => set(key,e.target.value)} /></span></label>)}
               </div>
-            </section>
-            <section className="mt-5 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
-              <label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={draft.show_sponsors === true} onChange={(e) => set('show_sponsors',e.target.checked)} />Mostrar patrocinantes en la landing</label>
-              {draft.show_sponsors && <div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-sm font-semibold">Título<input value={draft.sponsors_title || ''} onChange={(e) => set('sponsors_title',e.target.value)} placeholder="Patrocinantes" className={input} /></label><label className="text-sm font-semibold">Presentación<select value={draft.sponsors_mode || 'static'} onChange={(e) => set('sponsors_mode',e.target.value as 'static' | 'carousel')} className={input}><option value="static">Estática</option><option value="carousel">Carrusel horizontal</option></select></label></div>}
-              <p className="mt-2 text-xs text-zinc-600">Se muestran las empresas con patrocinio confirmado y logo público.</p>
             </section>
             <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
               <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold">
@@ -748,7 +748,12 @@ export default function EventLandingAdmin() {
                 />{" "}
                 Mostrar solicitud de información
               </label>
+              <label>
+                <input checked={draft.show_sponsors === true} onChange={(e) => set("show_sponsors", e.target.checked)} type="checkbox" />{" "}
+                Mostrar patrocinantes
+              </label>
             </fieldset>
+            {draft.show_sponsors && <div className="mt-4 grid gap-3 sm:grid-cols-2"><label className="text-sm font-semibold">Título de patrocinantes<input value={draft.sponsors_title || ""} onChange={(e) => set("sponsors_title", e.target.value)} placeholder="Patrocinantes" className={input} /></label><label className="text-sm font-semibold">Presentación<select value={draft.sponsors_mode || "static"} onChange={(e) => set("sponsors_mode", e.target.value as "static" | "carousel")} className={input}><option value="static">Estática</option><option value="carousel">Carrusel horizontal</option></select></label></div>}
             <label className="mt-5 block text-sm font-semibold">
               URL de folleto
               <input

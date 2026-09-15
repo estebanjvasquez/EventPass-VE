@@ -47,7 +47,6 @@ const defaults: Required<
     | "text_color"
     | "muted_text_color"
     | "cta_text_color"
-    | "hero_gradient_start"
     | "hero_gradient_end"
     | "hero_gradient_angle"
     | "hero_heading_color"
@@ -153,7 +152,7 @@ export default function EventPublicLanding({
   const cardTextColor = content.card_text_color || palette.text;
   const cardMutedColor = content.card_muted_text_color || palette.muted;
   const heroSize = content.hero_heading_size === "xl" ? "sm:text-7xl lg:text-8xl" : content.hero_heading_size === "md" ? "sm:text-5xl lg:text-6xl" : "sm:text-6xl lg:text-7xl";
-  const heroGradient = `linear-gradient(${content.hero_gradient_angle ?? 120}deg, ${content.hero_gradient_start || palette.hero}, ${content.hero_gradient_end || palette.page})`;
+  const heroGradient = `linear-gradient(${content.hero_gradient_angle ?? 120}deg, ${palette.hero}, ${content.hero_gradient_end || palette.page})`;
   const organization = brand.name;
   const logoUrl = brand.logo_url;
   const date = event.start_date
