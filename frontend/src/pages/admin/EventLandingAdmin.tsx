@@ -21,6 +21,9 @@ import {
   type LandingTemplate,
 } from "../../lib/landingBuilder";
 import { supabase } from "../../lib/supabase";
+import { slugify } from "../../lib/onboarding";
+
+const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
 const initial: LandingConfig = {
   template: "summit",
@@ -73,6 +76,7 @@ type Event = {
   config: Record<string, unknown> | null;
 };
 type Domain = { slug: string; custom_hostname: string | null };
+type PublicSite = { id: string; slug: string | null; status: "draft" | "active" | "disabled"; landing_config: LandingConfig | null };
 const cloneBlocks = (template: LandingTemplate) =>
   templateBlocks[template].map((block) => ({ ...block }));
 const input =
@@ -94,6 +98,9 @@ export default function EventLandingAdmin() {
   const { eventId } = useParams();
   const [event, setEvent] = useState<Event | null>(null);
   const [domain, setDomain] = useState<Domain | null>(null);
+  const [publicSite, setPublicSite] = useState<PublicSite | null>(null);
+  const [siteSlug, setSiteSlug] = useState("");
+  const [provisioning, setProvisioning] = useState(false);
   const [draft, setDraft] = useState<LandingConfig>(initial);
   const [message, setMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -124,6 +131,13 @@ export default function EventLandingAdmin() {
       blocks: source.blocks?.length ? source.blocks : cloneBlocks(template),
     });
     setLogoState(source.logo_url ? "ready" : "idle");
+    const { data: site } = await supabase
+      .from("public_sites")
+      .select("id,slug,status,landing_config")
+      .eq("event_id", loaded.id)
+      .maybeSingle();
+    setPublicSite(site as PublicSite | null);
+    setSiteSlug((site as PublicSite | null)?.slug ?? slugify(loaded.name));
     const { data: org } = await supabase
       .from("organizations")
       .select("slug,custom_hostname")
@@ -192,6 +206,17 @@ export default function EventLandingAdmin() {
     setSaving(false);
     if (error) setMessage(error.message);
     else {
+      if (publicSite) {
+        const { error: siteError } = await supabase
+          .from("public_sites")
+          .update({ landing_config: draft })
+          .eq("id", publicSite.id);
+        if (siteError) {
+          setMessage(siteError.message);
+          return;
+        }
+        setPublicSite({ ...publicSite, landing_config: draft });
+      }
       setEvent({ ...event, config });
       setMessage(
         mode === "publish"
@@ -271,6 +296,46 @@ export default function EventLandingAdmin() {
   async function copyUrl(url: string) {
     await navigator.clipboard.writeText(url);
     setMessage("Enlace copiado.");
+  }
+  async function createOrUpdatePublicSite() {
+    if (!event) return;
+    const slug = slugify(siteSlug);
+    if (!slug) {
+      setMessage("Indica un subdominio válido para el sitio del evento.");
+      return;
+    }
+    setProvisioning(true);
+    setMessage(null);
+    const values = { organization_id: event.organization_id, event_id: event.id, scope: "event" as const, slug, landing_config: draft };
+    const result = publicSite
+      ? await supabase.from("public_sites").update({ slug, landing_config: draft }).eq("id", publicSite.id).select("id,slug,status,landing_config").single()
+      : await supabase.from("public_sites").insert(values).select("id,slug,status,landing_config").single();
+    if (result.error || !result.data) {
+      setProvisioning(false);
+      setMessage(result.error?.message ?? "No se pudo guardar el sitio público.");
+      return;
+    }
+    const site = result.data as PublicSite;
+    setPublicSite(site);
+    if (!API_URL) {
+      setProvisioning(false);
+      setMessage("Sitio guardado. Configura VITE_API_URL para activar su dominio.");
+      return;
+    }
+    const { data: { session } } = await supabase.auth.getSession();
+    const response = await fetch(`${API_URL}/api/public-sites/provision-domain`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
+      body: JSON.stringify({ public_site_id: site.id }),
+    });
+    const body = await response.json().catch(() => ({})) as { error?: string; hostname?: string; status?: string };
+    setProvisioning(false);
+    if (!response.ok) {
+      setMessage(body.error ?? "No se pudo activar el subdominio del evento.");
+      return;
+    }
+    setPublicSite({ ...site, status: "active" });
+    setMessage(`Sitio activo en https://${body.hostname ?? `${slug}.eventosfacil.net`}.`);
   }
   const imageList = (
     key: "hero_images" | "gallery_images",
@@ -390,6 +455,35 @@ export default function EventLandingAdmin() {
           >
             Configurar dominio de organización
           </Link>
+        </div>
+        <div className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="min-w-56 flex-1 text-sm font-semibold text-zinc-900">
+              Sitio propio del evento
+              <span className="mt-1 flex items-center rounded-lg border border-zinc-300 bg-white px-3">
+                <input
+                  value={siteSlug}
+                  onChange={(e) => setSiteSlug(e.target.value)}
+                  className="min-w-0 flex-1 bg-transparent py-2 font-normal outline-none"
+                  aria-label="Subdominio del sitio del evento"
+                />
+                <span className="shrink-0 text-xs font-normal text-zinc-500">.eventosfacil.net</span>
+              </span>
+            </label>
+            <button
+              type="button"
+              onClick={() => void createOrUpdatePublicSite()}
+              disabled={provisioning || !event}
+              className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+            >
+              <Globe2 className="h-4 w-4" />
+              {provisioning ? "Activando…" : publicSite?.status === "active" ? "Actualizar sitio" : "Activar sitio"}
+            </button>
+          </div>
+          <p className="mt-2 text-xs leading-5 text-zinc-600">
+            Crea una portada independiente para este evento, sin sustituir el sitio general de la organización.
+            {publicSite?.status === "active" ? " El dominio está activo." : " Se activa al guardar y puede tardar unos minutos en validar DNS."}
+          </p>
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {[
