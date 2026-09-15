@@ -68,7 +68,9 @@ const validImages = (items: unknown) =>
 function contentFor(event: LandingEvent) {
   const saved = (event.config?.public_landing ?? {}) as LandingConfig;
   const heroImages = validImages(saved.hero_images);
-  if (saved.hero_image_url && !heroImages.includes(saved.hero_image_url))
+  // `hero_image_url` es compatibilidad con landings antiguas. Cuando el
+  // constructor guarda una lista (aunque esté vacía), esa lista manda.
+  if (!Array.isArray(saved.hero_images) && saved.hero_image_url && !heroImages.includes(saved.hero_image_url))
     heroImages.unshift(saved.hero_image_url);
   const template = saved.template ?? "summit";
   return {

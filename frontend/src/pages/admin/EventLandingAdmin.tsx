@@ -292,10 +292,12 @@ export default function EventLandingAdmin() {
             <button
               type="button"
               onClick={() =>
-                set(
-                  key,
-                  (draft[key] ?? []).filter((image) => image !== url),
-                )
+                setDraft((current) => {
+                  const remaining = (current[key] ?? []).filter((image) => image !== url);
+                  return key === "hero_images" && current.hero_image_url === url
+                    ? { ...current, hero_images: remaining, hero_image_url: "" }
+                    : { ...current, [key]: remaining };
+                })
               }
               className="absolute right-2 top-2 rounded-lg bg-white/95 p-2 text-zinc-700 shadow-sm"
               aria-label="Quitar imagen"
