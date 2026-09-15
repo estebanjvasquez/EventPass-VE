@@ -55,7 +55,7 @@ const ACCESS_LABEL: Record<Pass["access_mode"], string> = {
 
 export default function RegistroPrograma() {
   const { programId } = useParams();
-  const { tenant, loading: tenantLoading } = useTenant();
+  const { loading: tenantLoading } = useTenant();
   const [program, setProgram] = useState<Program | null>(null);
   const [passes, setPasses] = useState<Pass[]>([]);
   const [events, setEvents] = useState<LinkedEvent[]>([]);
@@ -211,7 +211,7 @@ export default function RegistroPrograma() {
   const selectedEvent = Array.isArray(selected?.events)
     ? selected.events[0]
     : selected?.events;
-  const brand = resolvePublicEventBrand(selectedEvent, tenant);
+  const brand = resolvePublicEventBrand(selectedEvent);
   const accent = brand.color;
 
   return (

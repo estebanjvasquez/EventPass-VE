@@ -11,7 +11,6 @@ import {
   Users,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { type Tenant } from "../lib/tenantCore";
 import {
   templateBlocks,
   type LandingBlock,
@@ -108,14 +107,12 @@ function EventLogo({
 
 export default function EventPublicLanding({
   event,
-  tenant,
 }: {
   event: LandingEvent;
-  tenant: Tenant;
 }) {
   const content = contentFor(event);
   const [slide, setSlide] = useState(0);
-  const brand = resolvePublicEventBrand(event, tenant);
+  const brand = resolvePublicEventBrand(event);
   const accent = brand.color;
   const organization = brand.name;
   const logoUrl = brand.logo_url;

@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { CheckCircle2, FileUp, Ticket, UploadCloud } from "lucide-react";
 import { supabase } from "../lib/supabase";
-import { useTenant } from "../lib/useTenant";
 import { resolvePublicEventBrand } from "../lib/eventBranding";
 
 type RegistrationByToken = {
@@ -27,7 +26,6 @@ const ACCEPTED = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
 
 export default function CargarComprobante() {
   const { token } = useParams();
-  const { tenant } = useTenant();
   const [reg, setReg] = useState<RegistrationByToken | null>(null);
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,7 +42,7 @@ export default function CargarComprobante() {
     config: Record<string, unknown> | null;
   } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const brand = resolvePublicEventBrand(eventIdentity, tenant);
+  const brand = resolvePublicEventBrand(eventIdentity);
   const color = brand.color;
   const name = brand.name;
   const logoUrl = brand.logo_url;

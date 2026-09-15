@@ -34,9 +34,9 @@ function AgendaScreen() {
       const [{ data, error: requestError }, { data: event }] =
         await Promise.all([
           supabase.rpc("get_public_forum_agenda", { p_event_id: eventId }),
-          supabase
-            .from("events")
-            .select("name,config,organizations(name,branding)")
+        supabase
+          .from("events")
+          .select("name,config")
             .eq("id", eventId)
             .maybeSingle(),
         ]);
@@ -47,10 +47,7 @@ function AgendaScreen() {
         return;
       }
       const next = (data ?? []) as AgendaItem[];
-      const organization = Array.isArray(event?.organizations)
-        ? event.organizations[0]
-        : event?.organizations;
-      const brand = resolvePublicEventBrand(event, organization ?? null);
+      const brand = resolvePublicEventBrand(event);
       setEventBranding({
         logo_url: brand.logo_url ?? undefined,
         color: brand.color,

@@ -359,7 +359,7 @@ export default function PlanoPublico() {
         setMessage(error?.message ?? "El plano aún no está publicado.");
         return;
       }
-      const [elementResult, assignmentResult, orgResult, routeResult] =
+      const [elementResult, assignmentResult, routeResult] =
         await Promise.all([
           supabase
             .from("venue_map_elements")
@@ -376,11 +376,6 @@ export default function PlanoPublico() {
               "element_id,company_name,logo_url,description,category,contact_email,contact_phone,social_links",
             ),
           supabase
-            .from("organizations")
-            .select("name,branding")
-            .eq("id", next.organization_id)
-            .maybeSingle(),
-          supabase
             .from("floor_plan_routes")
             .select("id,name,kind,geometry,active")
             .eq("map_id", next.id)
@@ -395,12 +390,7 @@ export default function PlanoPublico() {
         return;
       }
       setMap(next);
-      setBranding(
-        resolvePublicEventBrand(eventResult.data, {
-          name: orgResult.data?.name ?? null,
-          branding: (orgResult.data?.branding as Branding | null) ?? {},
-        }),
-      );
+      setBranding(resolvePublicEventBrand(eventResult.data));
       setRoutes((routeResult.data ?? []) as PublicRoute[]);
       const backgroundPath =
         typeof next.metadata?.background_path === "string" &&

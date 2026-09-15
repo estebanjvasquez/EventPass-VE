@@ -400,7 +400,7 @@ function TenantLanding({ tenant }: { tenant: Tenant }) {
       active = false;
     };
   }, [tenant.id]);
-  if (!loading && events.length === 1) return <EventPublicLanding event={events[0] as LandingEvent} tenant={tenant} />;
+  if (!loading && events.length === 1) return <EventPublicLanding event={events[0] as LandingEvent} />;
   return (
     <div className="min-h-[100dvh] bg-zinc-50">
       <header className="border-b border-zinc-200 bg-white">

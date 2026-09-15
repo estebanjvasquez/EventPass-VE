@@ -254,7 +254,7 @@ export default function RegistroEvento() {
     if (registration) await sendRegistrationEmail(registration);
   }
 
-  const brand = resolvePublicEventBrand(event, tenant);
+  const brand = resolvePublicEventBrand(event);
   const color = brand.color;
   const name = brand.name;
   const logoUrl = brand.logo_url;

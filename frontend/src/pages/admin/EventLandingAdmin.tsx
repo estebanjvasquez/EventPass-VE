@@ -185,10 +185,15 @@ export default function EventLandingAdmin() {
   ) {
     if (!file || !event) return;
     if (
-      !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
+      ![
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        ...(target === "logo" ? ["image/svg+xml"] : []),
+      ].includes(file.type) ||
       file.size > 8 * 1024 * 1024
     ) {
-      setMessage("Usa JPG, PNG o WebP de máximo 8 MB.");
+      setMessage(target === "logo" ? "Usa SVG, JPG, PNG o WebP de máximo 8 MB." : "Usa JPG, PNG o WebP de máximo 8 MB.");
       return;
     }
     setUploading(true);
@@ -510,7 +515,7 @@ export default function EventLandingAdmin() {
                 <input
                   type="file"
                   className="sr-only"
-                  accept="image/jpeg,image/png,image/webp"
+                  accept="image/svg+xml,image/jpeg,image/png,image/webp"
                   disabled={uploading}
                   onChange={(e) =>
                     void uploadImage(e.target.files?.[0], "logo")
