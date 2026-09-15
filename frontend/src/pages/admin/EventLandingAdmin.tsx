@@ -79,6 +79,7 @@ export default function EventLandingAdmin() {
   const [message, setMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [logoState, setLogoState] = useState<"idle" | "verifying" | "ready" | "failed">("idle");
   const load = useCallback(async () => {
     if (!eventId) return;
     const { data, error } = await supabase
@@ -103,6 +104,7 @@ export default function EventLandingAdmin() {
       template,
       blocks: source.blocks?.length ? source.blocks : cloneBlocks(template),
     });
+    setLogoState(source.logo_url ? "ready" : "idle");
     const { data: org } = await supabase
       .from("organizations")
       .select("slug,custom_hostname")
@@ -184,13 +186,10 @@ export default function EventLandingAdmin() {
     target: "hero" | "gallery" | "logo",
   ) {
     if (!file || !event) return;
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    const allowed = ["image/jpeg", "image/png", "image/webp"].includes(file.type) || (target === "logo" && (file.type === "image/svg+xml" || extension === "svg"));
     if (
-      ![
-        "image/jpeg",
-        "image/png",
-        "image/webp",
-        ...(target === "logo" ? ["image/svg+xml"] : []),
-      ].includes(file.type) ||
+      !allowed ||
       file.size > 8 * 1024 * 1024
     ) {
       setMessage(target === "logo" ? "Usa SVG, JPG, PNG o WebP de máximo 8 MB." : "Usa JPG, PNG o WebP de máximo 8 MB.");
@@ -210,6 +209,21 @@ export default function EventLandingAdmin() {
     }
     const url = supabase.storage.from("event-landing-assets").getPublicUrl(path)
       .data.publicUrl;
+    if (target === "logo") {
+      setLogoState("verifying");
+      const verified = await new Promise<boolean>((resolve) => {
+        const image = new Image();
+        image.onload = () => resolve(true);
+        image.onerror = () => resolve(false);
+        image.src = url;
+      });
+      if (!verified) {
+        setLogoState("failed");
+        setMessage("El archivo se subió, pero no pudo verificarse como logo. Prueba un SVG simple, PNG o WebP.");
+        return;
+      }
+      setLogoState("ready");
+    }
     setDraft((current) =>
       target === "logo"
         ? { ...current, logo_url: url }
@@ -227,9 +241,7 @@ export default function EventLandingAdmin() {
               ),
             },
     );
-    setMessage(
-      "Imagen cargada al borrador. Guarda o publica para confirmar el cambio.",
-    );
+    setMessage(target === "logo" ? "Logo verificado y cargado al borrador. Pulsa Publicar para mostrarlo al público." : "Imagen cargada al borrador. Guarda o publica para confirmar el cambio.");
   }
   const subdomain = domain?.slug
     ? `https://${domain.slug}.eventosfacil.net`
@@ -492,12 +504,8 @@ export default function EventLandingAdmin() {
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <label className="text-sm font-semibold">
                 Color principal
-                <input
-                  type="color"
-                  value={draft.primary_color || "#00875a"}
-                  onChange={(e) => set("primary_color", e.target.value)}
-                  className="mt-2 block h-10 w-full cursor-pointer rounded-lg border p-1"
-                />
+                <span className="mt-2 flex items-center gap-2"><input type="color" value={draft.primary_color || "#00875a"} onChange={(e) => set("primary_color", e.target.value)} className="h-10 w-14 cursor-pointer rounded-lg border p-1" /><input value={draft.primary_color || "#00875a"} onChange={(e) => set("primary_color", e.target.value)} className="h-10 min-w-0 flex-1 rounded-lg border border-zinc-300 px-3 font-mono text-sm" aria-label="Código hexadecimal del color principal" /></span>
+                <span className="mt-2 block rounded-md px-3 py-2 text-xs font-medium text-white" style={{ backgroundColor: draft.primary_color || "#00875a" }}>Color público activo: {draft.primary_color || "#00875a"}</span>
               </label>
               <label className="text-sm font-semibold">
                 Ubicación
@@ -508,7 +516,7 @@ export default function EventLandingAdmin() {
                 />
               </label>
             </div>
-            <div className="mt-4 flex flex-wrap items-center gap-3">
+            <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
               <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold">
                 <ImagePlus className="h-4 w-4" />
                 {uploading ? "Cargando…" : "Subir logo"}
@@ -522,13 +530,7 @@ export default function EventLandingAdmin() {
                   }
                 />
               </label>
-              {draft.logo_url && (
-                <img
-                  src={draft.logo_url}
-                  alt="Logo del evento"
-                  className="h-10 max-w-32 object-contain"
-                />
-              )}
+              {draft.logo_url ? <div className="flex min-w-0 items-center gap-3"><img src={draft.logo_url} alt="Vista previa del logo del evento" onLoad={() => setLogoState("ready")} onError={() => setLogoState("failed")} className="h-12 max-w-44 rounded bg-white p-1 object-contain" /><div className="min-w-0 text-xs"><p className={logoState === "failed" ? "font-bold text-red-700" : "font-bold text-emerald-700"}>{logoState === "verifying" ? "Verificando logo…" : logoState === "failed" ? "No se pudo mostrar el logo" : "Logo cargado y visible en el borrador"}</p><p className="mt-1 break-all text-zinc-500">{draft.logo_url}</p></div></div> : <p className="text-sm text-zinc-600">Aún no hay logo propio. No se usará el logo de la organización.</p>}
             </div>
           </section>
           {imageList("hero_images", "Imágenes del hero", "hero")}
