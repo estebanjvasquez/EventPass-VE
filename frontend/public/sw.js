@@ -1,4 +1,4 @@
-const CACHE = 'eventpass-shell-v3'
+const CACHE = 'eventpass-shell-v4'
 const SHELL = ['/', '/admin', '/favicon.svg']
 
 self.addEventListener('install', (event) => {
@@ -21,11 +21,22 @@ self.addEventListener('fetch', (event) => {
 
   const isAppCode = url.pathname.startsWith('/assets/') || request.destination === 'script' || request.destination === 'style' || request.mode === 'navigate'
   if (!isAppCode) return
+  const validCode = (response) => {
+    const type = response.headers.get('content-type') || ''
+    return response.ok && (request.mode === 'navigate' || (request.destination === 'style' ? type.includes('text/css') : request.destination === 'script' ? /javascript|ecmascript|wasm/.test(type) : !type.includes('text/html')))
+  }
   event.respondWith(
-    fetch(request).then((response) => {
+    fetch(request).then(async (response) => {
+      // A stale SPA fallback must never be cached or delivered as JavaScript.
+      if (!validCode(response) && request.mode !== 'navigate') {
+        const freshUrl = new URL(request.url)
+        freshUrl.searchParams.set('asset_retry', CACHE)
+        response = await fetch(freshUrl, { cache: 'reload' })
+      }
+      if (!validCode(response)) throw new Error('Invalid app asset response')
       const copy = response.clone()
       void caches.open(CACHE).then((cache) => cache.put(request, copy))
       return response
-    }).catch(() => caches.match(request).then((cached) => cached || (request.mode === 'navigate' ? caches.match('/') : Response.error())))
+    }).catch(() => caches.match(request).then((cached) => cached && validCode(cached) ? cached : (request.mode === 'navigate' ? caches.match('/') : Response.error())))
   )
 })
