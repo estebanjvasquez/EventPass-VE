@@ -130,8 +130,12 @@ function EventLogo({
 
 export default function EventPublicLanding({
   event,
+  registrationUrl,
+  linkedEvents = [],
 }: {
   event: LandingEvent;
+  registrationUrl?: string;
+  linkedEvents?: { id: string; name: string }[];
 }) {
   const content = contentFor(event);
   const [slide, setSlide] = useState(0);
@@ -175,7 +179,7 @@ export default function EventPublicLanding({
     "--event-text": palette.text,
     "--event-muted": palette.muted,
   } as CSSProperties;
-  const registration = `/e/${event.id}`;
+  const registration = registrationUrl ?? `/e/${event.id}`;
   useEffect(() => {
     if (!content.show_sponsors) return;
     let active = true;
@@ -513,6 +517,7 @@ export default function EventPublicLanding({
           </div>
         </section>
         {content.show_sponsors && sponsors.length > 0 && <section className="overflow-hidden py-14 sm:py-18" style={{ backgroundColor: palette.surface }}><div className="mx-auto max-w-7xl px-4 sm:px-7"><h2 className="text-2xl font-semibold" style={{ color: palette.text }}>{content.sponsors_title || "Patrocinantes"}</h2><div className={content.sponsors_mode === "carousel" ? "mt-7 flex gap-5 overflow-x-auto pb-3" : "mt-7 flex flex-wrap gap-5"}>{sponsors.map((sponsor) => <div key={sponsor.id} className="flex h-24 min-w-44 items-center justify-center rounded-xl border border-black/10 bg-white p-4"><img src={sponsor.logo_url || ""} alt={sponsor.name} className="max-h-full max-w-full object-contain" onError={(e) => { e.currentTarget.style.display = "none"; }} />{!sponsor.logo_url && <span className="text-sm font-semibold text-zinc-700">{sponsor.name}</span>}</div>)}</div></div></section>}
+        {linkedEvents.length > 0 && <section className="mx-auto max-w-7xl px-4 py-10 sm:px-7"><h2 className="text-2xl font-semibold">Eventos del programa</h2><div className="mt-5 grid gap-4 sm:grid-cols-2">{linkedEvents.map(linked => <Link key={linked.id} to={`/e/${linked.id}`} className="rounded-xl border p-5 font-semibold" style={{ backgroundColor: palette.surface, color: cardTextColor }}>{linked.name}<ArrowRight className="mt-3 h-4 w-4" /></Link>)}</div></section>}
         {content.blocks.map(renderBlock)}
       </main>
       <footer className="border-t border-white/10 px-4 py-9 text-sm sm:px-7" style={{ backgroundColor: palette.page, color: palette.muted }}>

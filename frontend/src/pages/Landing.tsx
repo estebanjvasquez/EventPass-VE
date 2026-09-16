@@ -492,13 +492,36 @@ function TenantLanding({ tenant }: { tenant: Tenant }) {
 export default function Landing() {
   const { tenant, loading } = useTenant();
   const [siteEvent, setSiteEvent] = useState<LandingEvent | null>(null);
-  const [program, setProgram] = useState<{ name: string; description: string | null; events: PublicEvent[] } | null>(null);
+  const [program, setProgram] = useState<{ id: string; events: LandingEvent[] } | null>(null);
   const [siteChecked, setSiteChecked] = useState(false);
-  useEffect(() => { let active = true; void resolvePublicSite().then(async (site) => { if (site?.event_id) { const { data } = await supabase.from('events').select('id,name,description,event_type,start_date,config').eq('id', site.event_id).eq('status','published').maybeSingle(); if (active && data) setSiteEvent({ ...(data as LandingEvent), config: { ...((data as LandingEvent).config ?? {}), public_landing: site.landing_config } }); } if (site?.program_id) { const [{ data: p }, { data: links }] = await Promise.all([supabase.from('event_programs').select('name,description').eq('id',site.program_id).maybeSingle(), supabase.from('program_events').select('event:events(id,name,description,event_type,start_date,config)').eq('program_id',site.program_id)]); if (active && p) setProgram({ ...p, events: (links ?? []).map((x: any) => x.event).filter(Boolean) }); } }).finally(() => { if (active) setSiteChecked(true); }); return () => { active = false; }; }, []);
-  if (loading) return <div className="min-h-[100dvh] bg-zinc-950" />;
-  if (!siteChecked) return <div className="min-h-[100dvh] bg-zinc-950" />;
-  if (siteEvent) return <EventPublicLanding event={siteEvent} />;
-  if (program) return <div className="min-h-[100dvh] bg-zinc-950 p-6 text-white"><main className="mx-auto max-w-6xl"><h1 className="text-5xl font-bold">{program.name}</h1><p className="mt-4 text-zinc-300">{program.description}</p><div className="mt-10 grid gap-4 sm:grid-cols-2">{program.events.map(event => <Link key={event.id} to={`/e/${event.id}`} className="rounded-2xl bg-white p-6 text-zinc-950"><h2 className="text-xl font-bold">{event.name}</h2><p className="mt-2 text-sm text-zinc-600">{event.description}</p></Link>)}</div></main></div>;
+  useEffect(() => {
+    let active = true;
+    void resolvePublicSite().then(async (site) => {
+      if (!site) return;
+      if (site.event_id) {
+        const { data } = await supabase.from('events').select('id,name,description,event_type,start_date,config').eq('id', site.event_id).eq('status', 'published').maybeSingle();
+        if (active && data) setSiteEvent({ ...(data as LandingEvent), config: { ...((data as LandingEvent).config ?? {}), public_landing: site.landing_config } });
+      }
+      if (site.program_id) {
+        const [{ data: p }, { data: links }] = await Promise.all([
+          supabase.from('event_programs').select('name,description,registration_config').eq('id', site.program_id).eq('status', 'published').maybeSingle(),
+          supabase.from('program_events').select('event:events(id,name,description,event_type,start_date,config,status)').eq('program_id', site.program_id),
+        ]);
+        const events = (links ?? []).flatMap(link => link.event ? [link.event] : []) as unknown as (LandingEvent & { status: string })[];
+        const published = events.filter(event => event.status === 'published');
+        const configured = p?.registration_config as Record<string, unknown> | undefined;
+        const primaryId = configured?.web_event_id ?? site.landing_config.primary_event_id;
+        const primary = published.find(event => event.id === primaryId) ?? published[0];
+        if (active && p && primary) {
+          setSiteEvent({ ...primary, name: p.name, description: p.description, config: { ...(primary.config ?? {}), public_landing: site.landing_config } });
+          setProgram({ id: site.program_id, events: published });
+        }
+      }
+    }).catch(() => { /* Allow the tenant landing to load if site lookup fails. */ }).finally(() => { if (active) setSiteChecked(true); });
+    return () => { active = false; };
+  }, []);
+  if (loading || !siteChecked) return <div className="min-h-[100dvh] bg-zinc-950" />;
+  if (siteEvent) return <EventPublicLanding event={siteEvent} registrationUrl={program ? `/p/${program.id}/registro` : undefined} linkedEvents={program?.events} />;
   if (tenant) return <TenantLanding tenant={tenant} />;
   return (
     <div className="min-h-[100dvh] bg-zinc-950">

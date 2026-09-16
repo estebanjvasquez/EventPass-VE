@@ -31,6 +31,7 @@ const EventLaunchChecklist = lazy(() => import('./pages/admin/EventLaunchCheckli
 const PublicLeadForm = lazy(() => import('./pages/PublicLeadForm'))
 const ProgramasAdmin = lazy(() => import('./pages/admin/ProgramasAdmin'))
 const ProgramaAccesosAdmin = lazy(() => import('./pages/admin/ProgramaAccesosAdmin'))
+const ProgramaConfiguracionAdmin = lazy(() => import('./pages/admin/ProgramaConfiguracionAdmin'))
 const AgendaAdmin = lazy(() => import('./pages/admin/AgendaAdmin'))
 const PuntosAccesoAdmin = lazy(() => import('./pages/admin/PuntosAccesoAdmin'))
 const EquipoOperativoAdmin = lazy(() => import('./pages/admin/EquipoOperativoAdmin'))
@@ -115,6 +116,7 @@ function App() {
         />
         <Route path="/admin/programas" element={<RequireAuth><ProgramasAdmin /></RequireAuth>} />
         <Route path="/admin/programas/:programId/accesos" element={<RequireAuth><ProgramaAccesosAdmin /></RequireAuth>} />
+        <Route path="/admin/programas/:programId/configuracion" element={<RequireAuth><ProgramaConfiguracionAdmin /></RequireAuth>} />
         <Route path="/admin/agenda/:eventId" element={<RequireAuth><AgendaAdmin /></RequireAuth>} />
         <Route path="/admin/programs" element={<Navigate to="/admin/programas" replace />} />
         <Route path="/admin/stands/:eventId" element={<RequireAuth><StandsAdmin /></RequireAuth>} />

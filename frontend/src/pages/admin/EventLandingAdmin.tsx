@@ -12,7 +12,7 @@ import {
   Send,
   Trash2,
 } from "lucide-react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   templateBlocks,
   type LandingBlock,
@@ -75,8 +75,8 @@ type Event = {
   organization_id: string;
   config: Record<string, unknown> | null;
 };
-type Domain = { slug: string; custom_hostname: string | null };
-type PublicSite = { id: string; slug: string | null; status: "draft" | "active" | "disabled"; landing_config: LandingConfig | null };
+type PublicSite = { id: string; slug: string | null; custom_hostname: string | null; status: "draft" | "active" | "disabled"; landing_config: (LandingConfig & { primary_event_id?: string; draft?: LandingConfig }) | null };
+type ProgramContext = { id: string; name: string; webEventId: string };
 const cloneBlocks = (template: LandingTemplate) =>
   templateBlocks[template].map((block) => ({ ...block }));
 const input =
@@ -96,8 +96,11 @@ const validHex = (value: string | undefined, fallback: string) =>
 
 export default function EventLandingAdmin() {
   const { eventId } = useParams();
+  const [searchParams] = useSearchParams();
+  const requestedProgramId = searchParams.get("programId");
+  const [programContext, setProgramContext] = useState<ProgramContext | null>(null);
+  const [siteContextReady, setSiteContextReady] = useState(false);
   const [event, setEvent] = useState<Event | null>(null);
-  const [domain, setDomain] = useState<Domain | null>(null);
   const [publicSite, setPublicSite] = useState<PublicSite | null>(null);
   const [siteSlug, setSiteSlug] = useState("");
   const [provisioning, setProvisioning] = useState(false);
@@ -118,6 +121,22 @@ export default function EventLandingAdmin() {
       return;
     }
     const loaded = data as Event;
+    const { data: programLinks, error: linksError } = await supabase.from("program_events")
+      .select("program_id,event_programs(id,name,registration_config)").eq("event_id", loaded.id);
+    if (linksError) { setMessage(linksError.message); return; }
+    const links = (programLinks ?? []) as unknown as { program_id: string; event_programs: { id: string; name: string; registration_config: Record<string, unknown> } | null }[];
+    const linkedProgram = requestedProgramId ? links.find(link => link.program_id === requestedProgramId)?.event_programs : links.length === 1 ? links[0].event_programs : null;
+    if (requestedProgramId && !linkedProgram) { setMessage("Este evento no pertenece al programa seleccionado."); return; }
+    let context: ProgramContext | null = null;
+    if (linkedProgram) {
+      const { data: members, error: membersError } = await supabase.from("program_events").select("event_id").eq("program_id", linkedProgram.id).order("event_id");
+      if (membersError) { setMessage(membersError.message); return; }
+      const configured = linkedProgram.registration_config?.web_event_id;
+      const webEventId = typeof configured === "string" && members?.some(member => member.event_id === configured) ? configured : members?.[0]?.event_id;
+      if (!webEventId) { setMessage("El programa no tiene eventos relacionados."); return; }
+      context = { id: linkedProgram.id, name: linkedProgram.name, webEventId };
+    }
+    setProgramContext(context);
     const config = loaded.config ?? {};
     const source = (config.public_landing_draft ??
       config.public_landing ??
@@ -131,20 +150,25 @@ export default function EventLandingAdmin() {
       blocks: source.blocks?.length ? source.blocks : cloneBlocks(template),
     });
     setLogoState(source.logo_url ? "ready" : "idle");
-    const { data: site } = await supabase
+    let { data: site, error: siteError } = await supabase
       .from("public_sites")
-      .select("id,slug,status,landing_config")
-      .eq("event_id", loaded.id)
+      .select("id,slug,custom_hostname,status,landing_config")
+      .eq(context ? "program_id" : "event_id", context?.id ?? loaded.id)
       .maybeSingle();
+    if (context && !site && !siteError) {
+      const existing = await supabase.from("public_sites").select("id,slug,custom_hostname,status,landing_config").eq("event_id", context.webEventId).maybeSingle();
+      site = existing.data; siteError = existing.error;
+    }
+    if (siteError) { setMessage(siteError.message); return; }
     setPublicSite(site as PublicSite | null);
-    setSiteSlug((site as PublicSite | null)?.slug ?? slugify(loaded.name));
-    const { data: org } = await supabase
-      .from("organizations")
-      .select("slug,custom_hostname")
-      .eq("id", loaded.organization_id)
-      .maybeSingle();
-    setDomain(org as Domain | null);
-  }, [eventId]);
+    setSiteSlug((site as PublicSite | null)?.slug ?? slugify(context?.name ?? loaded.name));
+    if (context && site?.landing_config) {
+      const saved = site.landing_config as PublicSite["landing_config"];
+      setDraft({ ...initial, ...(saved?.draft ?? saved), blocks: saved?.draft?.blocks ?? saved?.blocks ?? cloneBlocks("summit") });
+    }
+    setSiteContextReady(links.length <= 1 || !!requestedProgramId);
+    if (links.length > 1 && !requestedProgramId) setMessage("El evento pertenece a varios programas. Abre la web desde Configuración y web del programa correspondiente.");
+  }, [eventId, requestedProgramId]);
   useEffect(() => {
     void load();
   }, [load]);
@@ -191,7 +215,7 @@ export default function EventLandingAdmin() {
     }));
   }
   async function save(mode: "draft" | "publish") {
-    if (!event) return;
+    if (!event || !canManageSite) return;
     setSaving(true);
     setMessage(null);
     const current = event.config ?? {};
@@ -207,15 +231,17 @@ export default function EventLandingAdmin() {
     if (error) setMessage(error.message);
     else {
       if (publicSite) {
-        const { error: siteError } = await supabase
+        const landingConfig = mode === "publish" ? { ...draft, primary_event_id: programContext?.webEventId } : { ...publicSite.landing_config, draft };
+        const { data: savedSite, error: siteError } = await supabase
           .from("public_sites")
-          .update({ landing_config: draft })
-          .eq("id", publicSite.id);
+          .update({ landing_config: landingConfig })
+          .eq("id", publicSite.id).select("id").single();
         if (siteError) {
           setMessage(siteError.message);
           return;
         }
-        setPublicSite({ ...publicSite, landing_config: draft });
+        if (!savedSite) { setMessage("No se pudo guardar el sitio."); return; }
+        setPublicSite({ ...publicSite, landing_config: landingConfig });
       }
       setEvent({ ...event, config });
       setMessage(
@@ -287,18 +313,19 @@ export default function EventLandingAdmin() {
     );
     setMessage(target === "logo" ? "Logo verificado y cargado al borrador. Pulsa Publicar para mostrarlo al público." : "Imagen cargada al borrador. Guarda o publica para confirmar el cambio.");
   }
-  const subdomain = domain?.slug
-    ? `https://${domain.slug}.eventosfacil.net`
+  const canManageSite = siteContextReady && (!programContext || programContext.webEventId === eventId);
+  const subdomain = publicSite?.slug
+    ? `https://${publicSite.slug}.eventosfacil.net`
     : null;
-  const customDomain = domain?.custom_hostname
-    ? `https://${domain.custom_hostname}`
+  const customDomain = publicSite?.custom_hostname
+    ? `https://${publicSite.custom_hostname}`
     : null;
   async function copyUrl(url: string) {
     await navigator.clipboard.writeText(url);
     setMessage("Enlace copiado.");
   }
   async function createOrUpdatePublicSite() {
-    if (!event) return;
+    if (!event || !canManageSite) return;
     const slug = slugify(siteSlug);
     if (!slug) {
       setMessage("Indica un subdominio válido para el sitio del evento.");
@@ -306,10 +333,11 @@ export default function EventLandingAdmin() {
     }
     setProvisioning(true);
     setMessage(null);
-    const values = { organization_id: event.organization_id, event_id: event.id, scope: "event" as const, slug, landing_config: draft };
+    const landing_config = { ...((event.config?.public_landing as LandingConfig | undefined) ?? {}), ...(publicSite?.landing_config ?? {}), primary_event_id: programContext?.webEventId ?? event.id };
+    const values = { organization_id: event.organization_id, event_id: programContext ? null : event.id, program_id: programContext?.id ?? null, scope: programContext ? "program" : "event", slug, landing_config };
     const result = publicSite
-      ? await supabase.from("public_sites").update({ slug, landing_config: draft }).eq("id", publicSite.id).select("id,slug,status,landing_config").single()
-      : await supabase.from("public_sites").insert(values).select("id,slug,status,landing_config").single();
+      ? await supabase.from("public_sites").update(values).eq("id", publicSite.id).select("id,slug,custom_hostname,status,landing_config").single()
+      : await supabase.from("public_sites").insert(values).select("id,slug,custom_hostname,status,landing_config").single();
     if (result.error || !result.data) {
       setProvisioning(false);
       setMessage(result.error?.message ?? "No se pudo guardar el sitio público.");
@@ -317,6 +345,7 @@ export default function EventLandingAdmin() {
     }
     const site = result.data as PublicSite;
     setPublicSite(site);
+    setSiteSlug(site.slug ?? slug);
     if (!API_URL) {
       setProvisioning(false);
       setMessage("Sitio guardado. Configura VITE_API_URL para activar su dominio.");
@@ -416,7 +445,7 @@ export default function EventLandingAdmin() {
           <button
             type="button"
             onClick={() => void save("draft")}
-            disabled={saving}
+            disabled={saving || !canManageSite}
             className="inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-bold disabled:opacity-50"
           >
             <Save className="h-4 w-4" />
@@ -425,7 +454,7 @@ export default function EventLandingAdmin() {
           <button
             type="button"
             onClick={() => void save("publish")}
-            disabled={saving}
+            disabled={saving || !canManageSite}
             className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"
           >
             <Send className="h-4 w-4" />
@@ -438,6 +467,7 @@ export default function EventLandingAdmin() {
           {message}
         </p>
       )}
+      {programContext && <p className="mt-5 rounded-xl border bg-zinc-50 p-4 text-sm">Web compartida de <strong>{programContext.name}</strong>. <Link className="font-semibold text-emerald-700" to={`/admin/programas/${programContext.id}/configuracion`}>Configuración del programa</Link>{!canManageSite && <> · Esta web se administra desde un único evento. <Link className="font-semibold text-emerald-700" to={`/admin/eventos/${programContext.webEventId}/landing?programId=${programContext.id}`}>Abrir constructor compartido</Link></>}</p>}
       <section className="mt-6 rounded-2xl border bg-white p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -446,20 +476,20 @@ export default function EventLandingAdmin() {
               Direcciones públicas
             </h2>
             <p className="mt-1 text-sm text-zinc-600">
-              La versión publicada aparece en estas direcciones.
+              Dirección propia {programContext ? "del programa" : "del evento"}. La URL se muestra al guardar el sitio.
             </p>
           </div>
           <Link
             to="/admin/eventos"
             className="text-sm font-semibold text-emerald-700"
           >
-            Configurar dominio de organización
+            Ver dominios de organización
           </Link>
         </div>
         <div className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4">
           <div className="flex flex-wrap items-end gap-3">
             <label className="min-w-56 flex-1 text-sm font-semibold text-zinc-900">
-              Sitio propio del evento
+              {programContext ? "Sitio compartido del programa" : "Sitio propio del evento"}
               <span className="mt-1 flex items-center rounded-lg border border-zinc-300 bg-white px-3">
                 <input
                   value={siteSlug}
@@ -473,7 +503,7 @@ export default function EventLandingAdmin() {
             <button
               type="button"
               onClick={() => void createOrUpdatePublicSite()}
-              disabled={provisioning || !event}
+              disabled={provisioning || !event || !canManageSite}
               className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"
             >
               <Globe2 className="h-4 w-4" />
@@ -481,13 +511,13 @@ export default function EventLandingAdmin() {
             </button>
           </div>
           <p className="mt-2 text-xs leading-5 text-zinc-600">
-            Crea una portada independiente para este evento, sin sustituir el sitio general de la organización.
+            {programContext ? "Una única portada y dirección para los eventos relacionados del programa." : "Portada y dirección propias de este evento."}
             {publicSite?.status === "active" ? " El dominio está activo." : " Se activa al guardar y puede tardar unos minutos en validar DNS."}
           </p>
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {[
-            { label: "Subdominio EventPass", url: subdomain },
+            { label: programContext ? "Subdominio del programa" : "Subdominio del evento", url: subdomain },
             { label: "Dominio propio", url: customDomain },
           ].map(({ label, url }) => (
             <article
@@ -798,7 +828,7 @@ export default function EventLandingAdmin() {
               <button
                 type="button"
                 onClick={() => void save("draft")}
-                disabled={saving}
+                disabled={saving || !canManageSite}
                 className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/25 px-4 py-2.5 text-sm font-bold disabled:opacity-50"
               >
                 <Save className="h-4 w-4" />
@@ -807,7 +837,7 @@ export default function EventLandingAdmin() {
               <button
                 type="button"
                 onClick={() => void save("publish")}
-                disabled={saving}
+                disabled={saving || !canManageSite}
                 className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-400 px-4 py-2.5 text-sm font-bold text-zinc-950 disabled:opacity-50"
               >
                 <Send className="h-4 w-4" />
