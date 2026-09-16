@@ -131,6 +131,14 @@ export function ProgramaAgendaView({ agenda }: { agenda: PublicAgenda }) {
               text.toLowerCase().includes(search.toLowerCase());
             const sessions = (event?.sessions ?? []).filter(
               (s) =>
+                config.presentation === "detailed" &&
+                b.mode !== "summary" &&
+                (!b.starts_at ||
+                  !b.ends_at ||
+                  agendaDay(b.starts_at, tz) !== agendaDay(b.ends_at, tz) ||
+                  (s.starts_at !== null &&
+                    Date.parse(s.starts_at) >= Date.parse(b.starts_at) &&
+                    Date.parse(s.starts_at) < Date.parse(b.ends_at))) &&
                 (!day || agendaDay(s.starts_at, tz) === day) &&
                 (!location ||
                   s.stage_name === location ||
@@ -165,6 +173,15 @@ export function ProgramaAgendaView({ agenda }: { agenda: PublicAgenda }) {
                   {b.ends_at && ` — ${agendaDate(b.ends_at, tz)}`}
                   {b.location && ` · ${b.location}`}
                 </p>
+                {event?.event_type === "exhibition" &&
+                  b.starts_at &&
+                  b.ends_at &&
+                  agendaDay(b.starts_at, tz) !== agendaDay(b.ends_at, tz) && (
+                    <p className="mt-2 text-xs text-zinc-500">
+                      Duración general de la exposición; no implica apertura
+                      continua. Consulta los horarios diarios publicados.
+                    </p>
+                  )}
                 {b.mode !== "sessions" && (
                   <p className="mt-3 whitespace-pre-line text-zinc-600">
                     {b.description}
@@ -239,6 +256,8 @@ export default function ProgramaAgenda() {
   const [error, setError] = useState("");
   useEffect(() => {
     let alive = true;
+    setAgenda(null);
+    setError("");
     void supabase
       .rpc("get_public_program_agenda", {
         p_program_id: programId ?? null,

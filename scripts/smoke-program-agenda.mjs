@@ -58,6 +58,11 @@ const own = await rpc({
 });
 assert.equal(own.events.length, 1);
 assert.equal(own.name, "Expo Energia 2026");
+const pending = await rpc({
+  p_program_id: "5bef4079-0345-4468-aad7-555483345cc3",
+});
+assert.equal(pending.config, null);
+assert.deepEqual(pending.events, []);
 assert.equal(
   await rpc({ p_program_id: "00000000-0000-0000-0000-000000000000" }),
   null,
