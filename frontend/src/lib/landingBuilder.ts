@@ -42,6 +42,10 @@ export type LandingConfig = {
   brochure_label?: string;
   brochure_url?: string;
   show_agenda?: boolean;
+  agenda_scope?: 'program' | 'event';
+  agenda_event_id?: string;
+  agenda_program_id?: string;
+  agenda_title?: string;
   show_exhibition?: boolean;
   show_interest?: boolean;
   blocks?: LandingBlock[];

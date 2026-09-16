@@ -99,6 +99,7 @@ export default function EventLandingAdmin() {
   const [searchParams] = useSearchParams();
   const requestedProgramId = searchParams.get("programId");
   const [programContext, setProgramContext] = useState<ProgramContext | null>(null);
+  const [agendaEvents, setAgendaEvents] = useState<{id:string;name:string}[]>([]);
   const [siteContextReady, setSiteContextReady] = useState(false);
   const [event, setEvent] = useState<Event | null>(null);
   const [publicSite, setPublicSite] = useState<PublicSite | null>(null);
@@ -129,13 +130,15 @@ export default function EventLandingAdmin() {
     if (requestedProgramId && !linkedProgram) { setMessage("Este evento no pertenece al programa seleccionado."); return; }
     let context: ProgramContext | null = null;
     if (linkedProgram) {
-      const { data: members, error: membersError } = await supabase.from("program_events").select("event_id").eq("program_id", linkedProgram.id).order("event_id");
+      const { data: members, error: membersError } = await supabase.from("program_events").select("event_id,event:events(id,name)").eq("program_id", linkedProgram.id).order("event_id");
       if (membersError) { setMessage(membersError.message); return; }
       const configured = linkedProgram.registration_config?.web_event_id;
       const webEventId = typeof configured === "string" && members?.some(member => member.event_id === configured) ? configured : members?.[0]?.event_id;
       if (!webEventId) { setMessage("El programa no tiene eventos relacionados."); return; }
       context = { id: linkedProgram.id, name: linkedProgram.name, webEventId };
+      setAgendaEvents((members ?? []).flatMap(m => m.event ? [m.event] : []) as unknown as {id:string;name:string}[]);
     }
+    if (!context) setAgendaEvents([{id:loaded.id,name:loaded.name}]);
     setProgramContext(context);
     const config = loaded.config ?? {};
     const source = (config.public_landing_draft ??
@@ -216,13 +219,14 @@ export default function EventLandingAdmin() {
   }
   async function save(mode: "draft" | "publish") {
     if (!event || !canManageSite) return;
+    const resolvedDraft = { ...draft, agenda_scope: draft.agenda_scope ?? (programContext ? 'program' : 'event'), agenda_program_id: programContext?.id ?? draft.agenda_program_id } as LandingConfig;
     setSaving(true);
     setMessage(null);
     const current = event.config ?? {};
     const config =
       mode === "publish"
-        ? { ...current, public_landing: draft, public_landing_draft: draft }
-        : { ...current, public_landing_draft: draft };
+        ? { ...current, public_landing: resolvedDraft, public_landing_draft: resolvedDraft }
+        : { ...current, public_landing_draft: resolvedDraft };
     const { error } = await supabase
       .from("events")
       .update({ config })
@@ -231,7 +235,7 @@ export default function EventLandingAdmin() {
     if (error) setMessage(error.message);
     else {
       if (publicSite) {
-        const landingConfig = mode === "publish" ? { ...draft, primary_event_id: programContext?.webEventId } : { ...publicSite.landing_config, draft };
+        const landingConfig = mode === "publish" ? { ...resolvedDraft, primary_event_id: programContext?.webEventId } : { ...publicSite.landing_config, draft: resolvedDraft };
         const { data: savedSite, error: siteError } = await supabase
           .from("public_sites")
           .update({ landing_config: landingConfig })
@@ -854,8 +858,12 @@ export default function EventLandingAdmin() {
                   onChange={(e) => set("show_agenda", e.target.checked)}
                   type="checkbox"
                 />{" "}
-                Mostrar agenda
+                Mostrar programa y agenda
               </label>
+              <label>Alcance de la agenda<select className="mt-1 w-full rounded-lg border p-2" value={draft.agenda_scope ?? (programContext ? 'program' : 'event')} onChange={e => { set('agenda_scope', e.target.value as 'program' | 'event'); if (programContext) set('agenda_program_id', programContext.id); }}><option value="event">Agenda de una actividad</option>{programContext && <option value="program">Programa general completo</option>}</select></label>
+              {(draft.agenda_scope === 'event' || (!draft.agenda_scope && !programContext)) && <label>Actividad cuya agenda se muestra<select className="mt-1 w-full rounded-lg border p-2" value={draft.agenda_event_id ?? eventId ?? ''} onChange={e => set('agenda_event_id', e.target.value)}>{agendaEvents.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}</select></label>}
+              <label>Título del enlace de agenda<input className="mt-1 w-full rounded-lg border p-2" value={draft.agenda_title ?? ''} placeholder={programContext ? 'Programa general' : 'Agenda de actividades'} onChange={e => set('agenda_title', e.target.value)} /></label>
+              {programContext && <Link className="text-emerald-700" to={`/admin/programas/${programContext.id}/agenda`}>Configurar actividades, horarios y publicación del programa</Link>}
               <label>
                 <input
                   checked={draft.show_exhibition !== false}

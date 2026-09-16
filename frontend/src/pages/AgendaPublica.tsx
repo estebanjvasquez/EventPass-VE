@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import {
   AgendaDisplay,
@@ -62,7 +63,7 @@ function AgendaScreen() {
       setError(
         next.length
           ? null
-          : "El organizador aún no ha publicado sesiones para esta pantalla.",
+          : "Esta pantalla de sala no tiene sesiones disponibles. Consulta el programa de actividades para ver horarios y otros eventos.",
       );
     };
     void load();
@@ -72,7 +73,8 @@ function AgendaScreen() {
       window.clearInterval(refresh);
     };
   }, [eventId, refreshEvery]);
-  return (
+  return (<>
+    <nav className="flex gap-4 bg-zinc-950 px-5 py-3 text-sm font-semibold text-white"><Link to="/">Volver al sitio</Link><Link to={`/e/${eventId}/programa`}>Programa de actividades</Link><span className="ml-auto">Pantalla de sala</span></nav>
     <AgendaDisplay
       items={items.map((item) => ({
         ...item,
@@ -81,5 +83,6 @@ function AgendaScreen() {
       error={error}
       loading={loading}
     />
+    </>
   );
 }

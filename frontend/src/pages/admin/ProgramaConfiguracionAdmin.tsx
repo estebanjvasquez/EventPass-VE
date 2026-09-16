@@ -66,6 +66,7 @@ export default function ProgramaConfiguracionAdmin() {
   return <main className="mx-auto max-w-4xl px-5 py-8">
     <nav className="flex flex-wrap gap-4 text-sm font-semibold text-emerald-700"><Link to="/admin/programas">Todos los programas</Link><Link to={`/admin/programas/${programId}/accesos`}>Centro del programa</Link></nav>
     <h1 className="mt-6 text-2xl font-bold">Configuración del programa</h1>
+    <Link className="mt-4 inline-block rounded-lg bg-emerald-700 px-4 py-2 font-semibold text-white" to={`/admin/programas/${programId}/agenda`}>Programa y agenda</Link>
     {message && <p role="status" className="mt-4 rounded-lg bg-zinc-100 p-3 text-sm">{message}</p>}
     {program && <form onSubmit={e => { e.preventDefault(); void save() }} className="mt-6 space-y-4 rounded-xl border bg-white p-5">
       <label className="block text-sm font-semibold">Nombre<input required className={input} value={program.name} onChange={e => setProgram({ ...program, name: e.target.value })} /></label>

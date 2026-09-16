@@ -521,7 +521,7 @@ export default function Landing() {
     return () => { active = false; };
   }, []);
   if (loading || !siteChecked) return <div className="min-h-[100dvh] bg-zinc-950" />;
-  if (siteEvent) return <EventPublicLanding event={siteEvent} registrationUrl={program ? `/p/${program.id}/registro` : undefined} linkedEvents={program?.events} />;
+  if (siteEvent) return <EventPublicLanding event={siteEvent} registrationUrl={program ? `/p/${program.id}/registro` : undefined} agendaUrl={program ? `/p/${program.id}/agenda` : undefined} linkedEvents={program?.events} />;
   if (tenant) return <TenantLanding tenant={tenant} />;
   return (
     <div className="min-h-[100dvh] bg-zinc-950">

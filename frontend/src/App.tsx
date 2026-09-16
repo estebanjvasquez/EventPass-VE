@@ -10,6 +10,8 @@ const Landing = lazy(() => import('./pages/Landing'))
 const RegistroEvento = lazy(() => import('./pages/RegistroEvento'))
 const RegistroPrograma = lazy(() => import('./pages/RegistroPrograma'))
 const AgendaPublica = lazy(() => import('./pages/AgendaPublica'))
+const ProgramaAgenda = lazy(() => import('./pages/ProgramaAgenda'))
+const ProgramaAgendaAdmin = lazy(() => import('./pages/admin/ProgramaAgendaAdmin'))
 const CargarComprobante = lazy(() => import('./pages/CargarComprobante'))
 const CredencialEvento = lazy(() => import('./pages/CredencialEvento'))
 const CrearCuenta = lazy(() => import('./pages/CrearCuenta'))
@@ -71,6 +73,9 @@ function App() {
         <Route path="/e/:eventId/interes/:slug" element={<PublicLeadForm />} />
         <Route path="/p/:programId/registro" element={<RegistroPrograma />} />
         <Route path="/e/:eventId/agenda" element={<AgendaPublica />} />
+        <Route path="/e/:eventId/programa" element={<ProgramaAgenda />} />
+        <Route path="/p/:programId/agenda" element={<ProgramaAgenda />} />
+        <Route path="/admin/programas/:programId/agenda" element={<RequireAuth><ProgramaAgendaAdmin /></RequireAuth>} />
         <Route path="/comprobante/:token" element={<CargarComprobante />} />
         <Route path="/credencial/:token" element={<CredencialEvento />} />
         <Route path="/crear-cuenta" element={<CrearCuenta />} />

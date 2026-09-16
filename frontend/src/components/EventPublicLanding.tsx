@@ -57,6 +57,10 @@ const defaults: Required<
     | "sponsors_mode"
     | "sponsors_title"
     | "brochure_url"
+    | "agenda_scope"
+    | "agenda_event_id"
+    | "agenda_program_id"
+    | "agenda_title"
   >
 > = {
   template: "summit",
@@ -131,10 +135,12 @@ function EventLogo({
 export default function EventPublicLanding({
   event,
   registrationUrl,
+  agendaUrl,
   linkedEvents = [],
 }: {
   event: LandingEvent;
   registrationUrl?: string;
+  agendaUrl?: string;
   linkedEvents?: { id: string; name: string }[];
 }) {
   const content = contentFor(event);
@@ -180,6 +186,7 @@ export default function EventPublicLanding({
     "--event-muted": palette.muted,
   } as CSSProperties;
   const registration = registrationUrl ?? `/e/${event.id}`;
+  const scheduleUrl = content.agenda_scope === 'event' ? `/e/${content.agenda_event_id ?? event.id}/programa?solo=evento` : content.agenda_program_id ? `/p/${content.agenda_program_id}/agenda` : agendaUrl ?? `/e/${event.id}/programa`;
   useEffect(() => {
     if (!content.show_sponsors) return;
     let active = true;
@@ -246,7 +253,7 @@ export default function EventPublicLanding({
               <div className="grid gap-px overflow-hidden rounded-xl border border-white/10 bg-white/10 sm:grid-cols-2">
                 {content.show_agenda && (
                   <Link
-                    to={`/e/${event.id}/agenda`}
+                    to={scheduleUrl}
                     className="group p-6 transition hover:brightness-110"
                     style={{ backgroundColor: palette.surface }}
                   >
@@ -254,7 +261,7 @@ export default function EventPublicLanding({
                       className="h-6 w-6"
                       style={{ color: accent }}
                     />
-                    <h3 className="mt-12 text-xl font-semibold" style={{ color: cardTextColor }}>Agenda</h3>
+                    <h3 className="mt-12 text-xl font-semibold" style={{ color: cardTextColor }}>{content.agenda_title || (scheduleUrl.startsWith('/p/') ? 'Programa general' : 'Agenda de actividades')}</h3>
                     <p className="mt-2 text-sm leading-6" style={{ color: cardMutedColor }}>
                       Sesiones, actividades y horarios en un solo lugar.
                     </p>
