@@ -37,3 +37,7 @@ Las campañas guardadas validan en la base de datos su origen y medio. Archivar 
 - Migración validada contra el esquema remoto con rollback antes de aplicarla.
 
 Para QA humana, crear una campaña por red, abrir su enlace en una pestaña privada, registrarse y actualizar el dashboard. Repetir desde la página principal sin UTM en otra sesión para comparar la fila directa. Una recarga de la misma campaña no debe duplicar la visita.
+
+## Publicación
+
+Aplicado en Supabase moqywmcbklaeaelttzdm e integrado en develop/main: commit ef27bba. Despliegue frontend 36909941037 completado correctamente el 1 de octubre de 2026. RLS y permisos verificados remotamente. La prueba transaccional real de campaña, recarga, apertura del formulario, dashboard y archivo pasó y se revirtió para no dejar datos QA. No fue necesario modificar el Worker.
