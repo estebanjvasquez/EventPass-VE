@@ -108,5 +108,9 @@ await scalar(`select close_participant_access($1)`,[hash]);
 assert.equal(await scalar(`select get_participant_records($1)`,[hash]),null);
 await db.exec('reset role');
 const site=await scalar(`select landing_config from public_sites where program_id=$1`,[program]);assert.equal(site.headline,'Published');assert.equal(site.draft.headline,'New draft');
+if (process.argv.includes('--campaigns')) {
+  const { testCampaigns } = await import('./test-campaigns-db.mjs');
+  await testCampaigns(db, { org, otherOrg, owner, staff, event, sibling, other, program, query, scalar, role, fails });
+}
 await db.close();
 console.log('PASS: migration twice, shared-site permissions/drafts, category scope/inventory, immutable prices, recovery scope/expiry/single-use, QR compatibility.');

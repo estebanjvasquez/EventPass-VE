@@ -11,6 +11,7 @@ const program={id:programId,name:'Programa QA',registration_config:{web_event_id
 const requests=[];
 let site={id:'site-qa',status:'draft',slug:null,custom_hostname:null,landing_config:{headline:'Web QA',blocks:[]}};
 let record={id:'record-qa',reference:'recordqa',name:'Maria QA',event_id:eventId,status:'pending_payment',deadline:'2026-12-01T12:00:00Z',snapshot:{event_name:'Foro QA',category:'VIP',amount:120,currency:'USD',timezone:'America/Caracas'},upload_token:'d'.repeat(32)};
+let campaigns=[];
 const failures=[];
 try{
  for(const width of [1440,390]){
@@ -36,8 +37,12 @@ try{
    if(path.endsWith('/api/registrations/notify')||path.endsWith('/api/registrations/confirm-notify'))return respond({status:'accepted'});
    if(path.includes('/auth/'))return respond({id:'00000000-0000-0000-0000-000000000003',email:'qa@example.test'});
    if(path.endsWith('/rpc/is_platform_admin'))return respond(false);
+   if(path.endsWith('/rpc/event_promotion_destinations'))return respond([{site_id:null,program_id:null,label:'Página principal del evento',url:`https://eventosfacil.net/evento/${eventId}`}]);
+   if(path.endsWith('/rpc/get_event_campaign_dashboard'))return respond({totals:{visits:0,starts:0,completions:0,form_only:0},campaigns,breakdown:[],legacy_events:4});
+   if(path.endsWith('/rpc/create_event_campaign')){campaigns=[{id:'10000000-0000-0000-0000-000000000001',name:body.p_name,source:body.p_source,medium:body.p_medium,site_id:body.p_site_id,archived:false}];return respond(campaigns[0].id);}
+   if(path.endsWith('/rpc/archive_event_campaign')){campaigns[0].archived=body.p_archived;return respond(null);}
    if(path.endsWith('/rpc/get_public_ticket_categories'))return respond([{id:'cat-qa',name:'VIP',description:'Acceso al foro',benefits:['Networking'],price:120,currency:'USD',remaining:1}]);
-   if(path.endsWith('/rpc/register_event_purchase'))return respond([{registration_id:'reg-qa',credential_token:'d'.repeat(32),payment_required:true}]);
+   if(path.endsWith('/rpc/register_event_attributed_purchase'))return respond([{registration_id:'reg-qa',credential_token:'d'.repeat(32),payment_required:true}]);
    if(path.endsWith('/rpc/create_registration_access'))return respond('b'.repeat(64));
    if(path.endsWith('/rpc/save_public_landing')){site={...site,landing_config:{...site.landing_config,...(body.p_publish?body.p_config:{}),draft:body.p_config}};return respond({site,event_config:{...event.config,public_landing_draft:body.p_config}});}
    if(path.includes('/rpc/'))return respond(null);
@@ -62,7 +67,23 @@ try{
    await expect(page.getByLabel('Titular',{exact:true})).toHaveValue(`Web guardada ${id}`);
   }
   await page.screenshot({path:new URL(`shared-site-${width}.png`,output).pathname.replace(/^\//,'')});
-  await page.goto(`${origin}/e/${eventId}`);
+  await page.goto(`${origin}/admin/eventos/${eventId}/conversiones`);
+  await page.getByLabel('Nombre de campaña',{exact:true}).fill('Lanzamiento Instagram QA');
+  await page.getByRole('button',{name:'Crear campaña y enlace'}).click();
+  const campaignLink=page.getByLabel('Enlace de Lanzamiento Instagram QA',{exact:true});
+  await expect(campaignLink).toBeVisible();
+  const campaignUrl=new URL(await campaignLink.inputValue());
+  assert.equal(campaignUrl.pathname,`/evento/${eventId}`);
+  assert.equal(campaignUrl.searchParams.get('utm_source'),'instagram');
+  await page.getByRole('button',{name:'Archivar',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Reactivar',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Reactivar',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Archivar',exact:true})).toBeVisible();
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+  await page.screenshot({path:new URL(`campaigns-${width}.png`,output).pathname.replace(/^\//,'')});
+  await page.goto(`${origin}${campaignUrl.pathname}${campaignUrl.search}`);
+  await page.getByRole('link',{name:'Registrarme',exact:true}).first().click();
+  assert.equal(new URL(page.url()).searchParams.get('utm_campaign'),campaigns[0].id);
   await page.getByRole('radio').check();
   await expect(page.getByRole('heading',{name:'Resumen del registro'})).toBeVisible();
   await expect(page.getByText('120,00 USD',{exact:true})).toBeVisible();
@@ -71,6 +92,11 @@ try{
   await page.getByLabel('Teléfono',{exact:true}).fill('123456789');
   await page.getByRole('button',{name:'Reservar mi plaza'}).click();
   await expect(page.getByRole('heading',{name:'¡Plaza reservada!'})).toBeVisible();
+  const conversion=requests.filter(req=>req.path.endsWith('/rpc/register_event_attributed_purchase')).at(-1);
+  const landing=requests.filter(req=>req.path.endsWith('/rpc/track_event_visit')&&req.body.p_stage==='landing').at(-1);
+  assert.ok(landing.body.p_visit_id);
+  assert.equal(conversion.body.p_visit_id,landing.body.p_visit_id);
+  assert.equal(landing.body.p_campaign,campaigns[0].id);
   await page.getByRole('button',{name:'Consultar mi registro'}).click();
   await expect(page.getByRole('heading',{name:'Mi registro',exact:true})).toBeVisible();
   await expect(page.getByRole('link',{name:'Cargar comprobante',exact:true})).toBeVisible();

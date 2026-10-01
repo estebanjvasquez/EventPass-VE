@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { Link } from "react-router-dom";
 import ParticipantAccessLink from "../components/ParticipantAccessLink";
 import PurchaseSummary from "../components/PurchaseSummary";
+import { trackVisit } from '../lib/campaignAttribution';
 import { CheckCircle2, Ticket } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useTenant } from "../lib/useTenant";
@@ -136,6 +137,12 @@ export default function RegistroPrograma() {
       : ["attendee", "guest", "vip", "speaker", "exhibitor"];
   }, [program]);
 
+  const requestedTrackingEvent = new URLSearchParams(window.location.search).get('ep_event');
+  const trackingEventId = events.find(item => item.event_id === requestedTrackingEvent)?.event_id
+    ?? events.find(item => item.event_id === program?.registration_config.web_event_id)?.event_id
+    ?? events[0]?.event_id;
+  useEffect(() => { if (programId && trackingEventId) void trackVisit(trackingEventId, programId, 'form'); }, [programId, trackingEventId]);
+
   function change(key: keyof typeof form, value: string) {
     setForm((f) => ({ ...f, [key]: value }));
   }
@@ -151,8 +158,9 @@ export default function RegistroPrograma() {
       return;
     setSaving(true);
     setError(null);
+    const visitId = trackingEventId ? await trackVisit(trackingEventId, programId, 'form') : null;
     const { data, error: rpcError } = await supabase.rpc(
-      "register_program_participant",
+      "register_program_attributed_participant",
       {
         p_program_id: programId,
         p_event_id: form.event_id || null,
@@ -168,6 +176,7 @@ export default function RegistroPrograma() {
         p_country: form.country || null,
         p_participation_type: form.participation_type,
         p_profile_data: {},
+        p_visit_id: visitId,
       },
     );
     setSaving(false);

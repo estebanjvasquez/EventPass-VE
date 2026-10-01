@@ -19,6 +19,7 @@ import {
 } from "../lib/landingBuilder";
 import { resolvePublicEventBrand } from "../lib/eventBranding";
 import { supabase } from "../lib/supabase";
+import { registrationCampaignUrl, trackVisit } from '../lib/campaignAttribution';
 
 export type {
   LandingTemplate,
@@ -185,7 +186,11 @@ export default function EventPublicLanding({
     "--event-text": palette.text,
     "--event-muted": palette.muted,
   } as CSSProperties;
-  const registration = registrationUrl ?? `/e/${event.id}`;
+  const programId = registrationUrl?.match(/^\/p\/([^/]+)\/registro/)?.[1] ?? null;
+  const requestedEvent = new URLSearchParams(window.location.search).get('ep_event');
+  const trackingEventId = requestedEvent && linkedEvents.some(item => item.id === requestedEvent) ? requestedEvent : event.id;
+  const registration = registrationCampaignUrl(registrationUrl ?? `/e/${event.id}`, trackingEventId, programId);
+  useEffect(() => { void trackVisit(trackingEventId, programId, 'landing'); }, [trackingEventId, programId]);
   const scheduleUrl = content.agenda_scope === 'event' ? `/e/${content.agenda_event_id ?? event.id}/programa?solo=evento` : content.agenda_program_id ? `/p/${content.agenda_program_id}/agenda` : agendaUrl ?? `/e/${event.id}/programa`;
   useEffect(() => {
     if (!content.show_sponsors) return;

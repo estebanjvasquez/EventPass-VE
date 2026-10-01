@@ -7,6 +7,7 @@ import EventLandingAdmin from './pages/admin/EventLandingAdmin'
 // público no descarga el panel admin ni el escáner QR (html5-qrcode), que solo
 // hacen falta en el check-in.
 const Landing = lazy(() => import('./pages/Landing'))
+const PublicEventHome = lazy(() => import('./pages/PublicEventHome'))
 const RegistroEvento = lazy(() => import('./pages/RegistroEvento'))
 const MiRegistro = lazy(() => import('./pages/MiRegistro'))
 const RecuperarRegistro = lazy(() => import('./pages/RecuperarRegistro'))
@@ -71,6 +72,7 @@ function App() {
     <Suspense fallback={<PageFallback />}>
       <Routes>
         <Route path="/" element={<Landing />} />
+        <Route path="/evento/:eventId" element={<PublicEventHome />} />
         <Route path="/registro" element={<RegistroEvento />} />
         <Route path="/mi-registro" element={<MiRegistro />} />
         <Route path="/mi-registro/:accessToken" element={<MiRegistro />} />

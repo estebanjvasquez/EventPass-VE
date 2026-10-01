@@ -16,6 +16,7 @@ import { resolvePublicEventBrand } from "../lib/eventBranding";
 import PurchaseSummary from "../components/PurchaseSummary";
 import ParticipantAccessLink from "../components/ParticipantAccessLink";
 import { type TicketCategory } from "../lib/participant";
+import { trackVisit } from '../lib/campaignAttribution';
 
 type EventRow = {
   id: string;
@@ -51,18 +52,6 @@ type CreatedRegistration = {
   payment_required: boolean;
 };
 type NotificationStatus = "idle" | "sending" | "accepted" | "failed";
-
-function attribution() {
-  const params = new URLSearchParams(window.location.search);
-  return {
-    campaign: params.get("utm_campaign") ?? undefined,
-    source: params.get("utm_source") ?? undefined,
-    medium: params.get("utm_medium") ?? undefined,
-    referrerHost: document.referrer
-      ? new URL(document.referrer).hostname
-      : undefined,
-  };
-}
 
 export default function RegistroEvento() {
   const { eventId } = useParams();
@@ -147,15 +136,7 @@ export default function RegistroEvento() {
 
   useEffect(() => {
     if (!event?.id) return;
-    const data = attribution();
-    void supabase.rpc("track_event_conversion", {
-      p_event_id: event.id,
-      p_event_kind: "landing_view",
-      p_campaign: data.campaign,
-      p_source: data.source,
-      p_medium: data.medium,
-      p_referrer_host: data.referrerHost,
-    });
+    void trackVisit(event.id, null, 'form');
   }, [event?.id]);
 
   async function reloadSeats(evId: string) {
@@ -220,16 +201,8 @@ export default function RegistroEvento() {
       return;
     }
 
-    const campaign = attribution();
-    void supabase.rpc("track_event_conversion", {
-      p_event_id: event.id,
-      p_event_kind: "registration_started",
-      p_campaign: campaign.campaign,
-      p_source: campaign.source,
-      p_medium: campaign.medium,
-      p_referrer_host: campaign.referrerHost,
-    });
-    const { data, error } = await supabase.rpc("register_event_purchase", {
+    const visitId = await trackVisit(event.id, null, 'form');
+    const { data, error } = await supabase.rpc("register_event_attributed_purchase", {
       p_event_id: event.id,
       p_seat_id: hasSeats ? selectedSeat : null,
       p_first_name: values.first_name,
@@ -237,9 +210,7 @@ export default function RegistroEvento() {
       p_email: values.email,
       p_phone: values.phone,
       p_cedula: values.cedula || "",
-      p_campaign: campaign.campaign,
-      p_source: campaign.source,
-      p_medium: campaign.medium,
+      p_visit_id: visitId,
       p_category_id: categoryId || null,
     });
     if (error) {
