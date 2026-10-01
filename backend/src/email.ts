@@ -109,6 +109,12 @@ function failed(error: unknown): EmailDeliveryResult {
   }
 }
 
+export async function sendRecoveryEmail(p: { email: EmailSendBinding; from: string; to: string; url: string }): Promise<EmailDeliveryResult> {
+  try {
+    return accepted(await p.email.send({to:p.to,from:sender(p.from),replyTo,subject:'Consulta tu registro — EventosFácil',html:`<html lang="es"><body><h1>Consulta tu registro</h1><p>Solicitaste acceso a tu registro. El enlace vence en 30 minutos y se utiliza una sola vez.</p><p><a href="${esc(p.url)}">Abrir mi registro</a></p><p>Si no lo solicitaste, puedes ignorar este correo.</p></body></html>`,text:`Solicitaste acceso a tu registro. El enlace vence en 30 minutos y se utiliza una sola vez.\n\n${p.url}\n\nSi no lo solicitaste, puedes ignorar este correo.`}));
+  } catch(error) { return failed(error); }
+}
+
 function paymentMethodsHtml(methods: PaymentMethod[]): string {
   if (methods.length === 0) return ''
   const items = methods

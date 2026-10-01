@@ -8,6 +8,9 @@ import EventLandingAdmin from './pages/admin/EventLandingAdmin'
 // hacen falta en el check-in.
 const Landing = lazy(() => import('./pages/Landing'))
 const RegistroEvento = lazy(() => import('./pages/RegistroEvento'))
+const MiRegistro = lazy(() => import('./pages/MiRegistro'))
+const RecuperarRegistro = lazy(() => import('./pages/RecuperarRegistro'))
+const TicketCategoriesAdmin = lazy(() => import('./pages/admin/TicketCategoriesAdmin'))
 const RegistroPrograma = lazy(() => import('./pages/RegistroPrograma'))
 const AgendaPublica = lazy(() => import('./pages/AgendaPublica'))
 const ProgramaAgenda = lazy(() => import('./pages/ProgramaAgenda'))
@@ -69,6 +72,11 @@ function App() {
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/registro" element={<RegistroEvento />} />
+        <Route path="/mi-registro" element={<MiRegistro />} />
+        <Route path="/mi-registro/:accessToken" element={<MiRegistro />} />
+        <Route path="/recuperar-registro" element={<RecuperarRegistro />} />
+        <Route path="/admin/eventos/:eventId/entradas" element={<RequireAuth><TicketCategoriesAdmin /></RequireAuth>} />
+        <Route path="/admin/programas/:programId/landing" element={<RequireAuth><EventLandingAdmin /></RequireAuth>} />
         <Route path="/e/:eventId" element={<RegistroEvento />} />
         <Route path="/e/:eventId/interes/:slug" element={<PublicLeadForm />} />
         <Route path="/p/:programId/registro" element={<RegistroPrograma />} />

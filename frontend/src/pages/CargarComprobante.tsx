@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { CheckCircle2, FileUp, Ticket, UploadCloud } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { resolvePublicEventBrand } from "../lib/eventBranding";
+import ParticipantAccessLink from "../components/ParticipantAccessLink";
 
 type RegistrationByToken = {
   registration_id: string;
@@ -175,6 +176,7 @@ export default function CargarComprobante() {
       </header>
 
       <main className="mx-auto max-w-2xl px-5 py-12">
+        <ParticipantAccessLink token={reg ? token : null} eventId={reg?.event_id}/>
         {loading && <Skeleton />}
 
         {!loading && loadError && (

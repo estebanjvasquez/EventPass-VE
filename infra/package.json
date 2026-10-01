@@ -4,6 +4,7 @@
   "description": "Supabase CLI y tooling de infraestructura para EventPass VE",
   "private": true,
   "scripts": {
+    "test": "node ../scripts/test-participant-db.mjs",
     "supabase": "supabase",
     "db:start": "supabase start",
     "db:diff": "supabase db diff",
@@ -11,6 +12,7 @@
   },
   "license": "UNLICENSED",
   "devDependencies": {
+    "@electric-sql/pglite": "0.3.14",
     "supabase": "^2.108.0"
   }
 }

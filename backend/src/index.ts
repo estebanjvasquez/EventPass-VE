@@ -4,6 +4,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import { sendUploadLinkEmail, sendConfirmationEmail, sendPortalInviteEmail, sendProviderNoticeEmail, type EmailSendBinding, type EventEmailContext } from './email'
 import { runScheduledJobs } from './jobs'
+import { participantApi } from './participant'
 import { normalizeSlug, provisionDomain, getDomainStatus, type CfEnv } from './tenants'
 import { forumLayoutIntentJsonSchema, forumLayoutIntentSchema, generateForumPlan, inferForumLayoutIntent } from './forumFloorplan'
 import { arrayBufferToDataUrl, exhibitionDetectionJsonSchema, exhibitionDetectionSchema, normalizeExhibitionDetection } from './exhibitionImport'
@@ -57,6 +58,7 @@ app.use('*', cors({
   allowMethods: ['GET', 'POST', 'OPTIONS'],
   maxAge: 86400,
 }))
+app.route('/api/participant', participantApi)
 
 app.get('/health', (c) =>
   c.json({ status: 'ok', service: 'eventpass-backend', env: c.env.ENVIRONMENT }),
@@ -228,7 +230,7 @@ app.post('/api/registrations/confirm-notify', async (c) => {
   const supabase = createClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY)
   const { data: reg, error } = await supabase
     .from('registrations')
-    .select('id, event_id, first_name, email, credential_token, status, organization_id')
+    .select('id, event_id, first_name, email, credential_token, status, organization_id, purchase_snapshot')
     .eq('id', parsed.data.registration_id)
     .eq('credential_token', parsed.data.credential_token)
     .maybeSingle()
@@ -243,7 +245,8 @@ app.post('/api/registrations/confirm-notify', async (c) => {
 
   const base = c.env.APP_BASE_URL.replace(/\/$/, '')
   const event = await loadEventEmailData(supabase, reg.event_id)
-  const kind = event.registrationMode === 'paid' ? 'payment_confirmed' : 'free_registration'
+  const purchase = reg.purchase_snapshot as { amount?: number | null } | null
+  const kind = purchase?.amount != null ? Number(purchase.amount) === 0 ? 'free_registration' : 'payment_confirmed' : event.registrationMode === 'paid' ? 'payment_confirmed' : 'free_registration'
   const result = await sendConfirmationEmail({
     email: c.env.EMAIL,
     from: c.env.EMAIL_FROM,

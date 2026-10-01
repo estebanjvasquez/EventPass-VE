@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { Link } from "react-router-dom";
+import ParticipantAccessLink from "../components/ParticipantAccessLink";
+import PurchaseSummary from "../components/PurchaseSummary";
 import { CheckCircle2, Ticket } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useTenant } from "../lib/useTenant";
@@ -232,6 +234,7 @@ export default function RegistroPrograma() {
             ? ` · ${new Date(program.starts_at).toLocaleDateString("es-VE", { day: "numeric", month: "long", year: "numeric" })}`
             : ""}
         </p>
+        <ParticipantAccessLink token={credentialToken} programId={program.id}/>
         {done ? (
           <div className="mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center text-emerald-800">
             <CheckCircle2 className="mx-auto h-10 w-10" />
@@ -358,6 +361,9 @@ export default function RegistroPrograma() {
                 {error}
               </p>
             )}
+            <div className="sm:col-span-2">
+              <PurchaseSummary snapshot={{ event_name: program.name, starts_at: program.starts_at, venue: program.venue_name, timezone: typeof program.registration_config.timezone === 'string' ? program.registration_config.timezone : 'America/Caracas', amount: null, benefits: passes.filter(pass => pass.id === form.pass_id).map(pass => pass.name) }} />
+            </div>
             <button
               disabled={saving || !passes.length}
               className="sm:col-span-2 inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"

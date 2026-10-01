@@ -12,7 +12,7 @@ import {
   Send,
   Trash2,
 } from "lucide-react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useParams, useSearchParams } from "react-router-dom";
 import {
   templateBlocks,
   type LandingBlock,
@@ -95,9 +95,11 @@ const validHex = (value: string | undefined, fallback: string) =>
   /^#[0-9a-f]{6}$/i.test(value ?? "") ? value! : fallback;
 
 export default function EventLandingAdmin() {
-  const { eventId } = useParams();
+  const { eventId, programId: routeProgramId } = useParams();
   const [searchParams] = useSearchParams();
-  const requestedProgramId = searchParams.get("programId");
+  const requestedProgramId = routeProgramId ?? searchParams.get("programId");
+  const [programChoices, setProgramChoices] = useState<{id: string; name: string}[]>([]);
+  const [savedDraft, setSavedDraft] = useState<string>(JSON.stringify(initial));
   const [programContext, setProgramContext] = useState<ProgramContext | null>(null);
   const [agendaEvents, setAgendaEvents] = useState<{id:string;name:string}[]>([]);
   const [siteContextReady, setSiteContextReady] = useState(false);
@@ -110,13 +112,29 @@ export default function EventLandingAdmin() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [logoState, setLogoState] = useState<"idle" | "verifying" | "ready" | "failed">("idle");
-  const load = useCallback(async () => {
-    if (!eventId) return;
+  const load = useCallback(async (signal: AbortSignal) => {
+    setSiteContextReady(false);
+    setEvent(null);
+    setProgramContext(null);
+    setProgramChoices([]);
+    setPublicSite(null);
+    setMessage(null);
+    let sourceEventId = eventId;
+    if (routeProgramId) {
+      const result = await supabase.from("event_programs").select("registration_config").eq("id", routeProgramId).single();
+      if (signal.aborted) return;
+      if (result.error) { setMessage(result.error.message); return; }
+      const primary = result.data.registration_config?.web_event_id;
+      if (typeof primary !== "string" || !primary) { setMessage("Selecciona el evento principal en Configuración del programa antes de editar la web."); return; }
+      sourceEventId = primary;
+    }
+    if (!sourceEventId) return;
     const { data, error } = await supabase
       .from("events")
       .select("id,name,organization_id,config")
-      .eq("id", eventId)
+      .eq("id", sourceEventId)
       .maybeSingle();
+    if (signal.aborted) return;
     if (error || !data) {
       setMessage(error?.message ?? "Evento no encontrado.");
       return;
@@ -124,17 +142,24 @@ export default function EventLandingAdmin() {
     const loaded = data as Event;
     const { data: programLinks, error: linksError } = await supabase.from("program_events")
       .select("program_id,event_programs(id,name,registration_config)").eq("event_id", loaded.id);
+    if (signal.aborted) return;
     if (linksError) { setMessage(linksError.message); return; }
     const links = (programLinks ?? []) as unknown as { program_id: string; event_programs: { id: string; name: string; registration_config: Record<string, unknown> } | null }[];
+    if (links.length > 1 && !requestedProgramId) {
+      setProgramChoices(links.flatMap(link => link.event_programs ? [{id: link.event_programs.id, name: link.event_programs.name}] : []));
+      setMessage("Selecciona el programa cuya web quieres editar.");
+      return;
+    }
     const linkedProgram = requestedProgramId ? links.find(link => link.program_id === requestedProgramId)?.event_programs : links.length === 1 ? links[0].event_programs : null;
     if (requestedProgramId && !linkedProgram) { setMessage("Este evento no pertenece al programa seleccionado."); return; }
     let context: ProgramContext | null = null;
     if (linkedProgram) {
       const { data: members, error: membersError } = await supabase.from("program_events").select("event_id,event:events(id,name)").eq("program_id", linkedProgram.id).order("event_id");
+      if (signal.aborted) return;
       if (membersError) { setMessage(membersError.message); return; }
       const configured = linkedProgram.registration_config?.web_event_id;
-      const webEventId = typeof configured === "string" && members?.some(member => member.event_id === configured) ? configured : members?.[0]?.event_id;
-      if (!webEventId) { setMessage("El programa no tiene eventos relacionados."); return; }
+      const webEventId = typeof configured === "string" && members?.some(member => member.event_id === configured) ? configured : null;
+      if (!webEventId) { setMessage("Selecciona un evento principal válido en Configuración del programa."); return; }
       context = { id: linkedProgram.id, name: linkedProgram.name, webEventId };
       setAgendaEvents((members ?? []).flatMap(m => m.event ? [m.event] : []) as unknown as {id:string;name:string}[]);
     }
@@ -158,8 +183,10 @@ export default function EventLandingAdmin() {
       .select("id,slug,custom_hostname,status,landing_config")
       .eq(context ? "program_id" : "event_id", context?.id ?? loaded.id)
       .maybeSingle();
+    if (signal.aborted) return;
     if (context && !site && !siteError) {
       const existing = await supabase.from("public_sites").select("id,slug,custom_hostname,status,landing_config").eq("event_id", context.webEventId).maybeSingle();
+      if (signal.aborted) return;
       site = existing.data; siteError = existing.error;
     }
     if (siteError) { setMessage(siteError.message); return; }
@@ -169,12 +196,27 @@ export default function EventLandingAdmin() {
       const saved = site.landing_config as PublicSite["landing_config"];
       setDraft({ ...initial, ...(saved?.draft ?? saved), blocks: saved?.draft?.blocks ?? saved?.blocks ?? cloneBlocks("summit") });
     }
+    const savedSource = context && site?.landing_config ? (site.landing_config.draft ?? site.landing_config) : source;
+    setSavedDraft(JSON.stringify({ ...initial, ...savedSource, template: savedSource.template ?? "summit", blocks: savedSource.blocks?.length ? savedSource.blocks : cloneBlocks(savedSource.template ?? "summit") }));
     setSiteContextReady(links.length <= 1 || !!requestedProgramId);
     if (links.length > 1 && !requestedProgramId) setMessage("El evento pertenece a varios programas. Abre la web desde Configuración y web del programa correspondiente.");
-  }, [eventId, requestedProgramId]);
+  }, [eventId, requestedProgramId, routeProgramId]);
   useEffect(() => {
-    void load();
+    const controller = new AbortController();
+    void load(controller.signal).catch(error => { if (!controller.signal.aborted) setMessage(error instanceof Error ? error.message : "No se pudo cargar la web."); });
+    return () => controller.abort();
   }, [load]);
+  const dirty = siteContextReady && JSON.stringify(draft) !== savedDraft;
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => { if (dirty) { event.preventDefault(); event.returnValue = ""; } };
+    const guard = (event: MouseEvent) => {
+      const anchor = (event.target as HTMLElement).closest("a");
+      if (dirty && anchor && anchor.target !== "_blank" && !window.confirm("Hay cambios sin guardar. ¿Salir del constructor?")) { event.preventDefault(); event.stopPropagation(); }
+    };
+    window.addEventListener("beforeunload", warn);
+    document.addEventListener("click", guard, true);
+    return () => { window.removeEventListener("beforeunload", warn); document.removeEventListener("click", guard, true); };
+  }, [dirty]);
   function set<K extends keyof LandingConfig>(key: K, value: LandingConfig[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
   }
@@ -222,38 +264,16 @@ export default function EventLandingAdmin() {
     const resolvedDraft = { ...draft, agenda_scope: draft.agenda_scope ?? (programContext ? 'program' : 'event'), agenda_program_id: programContext?.id ?? draft.agenda_program_id } as LandingConfig;
     setSaving(true);
     setMessage(null);
-    const current = event.config ?? {};
-    const config =
-      mode === "publish"
-        ? { ...current, public_landing: resolvedDraft, public_landing_draft: resolvedDraft }
-        : { ...current, public_landing_draft: resolvedDraft };
-    const { error } = await supabase
-      .from("events")
-      .update({ config })
-      .eq("id", event.id);
-    setSaving(false);
-    if (error) setMessage(error.message);
-    else {
-      if (publicSite) {
-        const landingConfig = mode === "publish" ? { ...resolvedDraft, primary_event_id: programContext?.webEventId } : { ...publicSite.landing_config, draft: resolvedDraft };
-        const { data: savedSite, error: siteError } = await supabase
-          .from("public_sites")
-          .update({ landing_config: landingConfig })
-          .eq("id", publicSite.id).select("id").single();
-        if (siteError) {
-          setMessage(siteError.message);
-          return;
-        }
-        if (!savedSite) { setMessage("No se pudo guardar el sitio."); return; }
-        setPublicSite({ ...publicSite, landing_config: landingConfig });
-      }
-      setEvent({ ...event, config });
-      setMessage(
-        mode === "publish"
-          ? "Landing publicada. El público ya verá esta versión."
-          : "Borrador guardado. La página pública no ha cambiado.",
-      );
-    }
+    try {
+      const { data, error } = await supabase.rpc("save_public_landing", { p_event_id: event.id, p_program_id: programContext?.id ?? null, p_config: resolvedDraft, p_publish: mode === "publish" });
+      if (error || !data) { setMessage(error?.message ?? "No se pudo verificar el guardado."); return; }
+      setPublicSite(data.site as PublicSite | null);
+      setEvent({ ...event, config: data.event_config });
+      setDraft(resolvedDraft);
+      setSavedDraft(JSON.stringify(resolvedDraft));
+      setMessage(mode === "publish" ? "Contenido publicado. Si el dominio está activo, el público verá esta versión." : "Borrador guardado. La página pública no ha cambiado.");
+    } catch { setMessage("No se pudo guardar. Comprueba la conexión e inténtalo de nuevo."); }
+    finally { setSaving(false); }
   }
   async function uploadImage(
     file: File | undefined,
@@ -317,7 +337,7 @@ export default function EventLandingAdmin() {
     );
     setMessage(target === "logo" ? "Logo verificado y cargado al borrador. Pulsa Publicar para mostrarlo al público." : "Imagen cargada al borrador. Guarda o publica para confirmar el cambio.");
   }
-  const canManageSite = siteContextReady && (!programContext || programContext.webEventId === eventId);
+  const canManageSite = siteContextReady && !!event && (!programContext || !!routeProgramId);
   const subdomain = publicSite?.slug
     ? `https://${publicSite.slug}.eventosfacil.net`
     : null;
@@ -432,6 +452,8 @@ export default function EventLandingAdmin() {
       </div>
     </section>
   );
+  if (programContext && !routeProgramId) return <Navigate replace to={`/admin/programas/${programContext.id}/landing`} />;
+  if (!siteContextReady) return <main className="mx-auto max-w-3xl p-8"><h1 className="text-xl font-bold">Web pública</h1><p role="status" className="mt-4">{message ?? "Cargando configuración…"}</p>{programChoices.map(program => <Link key={program.id} className="mt-3 block font-semibold text-emerald-700" to={`/admin/programas/${program.id}/landing`}>{program.name}</Link>)}{requestedProgramId && <Link className="mt-4 block text-emerald-700" to={`/admin/programas/${requestedProgramId}/configuracion`}>Configuración del programa</Link>}</main>;
   return (
     <main className="mx-auto max-w-6xl px-4 py-6 sm:px-7">
       <header className="flex flex-wrap items-start justify-between gap-4">
@@ -471,7 +493,7 @@ export default function EventLandingAdmin() {
           {message}
         </p>
       )}
-      {programContext && <p className="mt-5 rounded-xl border bg-zinc-50 p-4 text-sm">Web compartida de <strong>{programContext.name}</strong>. <Link className="font-semibold text-emerald-700" to={`/admin/programas/${programContext.id}/configuracion`}>Configuración del programa</Link>{!canManageSite && <> · Esta web se administra desde un único evento. <Link className="font-semibold text-emerald-700" to={`/admin/eventos/${programContext.webEventId}/landing?programId=${programContext.id}`}>Abrir constructor compartido</Link></>}</p>}
+      {programContext && <p className="mt-5 rounded-xl border bg-zinc-50 p-4 text-sm">Web compartida de <strong>{programContext.name}</strong>. Los eventos asociados utilizan este mismo constructor. <Link className="font-semibold text-emerald-700" to={`/admin/programas/${programContext.id}/configuracion`}>Configuración del programa</Link></p>}
       <section className="mt-6 rounded-2xl border bg-white p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>

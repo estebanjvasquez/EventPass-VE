@@ -62,7 +62,7 @@ export default function ProgramaConfiguracionAdmin() {
     if (!error && data) setSavedWebEvent(webEvent)
     setMessage(error?.message ?? (data ? 'Configuración guardada.' : 'No se pudo guardar.'))
   }
-  const editUrl = savedWebEvent ? `/admin/eventos/${savedWebEvent}/landing?programId=${programId}` : null
+  const editUrl = savedWebEvent ? `/admin/programas/${programId}/landing` : null
   return <main className="mx-auto max-w-4xl px-5 py-8">
     <nav className="flex flex-wrap gap-4 text-sm font-semibold text-emerald-700"><Link to="/admin/programas">Todos los programas</Link><Link to={`/admin/programas/${programId}/accesos`}>Centro del programa</Link></nav>
     <h1 className="mt-6 text-2xl font-bold">Configuración del programa</h1>

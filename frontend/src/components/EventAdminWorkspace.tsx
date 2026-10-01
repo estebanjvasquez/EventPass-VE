@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabase'
 type EventInfo = { id: string; name: string; event_type: string; status: string }
 
 function eventIdFromPath(pathname: string) {
-  const match = pathname.match(/^\/admin\/(?:eventos\/([^/]+)\/(?:resumen|administrar|conversiones|registros|formularios|lanzamiento|landing)|agenda\/([^/]+)|stands\/([^/]+)|expositores\/([^/]+)|patrocinantes\/([^/]+)|personal\/([^/]+)|operacion-plano\/([^/]+)|asientos\/([^/]+)|foro-plano\/([^/]+)|plano-comercial\/([^/]+)|plano-publicar\/([^/]+))/)
+  const match = pathname.match(/^\/admin\/(?:eventos\/([^/]+)\/(?:resumen|administrar|conversiones|registros|formularios|lanzamiento|landing|entradas)|agenda\/([^/]+)|stands\/([^/]+)|expositores\/([^/]+)|patrocinantes\/([^/]+)|personal\/([^/]+)|operacion-plano\/([^/]+)|asientos\/([^/]+)|foro-plano\/([^/]+)|plano-comercial\/([^/]+)|plano-publicar\/([^/]+))/)
   return match?.slice(1).find(Boolean) ?? null
 }
 
@@ -36,6 +36,7 @@ export default function EventAdminWorkspace({ children }: { children: ReactNode 
   const entries = [
     { to: `${base}/resumen`, label: 'Resumen', icon: LayoutDashboard },
     { to: `${base}/registros`, label: 'Venta y registros', icon: ClipboardList },
+    { to: `${base}/entradas`, label: 'Categorías de entradas', icon: Store },
     ...(forum ? [{ to: `/admin/agenda/${eventId}`, label: 'Programa y agenda', icon: CalendarCog }] : []),
     ...(exhibition ? [{ to: `/admin/stands/${eventId}`, label: 'Exposición', icon: Map }, { to: `/admin/expositores/${eventId}`, label: 'Expositores', icon: Users }] : []),
     ...(exhibition ? [{ to: `/admin/plano-comercial/${eventId}`, label: 'Paquetes comerciales', icon: Store }, { to: `/admin/plano-publicar/${eventId}`, label: 'Publicar exposición', icon: MonitorSmartphone }] : []),

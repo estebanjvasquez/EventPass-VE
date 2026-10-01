@@ -528,6 +528,7 @@ export default function EventPublicLanding({
         {content.blocks.map(renderBlock)}
       </main>
       <footer className="border-t border-white/10 px-4 py-9 text-sm sm:px-7" style={{ backgroundColor: palette.page, color: palette.muted }}>
+        <div className="mx-auto mb-4 max-w-7xl"><Link className="underline" to={`/recuperar-registro?${content.agenda_program_id ? `programa=${content.agenda_program_id}` : `evento=${event.id}`}`}>Consultar mi registro o recuperar mi credencial</Link></div>
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
           <span>{organization}</span>
           <span>{event.name}</span>

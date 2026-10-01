@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { CalendarDays, Clock3, MapPin, Printer, Ticket } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { credentialQrValue } from '../lib/credentialQr'
+import ParticipantAccessLink from '../components/ParticipantAccessLink'
 
 type Credential = {
   first_name: string
@@ -60,6 +61,7 @@ export default function CredencialEvento() {
       </header>
 
       <main className="mx-auto max-w-2xl px-5 py-12">
+        <div className="print:hidden"><ParticipantAccessLink token={cred ? token : null}/></div>
         {loading && <Skeleton />}
 
         {!loading && loadError && (

@@ -13,6 +13,9 @@ import {
 import { supabase } from "../lib/supabase";
 import { useTenant } from "../lib/useTenant";
 import { resolvePublicEventBrand } from "../lib/eventBranding";
+import PurchaseSummary from "../components/PurchaseSummary";
+import ParticipantAccessLink from "../components/ParticipantAccessLink";
+import { type TicketCategory } from "../lib/participant";
 
 type EventRow = {
   id: string;
@@ -67,6 +70,8 @@ export default function RegistroEvento() {
   const [event, setEvent] = useState<EventRow | null>(null);
   const [seats, setSeats] = useState<Seat[]>([]);
   const [selectedSeat, setSelectedSeat] = useState<string | null>(null);
+  const [categories,setCategories] = useState<TicketCategory[]>([]);
+  const [categoryId,setCategoryId] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -113,6 +118,13 @@ export default function RegistroEvento() {
       }
       const ev = data as unknown as EventRow | null;
       setEvent(ev);
+      setCategories([]); setCategoryId('');
+      if (ev?.config?.ticket_categories_enabled === true) {
+        const result=await supabase.rpc('get_public_ticket_categories',{p_event_id:ev.id});
+        if (!active) return;
+        if (result.error) { setLoadError('No se pudieron consultar las entradas disponibles. Inténtalo de nuevo.'); setLoading(false); return; }
+        setCategories((result.data??[]) as TicketCategory[]);
+      }
       if (
         ev?.config?.public_seat_selection_enabled === true &&
         ev.config?.seat_assignment_mode === "attendee"
@@ -197,6 +209,7 @@ export default function RegistroEvento() {
   async function onSubmit(values: FormValues) {
     if (!event) return;
     setSubmitError(null);
+    if (event.config.ticket_categories_enabled === true && !categoryId) { setSubmitError('Selecciona una categoría de entrada disponible.'); return; }
 
     const hasSeats =
       event.config?.public_seat_selection_enabled === true &&
@@ -216,7 +229,7 @@ export default function RegistroEvento() {
       p_medium: campaign.medium,
       p_referrer_host: campaign.referrerHost,
     });
-    const { data, error } = await supabase.rpc("register_event_participant", {
+    const { data, error } = await supabase.rpc("register_event_purchase", {
       p_event_id: event.id,
       p_seat_id: hasSeats ? selectedSeat : null,
       p_first_name: values.first_name,
@@ -227,6 +240,7 @@ export default function RegistroEvento() {
       p_campaign: campaign.campaign,
       p_source: campaign.source,
       p_medium: campaign.medium,
+      p_category_id: categoryId || null,
     });
     if (error) {
       if (error.code === "23505") {
@@ -258,6 +272,10 @@ export default function RegistroEvento() {
   const color = brand.color;
   const name = brand.name;
   const logoUrl = brand.logo_url;
+  const category = categories.find(item=>item.id===categoryId);
+  const seat = seats.find(item=>item.id===selectedSeat);
+  const snapshot = {event_name:event?.name,starts_at:event?.start_date,timezone:typeof event?.config.timezone==='string'?event.config.timezone:'America/Caracas',venue:String(event?.config.venue_name??event?.config.location??''),category:category?.name,benefits:category?.benefits,amount:category?Number(category.price):event?.config.registration_mode==='free'?0:seat?.price??(event?.config.price!=null?Number(event.config.price):null),currency:category?.currency??String(event?.config.currency??'USD'),seat:seat?.seat_number};
+  const isFree = category ? Number(category.price)===0 : event?.config.registration_mode==='free';
 
   return (
     <div className="min-h-[100dvh] bg-[#fafafa]">
@@ -292,6 +310,7 @@ export default function RegistroEvento() {
       </header>
 
       <main className="mx-auto max-w-3xl px-5 py-12">
+        {event && !done && <ParticipantAccessLink eventId={event.id}/>}
         {loading && <SkeletonForm />}
 
         {!loading && loadError && (
@@ -355,6 +374,7 @@ export default function RegistroEvento() {
                 onSubmit={handleSubmit(onSubmit)}
                 className="mt-10 grid gap-5 sm:grid-cols-2"
               >
+                {event.config.ticket_categories_enabled === true && <fieldset className="space-y-3 sm:col-span-2"><legend className="font-semibold">Selecciona tu entrada</legend>{categories.length===0 && <p>No hay categorías disponibles para venta en este momento.</p>}{categories.map(item=><label key={item.id} className="block rounded-xl border p-4"><input type="radio" name="ticket-category" required checked={categoryId===item.id} disabled={item.remaining===0} value={item.id} onChange={()=>setCategoryId(item.id)}/><span className="ml-2 font-semibold">{item.name} · {Number(item.price)===0?'Gratuito':`${item.price} ${item.currency}`}</span><p className="mt-2 text-sm">{item.description}</p>{item.benefits.length>0&&<p className="mt-1 text-sm">{item.benefits.join(' · ')}</p>}<p className="mt-2 text-sm text-zinc-500">{item.remaining===0?'Agotada':item.remaining==null?'Sujeta al aforo del evento':`${item.remaining} cupos disponibles`}</p></label>)}<p className="text-sm text-zinc-600">El precio de la entrada sustituye al del asiento; no se suman.</p></fieldset>}
                 <FieldText
                   label="Nombre"
                   error={errors.first_name?.message}
@@ -400,22 +420,24 @@ export default function RegistroEvento() {
                   </p>
                 )}
 
+                <div className="sm:col-span-2"><PurchaseSummary snapshot={snapshot}/></div>
+
                 <div className="sm:col-span-2">
                   <button
                     type="submit"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || (event.config.ticket_categories_enabled === true && !categoryId)}
                     style={color ? { backgroundColor: color } : undefined}
                     className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition-transform active:scale-[0.98] disabled:opacity-60"
                   >
                     {isSubmitting
                       ? "Enviando…"
-                      : event.config?.registration_mode === "free"
+                      : isFree
                         ? "Confirmar mi registro"
                         : "Reservar mi plaza"}
                     {!isSubmitting && <ArrowRight className="h-4 w-4" />}
                   </button>
                   <p className="mt-3 text-xs text-zinc-500">
-                    {event.config?.registration_mode === "free"
+                    {isFree
                       ? "Tu registro quedará confirmado inmediatamente y recibirás tu credencial."
                       : "Recibirás un correo con los datos de pago y el plazo para completar tu registro."}
                   </p>
@@ -426,6 +448,7 @@ export default function RegistroEvento() {
 
         {done && (
           <div className="animate-float-up rounded-2xl border border-emerald-200 bg-white p-8 text-center">
+            <ParticipantAccessLink token={credentialToken} eventId={event?.id}/>
             <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-emerald-50 text-emerald-600">
               <CheckCircle2 className="h-8 w-8" />
             </span>

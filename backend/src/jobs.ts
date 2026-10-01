@@ -61,6 +61,8 @@ export async function runScheduledJobs(
   await notifyAttendeesOfReleases(supabase, env, released, result)
   await notifyOrganizersOfReleases(supabase, env, released, result)
   await sendPaymentReminders(supabase, env, result)
+  const { error: cleanupError } = await supabase.rpc('purge_participant_access')
+  if (cleanupError) result.errors.push('participant access cleanup failed')
   return result
 }
 
@@ -82,18 +84,12 @@ async function releaseExpiredSlots(
   }
   for (const r of data ?? []) {
     // Guard de carrera: solo actualiza si sigue pendiente.
-    const { error: upErr } = await supabase
-      .from('registrations')
-      .update({ status: 'rejected', rejection_reason: 'Plazo de pago vencido', seat_id: null })
-      .eq('id', r.id)
-      .eq('status', 'pending_payment')
+    const { data: expired, error: upErr } = await supabase.rpc('expire_registration_purchase', { p_registration_id: r.id })
     if (upErr) {
       result.errors.push(`expire ${r.id}: ${upErr.message}`)
       continue
     }
-    if (r.seat_id) {
-      await supabase.from('seats').update({ status: 'available' }).eq('id', r.seat_id)
-    }
+    if (!expired) continue
     await supabase.from('admin_actions').insert({
       organization_id: r.organization_id,
       action: 'auto_expire_registration',
