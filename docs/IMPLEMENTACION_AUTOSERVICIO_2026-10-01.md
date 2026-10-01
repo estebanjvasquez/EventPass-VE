@@ -1,6 +1,6 @@
 # Implementación y validación del autoservicio
 
-Implementado en la rama `feat/participant-self-service`. No aplicado ni desplegado en producción.
+Implementado en `feat/participant-self-service` e integrado en `develop` y `main`. Migración y despliegues publicados el 1 de octubre de 2026 tras autorización explícita.
 
 ## Entregas
 
@@ -31,3 +31,15 @@ Estas pruebas usan un esquema mínimo de dependencias y tráfico simulado. No su
 7. Validar recuperación real existente/inexistente, enlace usado/vencido, selección de registros de programa, permisos, móvil e impresión. Registrar versiones desplegadas y resultados.
 
 Ante una regresión, volver al frontend/Worker anterior conservando las tablas y snapshots nuevos. La RPC anterior de alta sigue disponible, aunque la validación de categorías activadas también se aplica a inserciones antiguas.
+
+## Publicación ejecutada
+
+- Código desplegado: 9bd60ec.
+- Supabase: moqywmcbklaeaelttzdm (Eventos Facil), migración 20261001171204 aplicada en transacción y registrada. Se preservó el historial remoto; db push detectó versiones remotas ausentes del repositorio.
+- Verificación remota: RLS activo en las tres tablas nuevas; RPC privada inaccesible a anon; guardado disponible a authenticated con autorización interna; sin eventos principales inválidos en programas configurados.
+- Worker: versión 8be2fee3-6db0-4184-9a65-22c21196e5f2, rutas y cron publicados. Versión anterior para rollback: 2bd11a02-3a15-4e7d-be27-78b0abc16d67.
+- Frontend producción: GitHub Actions 36906416620 finalizado correctamente; https://eventosfacil.net.
+- Preview QA: https://a22088cb.eventpass-d7d.pages.dev.
+- Smoke: las pantallas nuevas cargan con Playwright en móvil; la API de registros sin bearer responde 401 y no-store; las RPC con identificadores inexistentes rechazan el acceso sin modificar registros reales.
+- Advisor de seguridad: detecta la vista preexistente published_exhibition_directory como SECURITY DEFINER; no fue creada por esta entrega y requiere revisión separada.
+- Pendientes de QA humana: guardado autenticado desde eventos asociados, inventario concurrente, recuperación con correo real y recorridos institucionales.
