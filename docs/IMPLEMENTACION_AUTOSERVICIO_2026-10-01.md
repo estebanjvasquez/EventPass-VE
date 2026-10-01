@@ -16,7 +16,7 @@ Implementado en la rama `feat/participant-self-service`. No aplicado ni desplega
 - `cd frontend && npm run build`: correcto.
 - `cd frontend && npm run lint`: correcto, con advertencia previa en `PlanoComercialAdmin.tsx` sobre dependencia de `useEffect`.
 - Playwright: iniciar frontend con `npm run dev -- --host 127.0.0.1 --mode production` y ejecutar `node scripts/qa-participant.mjs`. Prueba con datos simulados, intercepta tráfico externo y no escribe en producción. Recorridos de guardado desde ambos eventos, recarga, categorías/resumen, estados y canje explícito; tamaños 1440 y 390. Capturas en `frontend/test-results/participant/`.
-- Workflow `checks.yml`: pruebas SQL, tipos, lint y build en pull requests o ejecución manual. No despliega.
+- Workflow `checks.yml` preparado localmente para pruebas SQL, tipos, lint y build. No incluido en GitHub: el token utilizado no dispone del permiso `workflow`.
 
 Estas pruebas usan un esquema mínimo de dependencias y tráfico simulado. No sustituyen aplicar toda la cadena de migraciones en una rama Supabase de QA ni probar compradores simultáneos en conexiones independientes.
 
