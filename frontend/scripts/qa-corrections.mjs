@@ -22,6 +22,7 @@ try {
       if (path.endsWith('/program_events')) data = [{event_id:eventId,events:event}];
       if (path.endsWith('/get_public_event_lead_form')) data = available ? [{id:'qa-form'}] : [];
       if (path.endsWith('/track_event_visit')) { visits.push(route.request().postDataJSON()); data = null; }
+      if (path.endsWith('/get_public_event_registration_state')) data = {available:true,payment_required:false,price_known:true,payment_methods_ready:true};
       await route.fulfill({ status, contentType:'application/json',body:JSON.stringify(data),headers:{'Access-Control-Allow-Origin':origin} });
     });
     await page.goto(`${origin}/p/${programId}/registro`);

@@ -373,6 +373,7 @@ type PublicEvent = {
   name: string;
   description: string | null;
   start_date: string | null;
+  end_date?: string | null;
   event_type: string;
   config: Record<string, unknown> | null;
 };
@@ -386,13 +387,13 @@ function TenantLanding({ tenant }: { tenant: Tenant }) {
     let active = true;
     supabase
       .from("events")
-      .select("id, name, description, start_date,event_type,config")
+      .select("id, name, description, start_date,end_date,event_type,config")
       .eq("organization_id", tenant.id)
       .eq("status", "published")
       .order("start_date", { ascending: true })
       .then(({ data }) => {
         if (active) {
-          setEvents((data ?? []) as PublicEvent[]);
+          setEvents(((data ?? []) as PublicEvent[]).filter((event) => !event.end_date || Date.parse(event.end_date) > Date.now()));
           setLoading(false);
         }
       });
@@ -499,13 +500,13 @@ export default function Landing() {
     void resolvePublicSite().then(async (site) => {
       if (!site) return;
       if (site.event_id) {
-        const { data } = await supabase.from('events').select('id,name,description,event_type,start_date,config').eq('id', site.event_id).eq('status', 'published').maybeSingle();
+        const { data } = await supabase.from('events').select('id,name,description,event_type,start_date,end_date,registration_deadline,config').eq('id', site.event_id).eq('status', 'published').maybeSingle();
         if (active && data) setSiteEvent({ ...(data as LandingEvent), config: { ...((data as LandingEvent).config ?? {}), public_landing: site.landing_config } });
       }
       if (site.program_id) {
         const [{ data: p }, { data: links }] = await Promise.all([
           supabase.from('event_programs').select('name,description,registration_config').eq('id', site.program_id).eq('status', 'published').maybeSingle(),
-          supabase.from('program_events').select('event:events(id,name,description,event_type,start_date,config,status)').eq('program_id', site.program_id),
+          supabase.from('program_events').select('event:events(id,name,description,event_type,start_date,end_date,registration_deadline,config,status)').eq('program_id', site.program_id),
         ]);
         const events = (links ?? []).flatMap(link => link.event ? [link.event] : []) as unknown as (LandingEvent & { status: string })[];
         const published = events.filter(event => event.status === 'published');
@@ -513,7 +514,13 @@ export default function Landing() {
         const primaryId = configured?.web_event_id ?? site.landing_config.primary_event_id;
         const primary = published.find(event => event.id === primaryId) ?? published[0];
         if (active && p && primary) {
-          setSiteEvent({ ...primary, name: p.name, description: p.description, config: { ...(primary.config ?? {}), public_landing: site.landing_config } });
+          const programLanding = {
+            ...site.landing_config,
+            brand_name: typeof configured?.brand_name === 'string' && configured.brand_name.trim() ? configured.brand_name : p.name,
+            logo_url: typeof configured?.logo_url === 'string' && configured.logo_url.trim() ? configured.logo_url : site.landing_config.logo_url,
+            primary_color: typeof configured?.primary_color === 'string' && configured.primary_color.trim() ? configured.primary_color : site.landing_config.primary_color,
+          };
+          setSiteEvent({ ...primary, name: p.name, description: p.description, config: { ...(primary.config ?? {}), public_landing: programLanding } });
           setProgram({ id: site.program_id, events: published });
         }
       }

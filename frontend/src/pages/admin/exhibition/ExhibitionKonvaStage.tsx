@@ -983,7 +983,7 @@ export function ExhibitionKonvaStage({
     item: SceneElement,
     event: Konva.KonvaEventObject<Event>,
   ) {
-    const node = event.target as Konva.Group;
+    const node = event.target as unknown as Konva.Group;
     const scaleX = node.scaleX();
     const scaleY = node.scaleY();
     node.scale({ x: 1, y: 1 });

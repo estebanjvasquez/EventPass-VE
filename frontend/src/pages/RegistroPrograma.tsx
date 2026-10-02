@@ -227,14 +227,15 @@ export default function RegistroPrograma() {
   const selectedEvent = Array.isArray(selected?.events)
     ? selected.events[0]
     : selected?.events;
-  const brand = resolvePublicEventBrand(selectedEvent);
-  const accent = brand.color;
+  const componentBrand = resolvePublicEventBrand(selectedEvent);
+  const accent = typeof program.registration_config.primary_color === "string" ? program.registration_config.primary_color : componentBrand.color;
+  const publicProgramName = typeof program.registration_config.brand_name === "string" && program.registration_config.brand_name.trim() ? program.registration_config.brand_name.trim() : program.name;
 
   return (
     <main className="min-h-[100dvh] bg-zinc-50 px-5 py-10">
       <section className="mx-auto max-w-2xl rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm sm:p-10">
         <p className="text-sm font-semibold" style={{ color: accent }}>
-          {brand.name}
+          {publicProgramName} · registro general
         </p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-900">
           {program.name}

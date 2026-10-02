@@ -141,7 +141,7 @@ export default function CheckinEvento() {
   function nextScan() {
     setOutcome(null)
     busyRef.current = false
-    scannerRef.current?.resume()
+    try { scannerRef.current?.resume() } catch { /* ingreso manual sin lector activo */ }
   }
 
   useEffect(() => {
@@ -165,10 +165,13 @@ export default function CheckinEvento() {
       })
     return () => {
       cancelled = true
-      scanner
-        .stop()
-        .then(() => scanner.clear())
-        .catch(() => {})
+      try {
+        void scanner.stop().then(() => scanner.clear()).catch(() => {
+          try { scanner.clear() } catch { /* el lector nunca llegó a iniciarse */ }
+        })
+      } catch {
+        try { scanner.clear() } catch { /* el lector nunca llegó a iniciarse */ }
+      }
     }
   }, [process])
 

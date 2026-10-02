@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
+import type { EventReadiness } from "../../lib/eventPresentation";
 
 type EventType = "forum" | "exhibition" | "workshop" | "social";
 type Status = "draft" | "published" | "closed" | "archived";
@@ -141,14 +142,18 @@ export default function EventoAdministracion() {
   }
   async function changeStatus(status: Status) {
     if (!event) return;
-    if (status === "published" && event.event_type === "exhibition") {
-      const { count } = await supabase
-        .from("venue_maps")
-        .select("id", { count: "exact", head: true })
-        .eq("event_id", event.id);
-      if (!count) {
-        setMessage("Crea el Plano antes de publicar la exposición.");
+    if (status === "published") {
+      const { data, error } = await supabase.rpc("get_event_launch_readiness", { p_event_id: event.id });
+      if (error) { setMessage(error.message); return; }
+      const readiness = data as unknown as EventReadiness;
+      const blockers = readiness.checks.filter((item) => item.blocking && !item.ok);
+      if (!readiness.can_publish || blockers.length) {
+        setMessage(`No se puede publicar: ${blockers.map((item) => item.detail).join(" ")}`);
         return;
+      }
+      if (event.event_type === "exhibition") {
+        const { count } = await supabase.from("venue_maps").select("id", { count: "exact", head: true }).eq("event_id", event.id);
+        if (!count) { setMessage("Crea el plano antes de publicar la exposición."); return; }
       }
     }
     setBusy(true);

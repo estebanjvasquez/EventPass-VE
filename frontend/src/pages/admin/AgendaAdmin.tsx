@@ -281,6 +281,7 @@ function SessionModal({ session, event, stages, speakers, assigned, assignedMode
     form.preventDefault()
     if (!name.trim() || !startsAt || !endsAt) { setError('Completa nombre, inicio y fin.'); return }
     if (new Date(endsAt) <= new Date(startsAt)) { setError('La hora de fin debe ser posterior al inicio.'); return }
+    if ((event.start_date && new Date(startsAt) < new Date(event.start_date)) || (event.end_date && new Date(endsAt) > new Date(event.end_date))) { setError('La actividad debe comenzar y terminar dentro de las fechas del evento.'); return }
     const normalizedStage = stageId || null
     const overlapping = allSessions.some((item) => item.id !== session?.id && item.stage_id === normalizedStage && item.session_type !== 'break' && type !== 'break' && item.starts_at && item.ends_at && new Date(startsAt) < new Date(item.ends_at) && new Date(endsAt) > new Date(item.starts_at))
     if (overlapping) { setError('Ese escenario ya tiene una sesión en ese horario. Cambia el horario o el escenario.'); return }

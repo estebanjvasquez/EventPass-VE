@@ -33,6 +33,8 @@ export type LandingEvent = {
   description: string | null;
   event_type: string;
   start_date: string | null;
+  end_date?: string | null;
+  registration_deadline?: string | null;
   config: Record<string, unknown> | null;
 };
 const defaults: Required<
@@ -196,6 +198,7 @@ export default function EventPublicLanding({
     "--event-muted": palette.muted,
   } as CSSProperties;
   const programId = registrationUrl?.match(/^\/p\/([^/]+)\/registro/)?.[1] ?? null;
+  const registrationOpen = Boolean(programId) || (![event.end_date, event.registration_deadline].some((value) => value && Date.parse(value) <= Date.now()));
   const requestedEvent = new URLSearchParams(window.location.search).get('ep_event');
   const trackingEventId = requestedEvent && linkedEvents.some(item => item.id === requestedEvent) ? requestedEvent : event.id;
   const registration = registrationCampaignUrl(registrationUrl ?? `/e/${event.id}`, trackingEventId, programId);
@@ -288,7 +291,7 @@ export default function EventPublicLanding({
                     </span>
                   </Link>
                 )}
-                <Link
+                {registrationOpen ? <Link
                   to={registration}
                   className="group p-6 transition hover:brightness-110"
                   style={{ backgroundColor: palette.surface }}
@@ -305,7 +308,7 @@ export default function EventPublicLanding({
                     Registrarme{" "}
                     <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
                   </span>
-                </Link>
+                </Link> : <div className="p-6" style={{ backgroundColor: palette.surface }}><Ticket className="h-6 w-6" style={{ color: accent }} /><h3 className="mt-12 text-xl font-semibold">Registro cerrado</h3><p className="mt-2 text-sm" style={{ color: cardMutedColor }}>Este evento ya terminó o cerró su periodo de registro.</p></div>}
                 {event.event_type === "exhibition" &&
                   content.show_exhibition && (
                     <Link
@@ -382,14 +385,14 @@ export default function EventPublicLanding({
               {item.body ||
                 "Consulta la información, organiza tu visita y completa tu registro."}
             </p>
-            <Link
+            {registrationOpen && <Link
               to={registration}
               className="mt-8 inline-flex items-center gap-2 rounded-md px-5 py-3.5 text-sm font-bold text-zinc-950 transition hover:brightness-110 active:translate-y-px"
               style={{ backgroundColor: accent, color: palette.ctaText }}
             >
               {content.cta_label}
               <ArrowRight className="h-4 w-4" />
-            </Link>
+            </Link>}
           </div>
         </div>
       </section>
@@ -419,13 +422,13 @@ export default function EventPublicLanding({
                 Galería
               </a>
             )}
-            <Link
+            {registrationOpen && <Link
               to={registration}
               className="hidden rounded-md px-4 py-2.5 text-sm font-bold text-zinc-950 transition hover:brightness-110 active:translate-y-px sm:inline-flex"
               style={{ backgroundColor: accent, color: palette.ctaText }}
             >
               {content.cta_label}
-            </Link>
+            </Link>}
             <span className="inline-flex lg:hidden">
               <Menu className="h-5 w-5" />
             </span>
@@ -463,14 +466,14 @@ export default function EventPublicLanding({
                 {content.subheadline}
               </p>
               <div className="mt-9 flex flex-wrap gap-3">
-                <Link
+                {registrationOpen ? <Link
                   to={registration}
                   className="inline-flex items-center gap-2 rounded-md px-5 py-3.5 text-sm font-bold text-zinc-950 transition hover:brightness-110 active:translate-y-px"
                   style={{ backgroundColor: accent, color: palette.ctaText }}
                 >
                   {content.cta_label}
                   <ArrowRight className="h-4 w-4" />
-                </Link>
+                </Link> : <span className="inline-flex rounded-md border border-white/20 px-5 py-3.5 text-sm font-bold">Registro cerrado</span>}
                 {content.brochure_url ? (
                   <a
                     href={content.brochure_url}

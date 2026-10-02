@@ -17,6 +17,7 @@ import PurchaseSummary from "../components/PurchaseSummary";
 import ParticipantAccessLink from "../components/ParticipantAccessLink";
 import { type TicketCategory } from "../lib/participant";
 import { trackVisit } from '../lib/campaignAttribution';
+import type { PublicRegistrationState } from '../lib/eventPresentation';
 
 type EventRow = {
   id: string;
@@ -24,6 +25,8 @@ type EventRow = {
   name: string;
   description: string | null;
   start_date: string | null;
+  end_date: string | null;
+  registration_deadline: string | null;
   config: Record<string, unknown>;
   organizations: { name: string | null } | null;
 };
@@ -63,6 +66,7 @@ export default function RegistroEvento() {
   const [categoryId,setCategoryId] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [registrationState, setRegistrationState] = useState<PublicRegistrationState | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [credentialToken, setCredentialToken] = useState<string | null>(null);
@@ -90,7 +94,7 @@ export default function RegistroEvento() {
       let query = supabase
         .from("events")
         .select(
-          "id, organization_id, name, description, start_date, config, organizations(name)",
+          "id, organization_id, name, description, start_date, end_date, registration_deadline, config, organizations(name)",
         )
         .eq("status", "published");
       // Aísla por organización cuando se resuelve un tenant por subdominio.
@@ -107,7 +111,14 @@ export default function RegistroEvento() {
       }
       const ev = data as unknown as EventRow | null;
       setEvent(ev);
+      setRegistrationState(null);
       setCategories([]); setCategoryId('');
+      if (ev) {
+        const availability = await supabase.rpc('get_public_event_registration_state', { p_event_id: ev.id });
+        if (!active) return;
+        if (availability.error) { setLoadError('No se pudo validar la disponibilidad del registro.'); setLoading(false); return; }
+        setRegistrationState(availability.data as unknown as PublicRegistrationState);
+      }
       if (ev?.config?.ticket_categories_enabled === true) {
         const result=await supabase.rpc('get_public_ticket_categories',{p_event_id:ev.id});
         if (!active) return;
@@ -188,7 +199,7 @@ export default function RegistroEvento() {
   }
 
   async function onSubmit(values: FormValues) {
-    if (!event) return;
+    if (!event || registrationState?.available !== true) return;
     setSubmitError(null);
     if (event.config.ticket_categories_enabled === true && !categoryId) { setSubmitError('Selecciona una categoría de entrada disponible.'); return; }
 
@@ -295,10 +306,14 @@ export default function RegistroEvento() {
           />
         )}
 
+        {!loading && event && !done && registrationState?.available === false && (
+          <Notice title="Registro no disponible" body={registrationState.reason ?? "El organizador todavía está preparando este registro."} />
+        )}
+
         {!loading &&
           event &&
           !done &&
-          event.config?.registration_mode === "invitation" && (
+          registrationState?.available !== false && event.config?.registration_mode === "invitation" && (
             <Notice
               title="Registro por invitación"
               body="Este evento no admite registros públicos. Solicita tu invitación al organizador."
@@ -308,7 +323,7 @@ export default function RegistroEvento() {
         {!loading &&
           event &&
           !done &&
-          event.config?.registration_mode !== "invitation" && (
+          registrationState?.available === true && event.config?.registration_mode !== "invitation" && (
             <div className="animate-float-up">
               <p className="text-sm font-medium uppercase tracking-wider text-emerald-600">
                 {event.organizations?.name ?? "Registro"}

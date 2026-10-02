@@ -370,11 +370,7 @@ export default function PlanoPublico() {
             .eq("public_visible", true)
             .eq("visible", true)
             .order("z_index"),
-          supabase
-            .from("published_exhibition_directory")
-            .select(
-              "element_id,company_name,logo_url,description,category,contact_email,contact_phone,social_links",
-            ),
+          supabase.rpc("get_published_exhibition_directory", { p_event_id: eventId }),
           supabase
             .from("floor_plan_routes")
             .select("id,name,kind,geometry,active")
@@ -427,7 +423,7 @@ export default function PlanoPublico() {
       );
       const nextAssignments = new Map<string, string>();
       const profileByElement = new Map<string, Record<string, unknown>>();
-      (assignmentResult.data ?? []).forEach((raw) => {
+      (assignmentResult.data ?? []).forEach((raw: unknown) => {
         const item = raw as {
           element_id: string;
           company_name?: string | null;
@@ -602,8 +598,8 @@ export default function PlanoPublico() {
               )}
             </div>
             <div className="min-w-0">
-              <Link to={`/e/${eventId}`} className="text-sm text-slate-500">
-                ← Volver al evento
+              <Link to={`/evento/${eventId}`} className="text-sm text-slate-500">
+                ← Portada del evento
               </Link>
               <p
                 className="mt-1 truncate text-xs font-semibold uppercase tracking-wide"
@@ -630,7 +626,7 @@ export default function PlanoPublico() {
               PDF
             </button>
             <Link
-              to={`/e/${eventId}/agenda`}
+              to={`/e/${eventId}/programa?solo=evento`}
               className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold"
             >
               <CalendarDays className="h-4 w-4" />
@@ -1009,7 +1005,7 @@ export default function PlanoPublico() {
             PDF
           </button>
           <Link
-            to={`/e/${eventId}/agenda`}
+            to={`/e/${eventId}/programa?solo=evento`}
             className="flex flex-1 items-center justify-center gap-1 rounded-xl px-3 py-2 text-xs font-semibold"
           >
             <CalendarDays className="h-4 w-4" />

@@ -16,6 +16,7 @@ import { resolveActiveOrg, type ActiveOrg } from "../../lib/activeOrg";
 import ImpersonationBanner from "../../components/ImpersonationBanner";
 import SponsorCompaniesAdmin from "./sponsors/SponsorCompaniesAdmin";
 import { loadProgramScopes, type ProgramScope } from "../../lib/programContext";
+import { displayLabel, EVENT_STATUS_LABEL } from "../../lib/eventPresentation";
 
 type Org = ActiveOrg;
 type Option = {
@@ -656,8 +657,8 @@ export default function PatrocinantesGestionAdmin() {
                       </p>
                       <p className="mt-2 text-xs text-zinc-500">
                         Acuerdo: {item.agreed_amount ?? "A definir"}{" "}
-                        {item.currency} · Pago: {item.payment_status} · Estado:{" "}
-                        {item.status}
+                        {item.currency} · Pago: {displayLabel(EVENT_STATUS_LABEL, item.payment_status)} · Estado:{" "}
+                        {displayLabel(EVENT_STATUS_LABEL, item.status)}
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -923,7 +924,7 @@ export default function PatrocinantesGestionAdmin() {
                           key={payment.id}
                           className="mt-1 text-xs text-zinc-600"
                         >
-                          {payment.amount} {payment.currency} · {payment.status}{" "}
+                          {payment.amount} {payment.currency} · {displayLabel(EVENT_STATUS_LABEL, payment.status)}{" "}
                           · {payment.reference || "sin referencia"}
                         </p>
                       ))}
@@ -937,7 +938,7 @@ export default function PatrocinantesGestionAdmin() {
                       </p>
                       {deliverables.map((item) => (
                         <p key={item.id} className="mt-1 text-xs text-zinc-600">
-                          {item.name} · {item.status}
+                          {item.name} · {displayLabel(EVENT_STATUS_LABEL, item.status)}
                           {item.requires_print ? " · imprimir" : ""}
                           {item.details ? ` · ${item.details}` : ""}
                         </p>

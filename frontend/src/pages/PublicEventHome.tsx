@@ -13,7 +13,7 @@ export default function PublicEventHome() {
     if (tenantLoading) return;
     let active = true;
     setLoading(true);
-    let query = supabase.from('events').select('id,name,description,event_type,start_date,config').eq('id', eventId).eq('status', 'published');
+    let query = supabase.from('events').select('id,name,description,event_type,start_date,end_date,registration_deadline,config').eq('id', eventId).eq('status', 'published');
     if (tenant) query = query.eq('organization_id', tenant.id);
     void query.maybeSingle().then(({ data }) => {
       if (active) { setEvent(data as LandingEvent | null); setLoading(false); }

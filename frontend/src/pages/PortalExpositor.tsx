@@ -17,6 +17,7 @@ import { useAuth } from "../lib/auth";
 import { usePersistentDraft } from "../lib/usePersistentDraft";
 import CsvImportPanel from "../components/CsvImportPanel";
 import type { CsvColumn, CsvRow } from "../lib/csvImport";
+import { displayLabel, EVENT_STATUS_LABEL } from "../lib/eventPresentation";
 
 type EventRow = {
   id: string;
@@ -295,12 +296,7 @@ export default function PortalExpositor() {
           .eq("event_id", eventId)
           .eq("company_id", companyId)
           .order("activity_at", { ascending: false }),
-        supabase
-          .from("published_exhibition_directory")
-          .select("element_id")
-          .eq("company_id", companyId)
-          .limit(1)
-          .maybeSingle(),
+        supabase.rpc("get_published_exhibition_directory", { p_event_id: eventId }),
       ]);
     if (
       taskResult.error ||
@@ -322,7 +318,8 @@ export default function PortalExpositor() {
     setStaff((staffResult.data ?? []) as Staff[]);
     setPersonnel((personnelResult.data ?? []) as Personnel[]);
     setActivities((activityResult.data ?? []) as Activity[]);
-    setPublicElementId((publicLinkResult.data as { element_id?: string } | null)?.element_id ?? null);
+    const publicStand = ((publicLinkResult.data ?? []) as { element_id: string; company_id: string }[]).find((item) => item.company_id === companyId);
+    setPublicElementId(publicStand?.element_id ?? null);
   }, [eventId, requestedCompanyId, userId]);
 
   useEffect(() => {
@@ -1055,7 +1052,7 @@ export default function PortalExpositor() {
                   <span>
                     {payment.amount} {payment.currency} · {payment.payment_date}
                   </span>
-                  <span className="text-zinc-500">{payment.status}</span>
+                  <span className="text-zinc-500">{displayLabel(EVENT_STATUS_LABEL, payment.status)}</span>
                 </div>
               ))}
             </div>

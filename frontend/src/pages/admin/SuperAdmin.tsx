@@ -4,6 +4,7 @@ import { ArrowLeft, Building2, ExternalLink, LogIn, ShieldCheck, Trash2, Users }
 import { supabase } from '../../lib/supabase'
 import { setImpersonatedOrg } from '../../lib/activeOrg'
 import { slugAvailable, slugify } from '../../lib/onboarding'
+import { displayLabel, EVENT_STATUS_LABEL } from '../../lib/eventPresentation'
 
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? ''
 
@@ -550,7 +551,7 @@ function OrgDetail({ org, onError, onChanged }: { org: Org; onError: (m: string)
             <li key={e.id} className="flex items-center justify-between text-sm">
               <span className="text-zinc-700">{e.name}</span>
               <span className="text-xs text-zinc-500">
-                {Number(e.registration_count)} reg. · {e.status}
+                {Number(e.registration_count)} reg. · {displayLabel(EVENT_STATUS_LABEL, e.status)}
               </span>
             </li>
           ))}

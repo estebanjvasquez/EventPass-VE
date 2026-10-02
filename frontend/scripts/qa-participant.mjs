@@ -19,14 +19,17 @@ try{
   await context.addInitScript(()=>{
    const user={id:'00000000-0000-0000-0000-000000000003',email:'qa@example.test',aud:'authenticated',role:'authenticated'};
    const jwt=`${btoa(JSON.stringify({alg:'HS256',typ:'JWT'}))}.${btoa(JSON.stringify({sub:user.id,exp:Math.floor(Date.now()/1000)+3600,role:'authenticated'}))}.qa`;
-   localStorage.setItem('sb-moqywmcbklaeaelttzdm-auth-token',JSON.stringify({access_token:jwt,refresh_token:'qa',expires_in:3600,expires_at:Math.floor(Date.now()/1000)+3600,token_type:'bearer',user}));
+   const session=JSON.stringify({access_token:jwt,refresh_token:'qa',expires_in:3600,expires_at:Math.floor(Date.now()/1000)+3600,token_type:'bearer',user});
+   localStorage.setItem('sb-moqywmcbklaeaelttzdm-auth-token',session);
+   localStorage.setItem('sb-qa-auth-token',session);
    sessionStorage.setItem('participant_access','b'.repeat(64));
   });
   // Deny ALL outgoing external requests unless explicitly mocked below.
   await context.route('**/*',async route=>{
    const url=new URL(route.request().url());
-   if(url.origin===origin)return route.continue();
-   const path=url.pathname;const body=route.request().postDataJSON();
+   const path=url.pathname;
+   if(url.origin===origin&&!path.startsWith('/api/'))return route.continue();
+   const body=route.request().postDataJSON();
    requests.push({path,method:route.request().method(),body});
    const respond=(value,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(value),headers:{'Access-Control-Allow-Origin':origin,'Access-Control-Allow-Headers':'authorization,content-type,apikey,x-client-info','Access-Control-Allow-Methods':'GET,POST,OPTIONS'}});
    if(route.request().method()==='OPTIONS')return respond({});
@@ -42,6 +45,7 @@ try{
    if(path.endsWith('/rpc/create_event_campaign')){campaigns=[{id:'10000000-0000-0000-0000-000000000001',name:body.p_name,source:body.p_source,medium:body.p_medium,site_id:body.p_site_id,archived:false}];return respond(campaigns[0].id);}
    if(path.endsWith('/rpc/archive_event_campaign')){campaigns[0].archived=body.p_archived;return respond(null);}
    if(path.endsWith('/rpc/get_public_ticket_categories'))return respond([{id:'cat-qa',name:'VIP',description:'Acceso al foro',benefits:['Networking'],price:120,currency:'USD',remaining:1}]);
+   if(path.endsWith('/rpc/get_public_event_registration_state'))return respond({available:true,payment_required:true,price_known:true,payment_methods_ready:true});
    if(path.endsWith('/rpc/register_event_attributed_purchase'))return respond([{registration_id:'reg-qa',credential_token:'d'.repeat(32),payment_required:true}]);
    if(path.endsWith('/rpc/create_registration_access'))return respond('b'.repeat(64));
    if(path.endsWith('/rpc/save_public_landing')){site={...site,landing_config:{...site.landing_config,...(body.p_publish?body.p_config:{}),draft:body.p_config}};return respond({site,event_config:{...event.config,public_landing_draft:body.p_config}});}
