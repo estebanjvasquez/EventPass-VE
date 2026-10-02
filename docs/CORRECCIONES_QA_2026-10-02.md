@@ -27,6 +27,8 @@ Migración específica: `20261001200749_qa_public_flows.sql`, proyecto `moqywmcb
 
 Código publicado: commit `f645986ea6968f83dd13543638b4db43168d057a`. GitHub Actions `36976520993`: **completed / success**, incluyendo compilación y despliegue Cloudflare Pages.
 
+Última publicación, incluyendo el instrumental reproducible: commit `5bdaee6f85a5498ff0549f142702fbbe931b883c`, Actions `36977046695`: **completed / success**. Tras esta publicación se repitieron otra vez los seis casos y los ocho controles anónimos: **todos PASS**. El commit posterior de cierre sólo actualiza este documento y no cambia el frontend desplegado.
+
 Se repitieron los seis casos contra `eventosfacil.net` y `expo-energia-2026.eventosfacil.net` usando respuestas reales, sin mocks:
 
 | Caso | Resultado publicado |
