@@ -1,4 +1,4 @@
-import { chromium } from '@playwright/test';
+import { chromium, expect } from '@playwright/test';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 
@@ -54,11 +54,13 @@ try {
   assert.equal(await preview.locator('.agenda-sponsors').count(), 0);
   assert(await preview.locator('footer').isVisible(), 'Activity and general sponsors independent');
   await page.getByRole('button',{name:'Pausar cintillo'}).click();
-  assert.equal(await preview.locator('.agenda-marquee-track').evaluate(el=>getComputedStyle(el).animationPlayState), 'paused');
+  const tickerStates = () => preview.locator('.agenda-marquee-track').evaluate(el=>el.getAnimations().map(animation=>animation.playState));
+  await expect.poll(tickerStates).toEqual(['paused']);
   await page.getByRole('button',{name:'Reanudar cintillo'}).click();
   await page.emulateMedia({reducedMotion:'reduce'});
-  assert.equal(await preview.locator('.agenda-marquee-track').evaluate(el=>getComputedStyle(el).animationName), 'none');
+  await expect.poll(async () => (await tickerStates()).some(state => state === 'running')).toBe(false);
   await page.emulateMedia({reducedMotion:'no-preference'});
+  await expect.poll(async () => (await tickerStates()).some(state => state === 'running')).toBe(true);
   for (const layout of ['cards','timeline','split']) {
     await page.getByLabel('Distribución',{exact:true}).selectOption(layout);
     assert(await page.locator(`.agenda-layout-${layout}`).isVisible());

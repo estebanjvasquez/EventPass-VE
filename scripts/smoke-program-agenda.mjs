@@ -34,7 +34,8 @@ async function rpc(body) {
   return data;
 }
 const forum = await rpc({ p_event_id: "47ad0375-24dd-4f40-80c0-500f4362767c" });
-assert.ok(forum.events[0].sessions.length > 0);
+const publicForum = forum.events.find(event => event.id === "47ad0375-24dd-4f40-80c0-500f4362767c");
+assert.ok(publicForum?.sessions.length > 0, "The requested forum must expose its sessions, regardless of linked-event order");
 const program = await rpc({
   p_program_id: "8f84c7bf-384c-4756-8b47-bde4306642a3",
 });

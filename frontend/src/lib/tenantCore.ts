@@ -35,7 +35,8 @@ function parseHost(hostname: string): HostTarget {
 export async function resolveTenant(): Promise<Tenant | null> {
   const params = new URLSearchParams(window.location.search)
   const forced = params.get('org')
-  const target: HostTarget = forced ? { slug: forced } : parseHost(window.location.hostname)
+  const hostTarget = parseHost(window.location.hostname)
+  const target: HostTarget = hostTarget.slug || hostTarget.customHost ? hostTarget : forced ? { slug: forced } : {}
   if (!target.slug && !target.customHost) return null
 
   let query = supabase
@@ -44,7 +45,15 @@ export async function resolveTenant(): Promise<Tenant | null> {
     .eq('status', 'active')
   query = target.slug ? query.eq('slug', target.slug) : query.eq('custom_hostname', target.customHost!)
   const { data } = await query.maybeSingle()
-  return (data as Tenant | null) ?? null
+  if (data) return data as Tenant
+  // Program/event domains belong to the same organization as their public site.
+  let siteQuery = supabase.from('public_sites').select('organization_id').eq('status', 'active')
+  siteQuery = target.slug ? siteQuery.eq('slug', target.slug) : siteQuery.eq('custom_hostname', target.customHost!)
+  const { data: site } = await siteQuery.maybeSingle()
+  if (!site?.organization_id) throw new Error('Sitio no disponible')
+  const { data: organization } = await supabase.from('organizations').select('id, slug, name, custom_hostname, branding').eq('id', site.organization_id).eq('status', 'active').maybeSingle()
+  if (!organization) throw new Error('Sitio no disponible')
+  return organization as Tenant
 }
 
 export async function resolvePublicSite(): Promise<PublicSite | null> {

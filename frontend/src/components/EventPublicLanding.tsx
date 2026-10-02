@@ -146,6 +146,15 @@ export default function EventPublicLanding({
 }) {
   const content = contentFor(event);
   const [slide, setSlide] = useState(0);
+  const [interestAvailable, setInterestAvailable] = useState(false);
+  useEffect(() => {
+    let active = true;
+    setInterestAvailable(false);
+    if (content.show_interest) void supabase.rpc('get_public_event_lead_form', { p_event_id: event.id, p_slug: 'solicita-informacion' }).then(({ data, error }) => {
+      if (active) setInterestAvailable(!error && Array.isArray(data) && data.length > 0);
+    });
+    return () => { active = false; };
+  }, [event.id, content.show_interest]);
   const [sponsors, setSponsors] = useState<{ id: string; name: string; logo_url: string | null }[]>([]);
   const brand = resolvePublicEventBrand(event);
   const accent = brand.color;
@@ -473,7 +482,7 @@ export default function EventPublicLanding({
                     <ArrowRight className="h-4 w-4" />
                   </a>
                 ) : (
-                  content.show_interest && (
+                  content.show_interest && interestAvailable && (
                     <Link
                       to={`/e/${event.id}/interes/solicita-informacion`}
                       className="inline-flex items-center gap-2 rounded-md border border-white/30 bg-white/5 px-5 py-3.5 text-sm font-bold transition hover:bg-white/12"
@@ -529,7 +538,7 @@ export default function EventPublicLanding({
           </div>
         </section>
         {content.show_sponsors && sponsors.length > 0 && <section className="overflow-hidden py-14 sm:py-18" style={{ backgroundColor: palette.surface }}><div className="mx-auto max-w-7xl px-4 sm:px-7"><h2 className="text-2xl font-semibold" style={{ color: palette.text }}>{content.sponsors_title || "Patrocinantes"}</h2><div className={content.sponsors_mode === "carousel" ? "mt-7 flex gap-5 overflow-x-auto pb-3" : "mt-7 flex flex-wrap gap-5"}>{sponsors.map((sponsor) => <div key={sponsor.id} className="flex h-24 min-w-44 items-center justify-center rounded-xl border border-black/10 bg-white p-4"><img src={sponsor.logo_url || ""} alt={sponsor.name} className="max-h-full max-w-full object-contain" onError={(e) => { e.currentTarget.style.display = "none"; }} />{!sponsor.logo_url && <span className="text-sm font-semibold text-zinc-700">{sponsor.name}</span>}</div>)}</div></div></section>}
-        {linkedEvents.length > 0 && <section className="mx-auto max-w-7xl px-4 py-10 sm:px-7"><h2 className="text-2xl font-semibold">Eventos del programa</h2><div className="mt-5 grid gap-4 sm:grid-cols-2">{linkedEvents.map(linked => <Link key={linked.id} to={`/e/${linked.id}`} className="rounded-xl border p-5 font-semibold" style={{ backgroundColor: palette.surface, color: cardTextColor }}>{linked.name}<ArrowRight className="mt-3 h-4 w-4" /></Link>)}</div></section>}
+        {linkedEvents.length > 0 && <section className="mx-auto max-w-7xl px-4 py-10 sm:px-7"><h2 className="text-2xl font-semibold">Eventos del programa</h2><div className="mt-5 grid gap-4 sm:grid-cols-2">{linkedEvents.map(linked => <Link key={linked.id} to={registrationCampaignUrl(`/e/${linked.id}`, linked.id, linked.id === trackingEventId ? programId : null)} className="rounded-xl border p-5 font-semibold" style={{ backgroundColor: palette.surface, color: cardTextColor }}>{linked.name}<ArrowRight className="mt-3 h-4 w-4" /></Link>)}</div></section>}
         {content.blocks.map(renderBlock)}
       </main>
       <footer className="border-t border-white/10 px-4 py-9 text-sm sm:px-7" style={{ backgroundColor: palette.page, color: palette.muted }}>

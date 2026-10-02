@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Link, Navigate, Route, Routes } from 'react-router-dom'
 import RequireAuth from './components/RequireAuth'
 import EventLandingAdmin from './pages/admin/EventLandingAdmin'
 
@@ -71,6 +71,7 @@ function App() {
   return (
     <Suspense fallback={<PageFallback />}>
       <Routes>
+        <Route path="*" element={<main className="grid min-h-[100dvh] place-items-center bg-zinc-50 p-6"><section className="max-w-lg text-center"><h1 className="text-3xl font-bold">Página no encontrada</h1><p className="my-5">El enlace no existe o ha cambiado. Puedes volver al inicio para continuar.</p><Link className="font-semibold text-emerald-700 underline" to="/">Volver al inicio</Link></section></main>} />
         <Route path="/" element={<Landing />} />
         <Route path="/evento/:eventId" element={<PublicEventHome />} />
         <Route path="/registro" element={<RegistroEvento />} />

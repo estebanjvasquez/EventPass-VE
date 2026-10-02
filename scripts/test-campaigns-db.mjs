@@ -14,6 +14,8 @@ export async function testCampaigns(db, { org, owner, staff, event, sibling, oth
   await db.exec(programMigration.slice(programMigration.indexOf('create function public.register_program_participant('), programMigration.indexOf('revoke all on function public.register_program_participant')));
   const migration = await readFile(new URL('../infra/supabase/migrations/20261001183330_event_campaign_attribution.sql', import.meta.url), 'utf8');
   await db.exec(migration); await db.exec(migration);
+  const fixes = await readFile(new URL('../infra/supabase/migrations/20261001200749_qa_public_flows.sql', import.meta.url), 'utf8');
+  await db.exec(fixes); await db.exec(fixes);
   await role('authenticated', owner);
   const campaign = await scalar(`select create_event_campaign($1,'Instagram QA','instagram','paid_social',null)`, [sibling]);
   await fails(`select create_event_campaign($1,'Other','instagram','social',null)`, [other], /permiso/);
@@ -79,6 +81,15 @@ export async function testCampaigns(db, { org, owner, staff, event, sibling, oth
   await scalar(`select register_program_attributed_participant($1,$2,$3,'Program','','program@example.test','1234567',p_visit_id=>$4)`, [program,sibling,pass,retryVisit]);
   await role('authenticated', owner);
   assert.equal((await scalar(`select get_event_campaign_dashboard($1)`, [sibling])).breakdown.find(row => row.campaign_id === shared).completions, 1);
+  await db.exec('reset role');
+  // Shared landing -> individual event registration must complete the same visit.
+  await role('anon');
+  const individualVisit = '10000000-0000-0000-0000-000000000008';
+  await scalar(`select track_event_visit($1,$2,'landing',$3,'linkedin','social',$4)`, [individualVisit,sibling,shared,program]);
+  await scalar(`select track_event_visit($1,$2,'form',$3,'linkedin','social',$4)`, [individualVisit,sibling,shared,program]);
+  await scalar(`select register_event_attributed_purchase($1,'Shared individual','','individual@example.test','1234567',p_visit_id=>$2)`, [sibling,individualVisit]);
+  await role('authenticated', owner);
+  assert.equal((await scalar(`select get_event_campaign_dashboard($1)`, [sibling])).breakdown.find(row => row.campaign_id === shared).completions, 2);
   await db.exec('reset role');
   console.log('PASS: campaign permissions/isolation, destinations, immutable attribution, deduplication, atomic conversions, duplicate rejection, form-only separation, expiry, period filters, shared program scope.');
 }

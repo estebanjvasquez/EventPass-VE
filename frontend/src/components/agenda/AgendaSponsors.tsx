@@ -18,13 +18,21 @@ export function AgendaSponsors({ sponsors, mode, size = 40 }: { sponsors: Agenda
 }
 export function SponsorTicker({ sponsors, mode, settings, preview }: { sponsors: AgendaSponsor[]; mode: SponsorMode; settings: AgendaSettings; preview: boolean }) {
   const [paused, setPaused] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setReducedMotion(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
   const trackRef = useRef<HTMLDivElement>(null);
   const groupRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<Animation | null>(null);
   const pausedRef = useRef(false);
   const [loopDistance, setLoopDistance] = useState(0);
   const visible = mode === 'none' ? [] : sponsors;
-  const animated = settings.ticker_animated !== false;
+  const animated = settings.ticker_animated !== false && !reducedMotion;
   const staticAlign = settings.ticker_static_align === 'left' ? 'left' : 'center';
   const duration = boundedNumber(settings.ticker_seconds, 45, 20, 120) * 1_000;
   const direction = settings.ticker_direction === 'right' ? 'right' : 'left';

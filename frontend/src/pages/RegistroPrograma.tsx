@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { Link } from "react-router-dom";
 import ParticipantAccessLink from "../components/ParticipantAccessLink";
 import PurchaseSummary from "../components/PurchaseSummary";
-import { trackVisit } from '../lib/campaignAttribution';
+import { registrationCampaignUrl, trackVisit } from '../lib/campaignAttribution';
 import { CheckCircle2, Ticket } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useTenant } from "../lib/useTenant";
@@ -58,7 +58,7 @@ const ACCESS_LABEL: Record<Pass["access_mode"], string> = {
 
 export default function RegistroPrograma() {
   const { programId } = useParams();
-  const { loading: tenantLoading } = useTenant();
+  const { tenant, loading: tenantLoading } = useTenant();
   const [program, setProgram] = useState<Program | null>(null);
   const [passes, setPasses] = useState<Pass[]>([]);
   const [events, setEvents] = useState<LinkedEvent[]>([]);
@@ -86,7 +86,10 @@ export default function RegistroPrograma() {
   });
 
   useEffect(() => {
-    if (!programId) return;
+    if (!programId || tenantLoading) return;
+    setLoading(true);
+    setError(null);
+    setProgram(null);
     let alive = true;
     Promise.all([
       supabase
@@ -95,6 +98,7 @@ export default function RegistroPrograma() {
           "id, name, description, venue_name, starts_at, registration_config",
         )
         .eq("id", programId)
+        .match(tenant ? { organization_id: tenant.id } : {})
         .maybeSingle(),
       supabase
         .from("passes")
@@ -113,6 +117,7 @@ export default function RegistroPrograma() {
       if (!alive) return;
       if (p.error || !p.data) setError("Este programa no está disponible.");
       else setProgram(p.data as Program);
+      if (p.data && (pa.error || ev.error)) setError('No pudimos consultar los accesos disponibles. Vuelve a intentarlo.');
       setPasses((pa.data ?? []) as Pass[]);
       const list = (ev.data ?? []) as unknown as LinkedEvent[];
       setEvents(list);
@@ -126,7 +131,7 @@ export default function RegistroPrograma() {
     return () => {
       alive = false;
     };
-  }, [programId]);
+  }, [programId, tenant, tenantLoading]);
 
   const profiles = useMemo(() => {
     const configured = program?.registration_config?.public_profiles;
@@ -266,6 +271,18 @@ export default function RegistroPrograma() {
               </Link>
             )}
           </div>
+        ) : error ? (
+          <div role="alert" className="mt-8 rounded-xl bg-red-50 p-5 text-red-800"><p>{error}</p><button className="mt-3 underline" onClick={() => window.location.reload()}>Volver a intentar</button></div>
+        ) : !passes.length ? (
+          <section className="mt-8 rounded-xl border bg-zinc-50 p-5">
+            <h2 className="text-xl font-bold">Registro conjunto no disponible</h2>
+            <p className="mt-3">El organizador todavía no ha habilitado pases para este programa. Puedes consultar las entradas disponibles de cada evento.</p>
+            <div className="mt-4 grid gap-3">{events.map(item => {
+              const linked = Array.isArray(item.events) ? item.events[0] : item.events;
+              return linked ? <Link className="font-semibold text-emerald-700 underline" key={item.event_id} to={registrationCampaignUrl(`/e/${item.event_id}`, item.event_id, item.event_id === trackingEventId ? programId ?? null : null)}>Ver entradas de {linked.name}</Link> : null;
+            })}</div>
+            <Link className="mt-4 inline-block underline" to="/">Volver al inicio</Link>
+          </section>
         ) : (
           <form className="mt-8 grid gap-4 sm:grid-cols-2" onSubmit={submit}>
             <Field label="Perfil">
