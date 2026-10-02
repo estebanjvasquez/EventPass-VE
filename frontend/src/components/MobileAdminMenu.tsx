@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { CalendarCog, Handshake, IdCard, LayoutDashboard, LogOut, Menu, ScanLine, ShieldCheck, Ticket, Users, X } from 'lucide-react'
+import { BookOpen, CalendarCog, Handshake, IdCard, LayoutDashboard, LogOut, Menu, ScanLine, ShieldCheck, Ticket, Users, X } from 'lucide-react'
 import { useAuth } from '../lib/auth'
 
 const links = [
@@ -44,6 +44,7 @@ export default function MobileAdminMenu() {
               </Link>
             ))}
             <Link to="/admin/suscripcion" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-zinc-700 hover:bg-emerald-50 hover:text-emerald-800"><ShieldCheck className="h-4 w-4 text-emerald-700" />Suscripción</Link>
+            <a href="/manual/" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-zinc-700 hover:bg-emerald-50 hover:text-emerald-800"><BookOpen className="h-4 w-4 text-emerald-700" />Manual de usuario</a>
             <button type="button" onClick={() => { setOpen(false); void signOut() }} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-zinc-700 hover:bg-red-50 hover:text-red-700"><LogOut className="h-4 w-4" />Salir</button>
           </nav>
         </div>

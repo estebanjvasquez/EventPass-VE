@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Building2, CalendarCog, ChevronDown, CircleUserRound, ClipboardList, Handshake, IdCard, LayoutDashboard, LogOut, ScanLine, ShieldCheck, Ticket, Users } from 'lucide-react'
+import { BookOpen, Building2, CalendarCog, ChevronDown, CircleUserRound, ClipboardList, Handshake, IdCard, LayoutDashboard, LogOut, ScanLine, ShieldCheck, Ticket, Users } from 'lucide-react'
 import { useAuth } from '../lib/auth'
 import { clearImpersonation, resolveActiveOrg } from '../lib/activeOrg'
 import { supabase } from '../lib/supabase'
@@ -88,6 +88,7 @@ export default function AuthenticatedHeader() {
             <nav aria-label="Navegación de usuario" className="max-h-[min(60dvh,30rem)] overflow-y-auto p-2">
               {navigation.map(({ to, label, icon: Icon }) => <Link key={to} to={to} onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-emerald-50 hover:text-emerald-900"><Icon className="h-4 w-4 text-emerald-700" />{label}</Link>)}
               <Link to="/admin/suscripcion" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-emerald-50 hover:text-emerald-900"><ShieldCheck className="h-4 w-4 text-emerald-700" />Suscripción</Link>
+              <a href="/manual/" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-emerald-50 hover:text-emerald-900"><BookOpen className="h-4 w-4 text-emerald-700" />Manual de usuario</a>
               {state.isPlatformAdmin && <Link to="/superadmin" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl bg-violet-50 px-3 py-2.5 text-sm font-bold text-violet-900 hover:bg-violet-100"><ShieldCheck className="h-4 w-4 text-violet-700" />Ir a Superadmin</Link>}
             </nav>
             <div className="border-t border-zinc-100 p-2"><button type="button" onClick={() => void leave()} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-red-700 hover:bg-red-50"><LogOut className="h-4 w-4" />Cerrar sesión</button></div>
