@@ -8,7 +8,8 @@ import { supabase } from '../lib/supabase'
 import { useTenant } from '../lib/useTenant'
 
 type CatalogEvent = { id: string; name: string; event_type: string; policy: string; price: number; currency: string; capacity: number | null }
-type CatalogItem = { id: string; name: string; description: string | null; item_type: string; selection_type: 'required' | 'optional'; price: number; currency: string; capacity: number | null; reserved: number; sales_start: string | null; sales_end: string | null; entitlements: { label: string }[] }
+type Entitlement = { label: string; event_id: string | null; session_id: string | null; session_event_id: string | null; session_type: string | null; starts_at: string | null; ends_at: string | null; stage_name: string | null; allow_overlap: boolean }
+type CatalogItem = { id: string; parent_item_id: string | null; source_event_id: string | null; name: string; description: string | null; item_type: string; selection_type: 'required' | 'optional'; price: number; currency: string; capacity: number | null; reserved: number; sales_start: string | null; sales_end: string | null; entitlements: Entitlement[] }
 type Catalog = { program: { id: string; name: string; description: string | null; venue_name: string | null; starts_at: string | null; ends_at: string | null; mode: 'separate' | 'unified' | 'modular' | 'hybrid'; timezone: string; brand_name?: string; primary_color?: string }; events: CatalogEvent[]; items: CatalogItem[] }
 type Result = { participation_id: string; credential_token: string; participation_status: string; order_id: string; order_token: string; order_status: string; total: number; currency: string }
 
@@ -33,28 +34,41 @@ export default function RegistroPrograma() {
     void supabase.rpc('get_public_program_registration_catalog', { p_program_id: programId }).then(response => {
       if (!active) return
       if (response.error || !response.data) setError(response.error?.message ?? 'Este programa no está disponible.')
-      else { const value = response.data as Catalog; setCatalog(value); setSelected(value.items.filter(item => item.selection_type === 'required').map(item => item.id)) }
+      else { const value = response.data as Catalog; setCatalog(value); const parents=value.items.filter(item=>!item.parent_item_id&&item.selection_type==='required').map(item=>item.id); const children=value.items.filter(item=>item.parent_item_id&&parents.includes(item.parent_item_id)&&item.selection_type==='required').map(item=>item.id); setSelected([...parents,...children]) }
       setLoading(false)
     })
     return () => { active = false }
   }, [programId, tenant, tenantLoading])
 
-  const required = useMemo(() => catalog?.items.filter(item => item.selection_type === 'required') ?? [], [catalog])
+  const topItems = useMemo(() => catalog?.items.filter(item => !item.parent_item_id) ?? [], [catalog])
+  const required = useMemo(() => topItems.filter(item => item.selection_type === 'required'), [topItems])
   const chosen = useMemo(() => catalog?.items.filter(item => selected.includes(item.id)) ?? [], [catalog, selected])
   const total = chosen.reduce((sum, item) => sum + Number(item.price), 0)
   const currency = chosen.find(item => Number(item.price) > 0)?.currency ?? chosen[0]?.currency ?? 'USD'
+  const selectionComplete = topItems.filter(item=>selected.includes(item.id)).every(parent=>{const children=catalog?.items.filter(item=>item.parent_item_id===parent.id)??[];return children.length===0||children.some(child=>selected.includes(child.id))})
   const trackingEventId = catalog?.events[0]?.id
   useEffect(() => { if (programId && trackingEventId) void trackVisit(trackingEventId, programId, 'form') }, [programId, trackingEventId])
 
   function change(key: keyof typeof form, value: string) { setForm(current => ({ ...current, [key]: value })) }
   function toggle(item: CatalogItem) {
     if (item.selection_type === 'required' || (item.capacity !== null && item.reserved >= item.capacity)) return
-    setSelected(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])
+    const children=catalog?.items.filter(child=>child.parent_item_id===item.id)??[]
+    if (!item.parent_item_id && !selected.includes(item.id) && children.some(child=>child.selection_type==='required'&&child.capacity!==null&&child.reserved>=child.capacity)) return
+    if (!item.parent_item_id) {
+      setSelected(current=>current.includes(item.id)?current.filter(id=>id!==item.id&&!children.some(child=>child.id===id)):[...current,item.id,...children.filter(child=>child.selection_type==='required').map(child=>child.id)])
+      return
+    }
+    if (!selected.includes(item.parent_item_id)) return
+    const schedule=item.entitlements.find(value=>value.session_id)
+    const conflict=catalog?.items.find(other=>selected.includes(other.id)&&other.id!==item.id&&other.item_type==='session'&&schedule?.starts_at&&schedule.ends_at&&other.entitlements.some(value=>value.session_id&&value.starts_at&&value.ends_at&&!schedule.allow_overlap&&!value.allow_overlap&&new Date(schedule.starts_at!)<new Date(value.ends_at!)&&new Date(value.starts_at!)<new Date(schedule.ends_at!)))
+    if (!selected.includes(item.id)&&conflict){setError(`“${item.name}” se cruza con “${conflict.name}”. Elige solo una.`);return}
+    setError(null); setSelected(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])
   }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault()
     if (!programId || !form.first_name.trim() || !form.email.trim() || !chosen.length) return
+    if (!selectionComplete) { setError('Selecciona al menos una sesión de cada taller elegido.'); return }
     setSaving(true); setError(null)
     const visitId = trackingEventId ? await trackVisit(trackingEventId, programId, 'form') : null
     const response = await supabase.rpc('register_program_selection', {
@@ -86,18 +100,24 @@ export default function RegistroPrograma() {
       <ParticipantAccessLink token={result?.credential_token ?? null} programId={catalog.program.id} />
 
       {result ? <Success result={result} accent={accent} /> : catalog.program.mode === 'separate' ? <SeparateRegistration events={catalog.events} programId={programId!} /> : !catalog.items.length ? <Notice title="Registro en configuración" body="El organizador todavía no ha publicado accesos para este programa." /> : <form className="mt-8" onSubmit={submit}>
-        <section><h2 className="text-xl font-bold">1. Elige tus accesos</h2><p className="mt-1 text-sm text-zinc-600">Los componentes incluidos ya están seleccionados. Puedes combinar eventos, talleres y presentaciones disponibles.</p><div className="mt-4 grid gap-3 sm:grid-cols-2">{catalog.items.map(item => {
-          const soldOut = item.capacity !== null && item.reserved >= item.capacity
-          const checked = selected.includes(item.id)
-          return <label key={item.id} className={`relative rounded-2xl border p-4 ${checked ? 'border-emerald-600 bg-emerald-50' : 'border-zinc-200'} ${soldOut ? 'opacity-60' : ''}`}><div className="flex items-start gap-3"><input type="checkbox" className="mt-1 h-4 w-4 accent-emerald-700" checked={checked} disabled={item.selection_type === 'required' || soldOut} onChange={() => toggle(item)} /><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-3"><strong>{item.name}</strong><span className="whitespace-nowrap font-bold text-emerald-800">{money(Number(item.price), item.currency)}</span></div>{item.description && <p className="mt-1 text-sm text-zinc-600">{item.description}</p>}<p className="mt-2 text-xs text-zinc-500">{item.entitlements.map(entitlement => entitlement.label).join(' · ')}</p><p className="mt-2 text-xs font-semibold">{item.selection_type === 'required' ? 'Incluido obligatoriamente' : soldOut ? 'Agotado' : item.capacity == null ? 'Sin límite' : `${Math.max(item.capacity - item.reserved, 0)} plazas disponibles`}</p></div></div></label>
-        })}</div></section>
+        <section><h2 className="text-xl font-bold">1. Elige tus accesos</h2><p className="mt-1 text-sm text-zinc-600">Selecciona los eventos y, dentro de cada taller, reserva las sesiones que quieres cursar. Cada sesión conserva su propio precio y cupo.</p><div className="mt-4 space-y-4">{topItems.map(item => <ProgramAccess key={item.id} item={item} childrenItems={catalog.items.filter(child=>child.parent_item_id===item.id)} selected={selected} onToggle={toggle}/>)}</div></section>
 
         <section className="mt-8"><h2 className="text-xl font-bold">2. Datos del participante</h2><div className="mt-4 grid gap-4 sm:grid-cols-2"><Field label="Perfil"><select value={form.participation_type} onChange={event => change('participation_type', event.target.value)}>{Object.entries(PROFILE_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field><Field label="Nombre"><input required value={form.first_name} onChange={event => change('first_name', event.target.value)} /></Field><Field label="Apellido"><input value={form.last_name} onChange={event => change('last_name', event.target.value)} /></Field><Field label="Correo"><input required type="email" value={form.email} onChange={event => change('email', event.target.value)} /></Field><Field label="Teléfono"><input required value={form.phone} onChange={event => change('phone', event.target.value)} /></Field><Field label="Cédula / documento"><input value={form.cedula} onChange={event => change('cedula', event.target.value)} /></Field><Field label="Empresa / organización"><input value={form.company} onChange={event => change('company', event.target.value)} /></Field><Field label="Cargo"><input value={form.job_title} onChange={event => change('job_title', event.target.value)} /></Field><Field label="Ciudad"><input value={form.city} onChange={event => change('city', event.target.value)} /></Field><Field label="País"><input value={form.country} onChange={event => change('country', event.target.value)} /></Field></div></section>
 
-        <section className="mt-8"><h2 className="text-xl font-bold">3. Revisa y confirma</h2><div className="mt-4"><PurchaseSummary snapshot={{ event_name: catalog.program.name, starts_at: catalog.program.starts_at, venue: catalog.program.venue_name, timezone: catalog.program.timezone, amount: total, currency, benefits: chosen.map(item => item.name) }} /></div>{error && <p role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}<button disabled={saving || selected.length < required.length || !chosen.length} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 font-semibold text-white disabled:opacity-50" style={{ backgroundColor: accent }}><Ticket className="h-4 w-4" />{saving ? 'Procesando…' : total > 0 ? `Continuar · ${money(total, currency)}` : 'Confirmar registro gratuito'}</button></section>
+        <section className="mt-8"><h2 className="text-xl font-bold">3. Revisa y confirma</h2><div className="mt-4"><PurchaseSummary snapshot={{ event_name: catalog.program.name, starts_at: catalog.program.starts_at, venue: catalog.program.venue_name, timezone: catalog.program.timezone, amount: total, currency, benefits: chosen.map(item => item.name) }} /></div>{error && <p role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}<button disabled={saving || selected.length < required.length || !chosen.length || !selectionComplete} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 font-semibold text-white disabled:opacity-50" style={{ backgroundColor: accent }}><Ticket className="h-4 w-4" />{saving ? 'Procesando…' : total > 0 ? `Continuar · ${money(total, currency)}` : 'Confirmar registro gratuito'}</button>{!selectionComplete&&<p className="mt-2 text-sm text-amber-700">Selecciona al menos una sesión dentro de cada taller elegido.</p>}</section>
       </form>}
     </section>
   </main>
+}
+
+function ProgramAccess({item,childrenItems,selected,onToggle}:{item:CatalogItem;childrenItems:CatalogItem[];selected:string[];onToggle:(item:CatalogItem)=>void}) {
+  const checked=selected.includes(item.id)
+  const requiredChildSoldOut=childrenItems.some(child=>child.selection_type==='required'&&child.capacity!==null&&child.reserved>=child.capacity)
+  const soldOut=(item.capacity!==null&&item.reserved>=item.capacity)||requiredChildSoldOut
+  return <article className={`rounded-2xl border ${checked?'border-emerald-600 bg-emerald-50/60':'border-zinc-200'} ${soldOut?'opacity-60':''}`}>
+    <label className="flex cursor-pointer items-start gap-3 p-4"><input type="checkbox" className="mt-1 h-4 w-4 accent-emerald-700" checked={checked} disabled={item.selection_type==='required'||soldOut} onChange={()=>onToggle(item)}/><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-3"><strong>{item.name}</strong><span className="whitespace-nowrap font-bold text-emerald-800">{money(Number(item.price),item.currency)}</span></div>{item.description&&<p className="mt-1 text-sm text-zinc-600">{item.description}</p>}<p className="mt-2 text-xs text-zinc-500">{item.entitlements.map(value=>value.label).join(' · ')}</p><p className="mt-2 text-xs font-semibold">{item.selection_type==='required'?'Incluido obligatoriamente':soldOut?'Agotado':item.capacity==null?'Sin límite':`${Math.max(item.capacity-item.reserved,0)} plazas disponibles`}</p></div></label>
+    {childrenItems.length>0&&<div className="border-t border-emerald-200 bg-white/80 p-4"><h3 className="font-semibold">Sesiones de {item.name}</h3><p className="mt-1 text-xs text-zinc-600">{checked?'Elige al menos una. Los cupos y precios se calculan por sesión.':'Selecciona primero el taller para habilitar sus sesiones.'}</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{childrenItems.map(child=>{const childChecked=selected.includes(child.id);const childSoldOut=child.capacity!==null&&child.reserved>=child.capacity;const schedule=child.entitlements.find(value=>value.session_id);return <label key={child.id} className={`rounded-xl border p-3 ${childChecked?'border-emerald-500 bg-emerald-50':'border-zinc-200'} ${!checked||childSoldOut?'opacity-55':'cursor-pointer'}`}><div className="flex items-start gap-2"><input type="checkbox" className="mt-1" checked={childChecked} disabled={!checked||child.selection_type==='required'||childSoldOut} onChange={()=>onToggle(child)}/><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><strong className="text-sm">{child.name}</strong><span className="text-sm font-bold text-emerald-800">{money(Number(child.price),child.currency)}</span></div>{schedule?.starts_at&&<p className="mt-1 text-xs text-zinc-600">{new Date(schedule.starts_at).toLocaleString('es-VE',{dateStyle:'medium',timeStyle:'short'})}{schedule.stage_name?` · ${schedule.stage_name}`:''}</p>}<p className="mt-2 text-xs font-semibold">{child.selection_type==='required'?'Incluida':childSoldOut?'Agotada':child.capacity==null?'Cupo disponible':`${Math.max(child.capacity-child.reserved,0)} plazas`}</p></div></div></label>})}</div></div>}
+  </article>
 }
 
 function Success({ result, accent }: { result: Result; accent: string }) {

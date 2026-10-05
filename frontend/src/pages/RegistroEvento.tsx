@@ -218,6 +218,7 @@ export default function RegistroEvento() {
     if (!event || registrationState?.available !== true) return;
     setSubmitError(null);
     if (event.config.ticket_categories_enabled === true && !categoryId) { setSubmitError('Selecciona una categoría de entrada disponible.'); return; }
+    if (event.event_type === 'workshop' && sessions.length > 0 && chosenSessions.length === 0) { setSubmitError('Selecciona al menos una sesión del taller.'); return; }
 
     const hasSeats =
       event.config?.public_seat_selection_enabled === true &&
@@ -441,7 +442,7 @@ export default function RegistroEvento() {
                 <div className="sm:col-span-2">
                   <button
                     type="submit"
-                    disabled={isSubmitting || (event.config.ticket_categories_enabled === true && !categoryId)}
+                    disabled={isSubmitting || (event.config.ticket_categories_enabled === true && !categoryId) || (event.event_type === 'workshop' && sessions.length > 0 && chosenSessions.length === 0)}
                     style={color ? { backgroundColor: color } : undefined}
                     className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition-transform active:scale-[0.98] disabled:opacity-60"
                   >
