@@ -33,7 +33,7 @@ export default function WorkshopSessionsAdmin() {
       supabase.from('events').select('id,name,event_type,organization_id,start_date,end_date').eq('id',eventId).single(),
       supabase.from('event_sessions').select('id,name,description,session_type,starts_at,ends_at,stage_id,capacity,registration_policy,price,currency,sales_start,sales_end,track,allow_overlap,event_stages(name)').eq('event_id',eventId).order('starts_at'),
       supabase.from('event_stages').select('id,name').eq('event_id',eventId).order('sort_order'),
-      supabase.from('event_ticket_categories').select('id,name,price,currency').eq('event_id',eventId).eq('published',true).order('sort_order'),
+      supabase.from('event_ticket_categories').select('id,name,price,currency').eq('event_id',eventId).eq('published',true).order('name'),
       supabase.from('event_session_ticket_categories').select('session_id,category_id'),
     ])
     if (eventResult.error || sessionResult.error || stageResult.error || categoryResult.error || eligibilityResult.error) setError(eventResult.error?.message ?? sessionResult.error?.message ?? stageResult.error?.message ?? categoryResult.error?.message ?? eligibilityResult.error?.message ?? 'No se pudo cargar el programa.')
