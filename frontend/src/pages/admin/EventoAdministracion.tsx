@@ -222,6 +222,14 @@ export default function EventoAdministracion() {
         show: event.event_type === "forum",
       },
       {
+        label: "Programa, sesiones y precios",
+        description: "Tipos, horarios, cupos, tracks y cobros por actividad.",
+        to: `/admin/eventos/${event.id}/talleres`,
+        icon: CalendarDays,
+        tone: "bg-emerald-50 text-emerald-800",
+        show: event.event_type === "workshop",
+      },
+      {
         label: "Asientos",
         description: "Filas, columnas y reservas nominales.",
         to: `/admin/asientos/${event.id}`,

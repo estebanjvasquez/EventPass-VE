@@ -23,12 +23,21 @@ type EventRow = {
   id: string;
   organization_id: string;
   name: string;
+  event_type: string;
   description: string | null;
   start_date: string | null;
   end_date: string | null;
   registration_deadline: string | null;
   config: Record<string, unknown>;
   organizations: { name: string | null } | null;
+};
+
+type PublicSession = {
+  id: string; name: string; description: string | null; session_type: string;
+  starts_at: string; ends_at: string; stage_name: string | null; capacity: number | null;
+  reserved: number; registration_policy: 'included' | 'optional_free' | 'optional_paid';
+  price: number; currency: string; track: string | null; allow_overlap: boolean;
+  eligible_category_ids: string[];
 };
 
 type Seat = {
@@ -64,6 +73,8 @@ export default function RegistroEvento() {
   const [selectedSeat, setSelectedSeat] = useState<string | null>(null);
   const [categories,setCategories] = useState<TicketCategory[]>([]);
   const [categoryId,setCategoryId] = useState('');
+  const [sessions,setSessions] = useState<PublicSession[]>([]);
+  const [selectedSessionIds,setSelectedSessionIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [registrationState, setRegistrationState] = useState<PublicRegistrationState | null>(null);
@@ -94,7 +105,7 @@ export default function RegistroEvento() {
       let query = supabase
         .from("events")
         .select(
-          "id, organization_id, name, description, start_date, end_date, registration_deadline, config, organizations(name)",
+          "id, organization_id, name, event_type, description, start_date, end_date, registration_deadline, config, organizations(name)",
         )
         .eq("status", "published");
       // Aísla por organización cuando se resuelve un tenant por subdominio.
@@ -113,11 +124,16 @@ export default function RegistroEvento() {
       setEvent(ev);
       setRegistrationState(null);
       setCategories([]); setCategoryId('');
+      setSessions([]); setSelectedSessionIds([]);
       if (ev) {
         const availability = await supabase.rpc('get_public_event_registration_state', { p_event_id: ev.id });
         if (!active) return;
         if (availability.error) { setLoadError('No se pudo validar la disponibilidad del registro.'); setLoading(false); return; }
         setRegistrationState(availability.data as unknown as PublicRegistrationState);
+        const catalog = await supabase.rpc('get_public_event_session_catalog',{p_event_id:ev.id});
+        if (!active) return;
+        if (catalog.error) { setLoadError('No se pudo consultar el programa disponible.'); setLoading(false); return; }
+        setSessions((catalog.data??[]) as PublicSession[]);
       }
       if (ev?.config?.ticket_categories_enabled === true) {
         const result=await supabase.rpc('get_public_ticket_categories',{p_event_id:ev.id});
@@ -213,7 +229,7 @@ export default function RegistroEvento() {
     }
 
     const visitId = await trackVisit(event.id, null, 'form');
-    const { data, error } = await supabase.rpc("register_event_attributed_purchase", {
+    const { data, error } = await supabase.rpc("register_event_session_purchase", {
       p_event_id: event.id,
       p_seat_id: hasSeats ? selectedSeat : null,
       p_first_name: values.first_name,
@@ -221,8 +237,9 @@ export default function RegistroEvento() {
       p_email: values.email,
       p_phone: values.phone,
       p_cedula: values.cedula || "",
-      p_visit_id: visitId,
       p_category_id: categoryId || null,
+      p_session_ids: selectedSessionIds,
+      p_visit_id: visitId,
     });
     if (error) {
       if (error.code === "23505") {
@@ -256,8 +273,20 @@ export default function RegistroEvento() {
   const logoUrl = brand.logo_url;
   const category = categories.find(item=>item.id===categoryId);
   const seat = seats.find(item=>item.id===selectedSeat);
-  const snapshot = {event_name:event?.name,starts_at:event?.start_date,timezone:typeof event?.config.timezone==='string'?event.config.timezone:'America/Caracas',venue:String(event?.config.venue_name??event?.config.location??''),category:category?.name,benefits:category?.benefits,amount:category?Number(category.price):event?.config.registration_mode==='free'?0:seat?.price??(event?.config.price!=null?Number(event.config.price):null),currency:category?.currency??String(event?.config.currency??'USD'),seat:seat?.seat_number};
-  const isFree = category ? Number(category.price)===0 : event?.config.registration_mode==='free';
+  const eligible = (session: PublicSession) => session.eligible_category_ids.length===0 || (!!categoryId && session.eligible_category_ids.includes(categoryId));
+  const chosenSessions = sessions.filter(item=>eligible(item) && (item.registration_policy==='included'||selectedSessionIds.includes(item.id)));
+  const baseAmount = category?Number(category.price):event?.config.registration_mode==='free'?0:seat?.price??(event?.config.price!=null?Number(event.config.price):0);
+  const sessionAmount = chosenSessions.reduce((sum,item)=>sum+(item.registration_policy==='optional_paid'?Number(item.price):0),0);
+  const totalAmount = Number(baseAmount??0)+sessionAmount;
+  const snapshot = {event_name:event?.name,starts_at:event?.start_date,timezone:typeof event?.config.timezone==='string'?event.config.timezone:'America/Caracas',venue:String(event?.config.venue_name??event?.config.location??''),category:category?.name,benefits:[...(category?.benefits??[]),...chosenSessions.map(item=>`${item.name}${item.registration_policy==='included'?' · incluida':''}`)],amount:totalAmount,currency:category?.currency??chosenSessions.find(item=>item.registration_policy==='optional_paid')?.currency??String(event?.config.currency??'USD'),seat:seat?.seat_number};
+  const isFree = totalAmount===0;
+
+  function toggleSession(session: PublicSession) {
+    if (selectedSessionIds.includes(session.id)) { setSelectedSessionIds(current=>current.filter(id=>id!==session.id)); return }
+    const conflict = sessions.find(other=>selectedSessionIds.includes(other.id) && !session.allow_overlap && !other.allow_overlap && new Date(session.starts_at)<new Date(other.ends_at) && new Date(other.starts_at)<new Date(session.ends_at))
+    if (conflict) { setSubmitError(`“${session.name}” se cruza con “${conflict.name}”. Elige solo una.`); return }
+    setSubmitError(null); setSelectedSessionIds(current=>[...current,session.id])
+  }
 
   return (
     <div className="min-h-[100dvh] bg-[#fafafa]">
@@ -360,7 +389,8 @@ export default function RegistroEvento() {
                 onSubmit={handleSubmit(onSubmit)}
                 className="mt-10 grid gap-5 sm:grid-cols-2"
               >
-                {event.config.ticket_categories_enabled === true && <fieldset className="space-y-3 sm:col-span-2"><legend className="font-semibold">Selecciona tu entrada</legend>{categories.length===0 && <p>No hay categorías disponibles para venta en este momento.</p>}{categories.map(item=><label key={item.id} className="block rounded-xl border p-4"><input type="radio" name="ticket-category" required checked={categoryId===item.id} disabled={item.remaining===0} value={item.id} onChange={()=>setCategoryId(item.id)}/><span className="ml-2 font-semibold">{item.name} · {Number(item.price)===0?'Gratuito':`${item.price} ${item.currency}`}</span><p className="mt-2 text-sm">{item.description}</p>{item.benefits.length>0&&<p className="mt-1 text-sm">{item.benefits.join(' · ')}</p>}<p className="mt-2 text-sm text-zinc-500">{item.remaining===0?'Agotada':item.remaining==null?'Sujeta al aforo del evento':`${item.remaining} cupos disponibles`}</p></label>)}<p className="text-sm text-zinc-600">El precio de la entrada sustituye al del asiento; no se suman.</p></fieldset>}
+                {event.config.ticket_categories_enabled === true && <fieldset className="space-y-3 sm:col-span-2"><legend className="font-semibold">Selecciona tu entrada</legend>{categories.length===0 && <p>No hay categorías disponibles para venta en este momento.</p>}{categories.map(item=><label key={item.id} className="block rounded-xl border p-4"><input type="radio" name="ticket-category" required checked={categoryId===item.id} disabled={item.remaining===0} value={item.id} onChange={()=>{setCategoryId(item.id);setSelectedSessionIds(current=>current.filter(id=>{const session=sessions.find(value=>value.id===id);return !!session&&(session.eligible_category_ids.length===0||session.eligible_category_ids.includes(item.id))}))}}/><span className="ml-2 font-semibold">{item.name} · {Number(item.price)===0?'Gratuito':`${item.price} ${item.currency}`}</span><p className="mt-2 text-sm">{item.description}</p>{item.benefits.length>0&&<p className="mt-1 text-sm">{item.benefits.join(' · ')}</p>}<p className="mt-2 text-sm text-zinc-500">{item.remaining===0?'Agotada':item.remaining==null?'Sujeta al aforo del evento':`${item.remaining} cupos disponibles`}</p></label>)}<p className="text-sm text-zinc-600">El precio de la entrada sustituye al del asiento; no se suman.</p></fieldset>}
+                {sessions.length>0 && <fieldset className="space-y-3 sm:col-span-2"><legend className="font-semibold">Elige tus sesiones</legend><p className="text-sm text-zinc-600">Las actividades incluidas se reservan automáticamente. Puedes añadir actividades opcionales según tu entrada.</p>{sessions.map(item=>{const allowed=eligible(item);const remaining=item.capacity==null?null:Math.max(item.capacity-item.reserved,0);const included=item.registration_policy==='included';const checked=included?allowed:selectedSessionIds.includes(item.id);const disabled=!allowed||remaining===0;return <label key={item.id} className={`block rounded-xl border p-4 ${disabled?'bg-zinc-50 text-zinc-500':'cursor-pointer hover:border-emerald-400'}`}><div className="flex items-start gap-3"><input type="checkbox" className="mt-1" checked={checked} disabled={included||disabled} onChange={()=>toggleSession(item)}/><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-semibold">{item.name}</span><span className="text-sm font-semibold">{item.registration_policy==='optional_paid'?`${item.price} ${item.currency}`:included?'Incluida':'Gratuita'}</span></div><p className="mt-1 text-sm">{new Date(item.starts_at).toLocaleString('es-VE',{dateStyle:'medium',timeStyle:'short'})}{item.stage_name?` · ${item.stage_name}`:''}{item.track?` · ${item.track}`:''}</p>{item.description&&<p className="mt-2 text-sm">{item.description}</p>}<p className="mt-2 text-xs">{!allowed?(categoryId?'Tu entrada no habilita esta sesión.':'Selecciona una entrada para validar el acceso.'):remaining===0?'Cupo agotado':remaining==null?'Cupo sujeto al aforo general':`${remaining} cupos disponibles`}</p></div></div></label>})}</fieldset>}
                 <FieldText
                   label="Nombre"
                   error={errors.first_name?.message}
