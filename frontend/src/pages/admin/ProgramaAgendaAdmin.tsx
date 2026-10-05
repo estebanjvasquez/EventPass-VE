@@ -11,6 +11,7 @@ import {
   type AgendaBlock,
 } from "../../lib/programAgenda";
 import { ProgramaAgendaView } from "../ProgramaAgenda";
+import { ProgramSessionManager } from "../../components/admin/ProgramSessionManager";
 
 const field =
   "mt-1 w-full rounded-lg border border-zinc-300 bg-white p-2 text-sm";
@@ -425,6 +426,7 @@ export default function ProgramaAgendaAdmin() {
               Vista previa
             </button>
           </div>
+          <ProgramSessionManager programId={programId!} events={events} />
           {preview && (
             <section className="rounded-xl border bg-zinc-50 p-5">
               <ProgramaAgendaView

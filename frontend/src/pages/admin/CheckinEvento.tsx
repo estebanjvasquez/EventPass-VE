@@ -21,7 +21,7 @@ type RegRow = {
   events: { name?: string } | { name?: string }[] | null
 }
 type AccessPoint = { id: string; name: string; event_id: string }
-type CheckinSession = { id: string; name: string; session_type: 'lecture' | 'workshop' | 'break' }
+type CheckinSession = { id: string; name: string; session_type: string }
 
 const READER_ID = 'checkin-reader'
 

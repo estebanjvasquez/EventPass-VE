@@ -3,7 +3,7 @@ import { ClipboardCheck, Plus, Trash2, UsersRound } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 
 type EventData = { id: string; organization_id: string }
-type Session = { id: string; name: string; session_type: 'lecture' | 'workshop' | 'break'; capacity: number | null; starts_at: string | null }
+type Session = { id: string; name: string; session_type: string; capacity: number | null; starts_at: string | null }
 type Staff = { user_id: string; email: string; role: string }
 type Assignment = { id: string; session_id: string; user_id: string; responsibility: 'host' | 'moderator' | 'checkin' | 'support'; shift_starts_at: string | null; shift_ends_at: string | null; notes: string | null }
 type Reservation = { session_id: string; status: 'confirmed' | 'cancelled' | 'checked_in' }

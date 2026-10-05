@@ -46,8 +46,14 @@ const dayLabel = (value: string) =>
   });
 const typeLabel: Record<string, string> = {
   lecture: "Ponencia",
+  keynote: "Conferencia magistral",
+  panel: "Panel",
   workshop: "Taller",
+  roundtable: "Mesa redonda",
+  training: "Capacitación",
+  networking: "Networking",
   break: "Receso",
+  other: "Otra actividad",
 };
 const refreshSeconds = (value: unknown) =>
   Math.min(

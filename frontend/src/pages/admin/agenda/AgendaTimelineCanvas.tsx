@@ -8,7 +8,7 @@ export type TimelineSession = {
   starts_at: string | null;
   ends_at: string | null;
   stage_id: string | null;
-  session_type: "lecture" | "workshop" | "break";
+  session_type: "lecture" | "keynote" | "panel" | "workshop" | "roundtable" | "training" | "networking" | "break" | "other";
 };
 export type TimelineStage = { id: string; name: string };
 
@@ -42,8 +42,14 @@ const duration = (item: TimelineSession) =>
     : 60;
 const styleByType: Record<TimelineSession["session_type"], string> = {
   lecture: "border-blue-300 bg-blue-50 text-blue-950",
+  keynote: "border-sky-300 bg-sky-50 text-sky-950",
+  panel: "border-cyan-300 bg-cyan-50 text-cyan-950",
   workshop: "border-violet-300 bg-violet-50 text-violet-950",
+  roundtable: "border-fuchsia-300 bg-fuchsia-50 text-fuchsia-950",
+  training: "border-indigo-300 bg-indigo-50 text-indigo-950",
+  networking: "border-emerald-300 bg-emerald-50 text-emerald-950",
   break: "border-amber-300 bg-amber-50 text-amber-950",
+  other: "border-zinc-300 bg-zinc-50 text-zinc-950",
 };
 
 function TimelineCell({ stageId, slot }: { stageId: string; slot: number }) {
