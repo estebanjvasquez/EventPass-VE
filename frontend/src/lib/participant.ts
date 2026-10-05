@@ -1,6 +1,6 @@
 export type TicketCategory = { id: string; name: string; description: string; benefits: string[]; price: number; currency: string; remaining: number | null; published?: boolean; capacity?: number | null; sales_start?: string | null; sales_end?: string | null };
 export type PurchaseSnapshot = { event_name?: string; starts_at?: string | null; timezone?: string; venue?: string | null; category?: string | null; benefits?: string[] | null; amount?: number | null; currency?: string | null; seat?: string | null; legacy?: boolean };
-export type ParticipantRecord = { id: string; reference: string; event_id?: string | null; program_id?: string | null; name: string; status: string; reason?: string | null; deadline?: string | null; snapshot: PurchaseSnapshot; credential_token?: string | null; upload_token?: string | null; passes?: string[]; email_status?: string | null };
+export type ParticipantRecord = { id: string; reference: string; event_id?: string | null; program_id?: string | null; name: string; status: string; reason?: string | null; deadline?: string | null; snapshot: PurchaseSnapshot; credential_token?: string | null; upload_token?: string | null; upload_kind?: 'program' | null; passes?: string[]; email_status?: string | null };
 export function purchasePrice(amount: number | null | undefined, currency?: string | null) {
   if (amount == null) return "Importe no registrado; consulta al organizador";
   if (Number(amount) === 0) return "Gratuito";

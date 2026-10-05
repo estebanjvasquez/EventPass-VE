@@ -1,418 +1,113 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useParams } from "react-router-dom";
-import { Link } from "react-router-dom";
-import ParticipantAccessLink from "../components/ParticipantAccessLink";
-import PurchaseSummary from "../components/PurchaseSummary";
-import { registrationCampaignUrl, trackVisit } from '../lib/campaignAttribution';
-import { CheckCircle2, Ticket } from "lucide-react";
-import { supabase } from "../lib/supabase";
-import { useTenant } from "../lib/useTenant";
-import { resolvePublicEventBrand } from "../lib/eventBranding";
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Link, useParams } from 'react-router-dom'
+import { CheckCircle2, Ticket } from 'lucide-react'
+import ParticipantAccessLink from '../components/ParticipantAccessLink'
+import PurchaseSummary from '../components/PurchaseSummary'
+import { registrationCampaignUrl, trackVisit } from '../lib/campaignAttribution'
+import { supabase } from '../lib/supabase'
+import { useTenant } from '../lib/useTenant'
 
-type Program = {
-  id: string;
-  name: string;
-  description: string | null;
-  venue_name: string | null;
-  starts_at: string | null;
-  registration_config: Record<string, unknown>;
-};
-type Pass = {
-  id: string;
-  name: string;
-  access_mode: "program" | "day" | "session" | "zone";
-  capacity: number | null;
-};
-type LinkedEvent = {
-  event_id: string;
-  component_type: string;
-  events:
-    | {
-        id: string;
-        name: string;
-        start_date: string | null;
-        config: Record<string, unknown> | null;
-      }
-    | {
-        id: string;
-        name: string;
-        start_date: string | null;
-        config: Record<string, unknown> | null;
-      }[]
-    | null;
-};
+type CatalogEvent = { id: string; name: string; event_type: string; policy: string; price: number; currency: string; capacity: number | null }
+type CatalogItem = { id: string; name: string; description: string | null; item_type: string; selection_type: 'required' | 'optional'; price: number; currency: string; capacity: number | null; reserved: number; sales_start: string | null; sales_end: string | null; entitlements: { label: string }[] }
+type Catalog = { program: { id: string; name: string; description: string | null; venue_name: string | null; starts_at: string | null; ends_at: string | null; mode: 'separate' | 'unified' | 'modular' | 'hybrid'; timezone: string; brand_name?: string; primary_color?: string }; events: CatalogEvent[]; items: CatalogItem[] }
+type Result = { participation_id: string; credential_token: string; participation_status: string; order_id: string; order_token: string; order_status: string; total: number; currency: string }
 
-const PROFILE_LABEL: Record<string, string> = {
-  attendee: "Asistente",
-  guest: "Invitado",
-  vip: "Invitado VIP",
-  speaker: "Ponente",
-  exhibitor: "Expositor",
-};
-const ACCESS_LABEL: Record<Pass["access_mode"], string> = {
-  program: "Evento completo",
-  day: "Por día",
-  session: "Por sesión",
-  zone: "Por zona",
-};
+const PROFILE_LABEL: Record<string, string> = { attendee: 'Asistente', guest: 'Invitado', vip: 'Invitado VIP', speaker: 'Ponente', exhibitor: 'Expositor' }
+const money = (amount: number, currency: string) => amount === 0 ? 'Gratis' : new Intl.NumberFormat('es-VE', { style: 'currency', currency }).format(amount)
 
 export default function RegistroPrograma() {
-  const { programId } = useParams();
-  const { tenant, loading: tenantLoading } = useTenant();
-  const [program, setProgram] = useState<Program | null>(null);
-  const [passes, setPasses] = useState<Pass[]>([]);
-  const [events, setEvents] = useState<LinkedEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [credentialToken, setCredentialToken] = useState<string | null>(null);
-  const [participationStatus, setParticipationStatus] = useState<string | null>(
-    null,
-  );
-  const [form, setForm] = useState({
-    first_name: "",
-    last_name: "",
-    email: "",
-    phone: "",
-    cedula: "",
-    company: "",
-    job_title: "",
-    city: "",
-    country: "Venezuela",
-    participation_type: "attendee",
-    pass_id: "",
-    event_id: "",
-  });
+  const { programId } = useParams()
+  const { tenant, loading: tenantLoading } = useTenant()
+  const [catalog, setCatalog] = useState<Catalog | null>(null)
+  const [selected, setSelected] = useState<string[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [result, setResult] = useState<Result | null>(null)
+  const [form, setForm] = useState({ first_name: '', last_name: '', email: '', phone: '', cedula: '', company: '', job_title: '', city: '', country: 'Venezuela', participation_type: 'attendee' })
 
   useEffect(() => {
-    if (!programId || tenantLoading) return;
-    setLoading(true);
-    setError(null);
-    setProgram(null);
-    let alive = true;
-    Promise.all([
-      supabase
-        .from("event_programs")
-        .select(
-          "id, name, description, venue_name, starts_at, registration_config",
-        )
-        .eq("id", programId)
-        .match(tenant ? { organization_id: tenant.id } : {})
-        .maybeSingle(),
-      supabase
-        .from("passes")
-        .select("id, name, access_mode, capacity")
-        .eq("program_id", programId)
-        .eq("is_public", true)
-        .order("created_at"),
-      supabase
-        .from("program_events")
-        .select(
-          "event_id, component_type, events(id, name, start_date, config)",
-        )
-        .eq("program_id", programId)
-        .order("sort_order"),
-    ]).then(([p, pa, ev]) => {
-      if (!alive) return;
-      if (p.error || !p.data) setError("Este programa no está disponible.");
-      else setProgram(p.data as Program);
-      if (p.data && (pa.error || ev.error)) setError('No pudimos consultar los accesos disponibles. Vuelve a intentarlo.');
-      setPasses((pa.data ?? []) as Pass[]);
-      const list = (ev.data ?? []) as unknown as LinkedEvent[];
-      setEvents(list);
-      setForm((f) => ({
-        ...f,
-        pass_id: (pa.data?.[0] as Pass | undefined)?.id ?? "",
-        event_id: list[0]?.event_id ?? "",
-      }));
-      setLoading(false);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [programId, tenant, tenantLoading]);
+    if (!programId || tenantLoading) return
+    let active = true
+    setLoading(true); setError(null)
+    void supabase.rpc('get_public_program_registration_catalog', { p_program_id: programId }).then(response => {
+      if (!active) return
+      if (response.error || !response.data) setError(response.error?.message ?? 'Este programa no está disponible.')
+      else { const value = response.data as Catalog; setCatalog(value); setSelected(value.items.filter(item => item.selection_type === 'required').map(item => item.id)) }
+      setLoading(false)
+    })
+    return () => { active = false }
+  }, [programId, tenant, tenantLoading])
 
-  const profiles = useMemo(() => {
-    const configured = program?.registration_config?.public_profiles;
-    return Array.isArray(configured) && configured.length
-      ? configured.filter(
-          (x): x is string => typeof x === "string" && !!PROFILE_LABEL[x],
-        )
-      : ["attendee", "guest", "vip", "speaker", "exhibitor"];
-  }, [program]);
+  const required = useMemo(() => catalog?.items.filter(item => item.selection_type === 'required') ?? [], [catalog])
+  const chosen = useMemo(() => catalog?.items.filter(item => selected.includes(item.id)) ?? [], [catalog, selected])
+  const total = chosen.reduce((sum, item) => sum + Number(item.price), 0)
+  const currency = chosen.find(item => Number(item.price) > 0)?.currency ?? chosen[0]?.currency ?? 'USD'
+  const trackingEventId = catalog?.events[0]?.id
+  useEffect(() => { if (programId && trackingEventId) void trackVisit(trackingEventId, programId, 'form') }, [programId, trackingEventId])
 
-  const requestedTrackingEvent = new URLSearchParams(window.location.search).get('ep_event');
-  const trackingEventId = events.find(item => item.event_id === requestedTrackingEvent)?.event_id
-    ?? events.find(item => item.event_id === program?.registration_config.web_event_id)?.event_id
-    ?? events[0]?.event_id;
-  useEffect(() => { if (programId && trackingEventId) void trackVisit(trackingEventId, programId, 'form'); }, [programId, trackingEventId]);
-
-  function change(key: keyof typeof form, value: string) {
-    setForm((f) => ({ ...f, [key]: value }));
+  function change(key: keyof typeof form, value: string) { setForm(current => ({ ...current, [key]: value })) }
+  function toggle(item: CatalogItem) {
+    if (item.selection_type === 'required' || (item.capacity !== null && item.reserved >= item.capacity)) return
+    setSelected(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])
   }
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (
-      !programId ||
-      !form.pass_id ||
-      !form.first_name.trim() ||
-      !form.email.trim()
-    )
-      return;
-    setSaving(true);
-    setError(null);
-    const visitId = trackingEventId ? await trackVisit(trackingEventId, programId, 'form') : null;
-    const { data, error: rpcError } = await supabase.rpc(
-      "register_program_attributed_participant",
-      {
-        p_program_id: programId,
-        p_event_id: form.event_id || null,
-        p_pass_id: form.pass_id,
-        p_first_name: form.first_name,
-        p_last_name: form.last_name,
-        p_email: form.email,
-        p_phone: form.phone,
-        p_cedula: form.cedula || null,
-        p_company: form.company || null,
-        p_job_title: form.job_title || null,
-        p_city: form.city || null,
-        p_country: form.country || null,
-        p_participation_type: form.participation_type,
-        p_profile_data: {},
-        p_visit_id: visitId,
-      },
-    );
-    setSaving(false);
-    if (rpcError) setError(rpcError.message);
-    else {
-      const result = Array.isArray(data)
-        ? (data[0] as
-            | {
-                participation_id: string;
-                credential_token: string;
-                participation_status: string;
-              }
-            | undefined)
-        : undefined;
-      setCredentialToken(result?.credential_token ?? null);
-      setParticipationStatus(result?.participation_status ?? null);
-      const apiUrl = import.meta.env.VITE_API_URL;
-      if (apiUrl && result?.participation_id)
-        void fetch(`${apiUrl}/api/program-participations/notify`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ participation_id: result.participation_id }),
-        }).catch(() => undefined);
-      setDone(true);
-    }
+  async function submit(event: React.FormEvent) {
+    event.preventDefault()
+    if (!programId || !form.first_name.trim() || !form.email.trim() || !chosen.length) return
+    setSaving(true); setError(null)
+    const visitId = trackingEventId ? await trackVisit(trackingEventId, programId, 'form') : null
+    const response = await supabase.rpc('register_program_selection', {
+      p_program_id: programId, p_item_ids: selected, p_first_name: form.first_name, p_last_name: form.last_name, p_email: form.email, p_phone: form.phone,
+      p_cedula: form.cedula || null, p_company: form.company || null, p_job_title: form.job_title || null, p_city: form.city || null, p_country: form.country || null,
+      p_participation_type: form.participation_type, p_profile_data: {}, p_visit_id: visitId,
+    })
+    setSaving(false)
+    if (response.error) { setError(response.error.message); return }
+    const value = (Array.isArray(response.data) ? response.data[0] : response.data) as Result | undefined
+    if (!value) { setError('No pudimos completar el registro.'); return }
+    setResult(value)
+    const apiUrl = import.meta.env.VITE_API_URL
+    if (apiUrl) void fetch(`${apiUrl}/api/program-participations/notify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ participation_id: value.participation_id }) }).catch(() => undefined)
   }
 
-  if (tenantLoading || loading)
-    return (
-      <div className="grid min-h-[100dvh] place-items-center text-sm text-zinc-500">
-        Cargando…
-      </div>
-    );
-  if (error && !program)
-    return (
-      <div className="grid min-h-[100dvh] place-items-center px-5 text-center text-sm text-red-700">
-        {error}
-      </div>
-    );
-  if (!program) return null;
-  const selected =
-    events.find((item) => item.event_id === form.event_id) ?? events[0];
-  const selectedEvent = Array.isArray(selected?.events)
-    ? selected.events[0]
-    : selected?.events;
-  const componentBrand = resolvePublicEventBrand(selectedEvent);
-  const accent = typeof program.registration_config.primary_color === "string" ? program.registration_config.primary_color : componentBrand.color;
-  const publicProgramName = typeof program.registration_config.brand_name === "string" && program.registration_config.brand_name.trim() ? program.registration_config.brand_name.trim() : program.name;
+  if (tenantLoading || loading) return <div className="grid min-h-[100dvh] place-items-center text-sm text-zinc-500">Cargando…</div>
+  if (error && !catalog) return <div className="grid min-h-[100dvh] place-items-center px-5 text-center text-sm text-red-700">{error}</div>
+  if (!catalog) return null
+  const accent = catalog.program.primary_color ?? '#047857'
+  const programName = catalog.program.brand_name ?? catalog.program.name
 
-  return (
-    <main className="min-h-[100dvh] bg-zinc-50 px-5 py-10">
-      <section className="mx-auto max-w-2xl rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm sm:p-10">
-        <p className="text-sm font-semibold" style={{ color: accent }}>
-          {publicProgramName} · registro general
-        </p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-900">
-          {program.name}
-        </h1>
-        {program.description && (
-          <p className="mt-3 text-zinc-600">{program.description}</p>
-        )}
-        <p className="mt-3 text-sm text-zinc-500">
-          {program.venue_name ?? "Sede por confirmar"}
-          {program.starts_at
-            ? ` · ${new Date(program.starts_at).toLocaleDateString("es-VE", { day: "numeric", month: "long", year: "numeric" })}`
-            : ""}
-        </p>
-        <ParticipantAccessLink token={credentialToken} programId={program.id}/>
-        {done ? (
-          <div className="mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center text-emerald-800">
-            <CheckCircle2 className="mx-auto h-10 w-10" />
-            <h2 className="mt-3 text-xl font-bold">
-              {participationStatus === "approved"
-                ? "Registro confirmado"
-                : "Registro recibido"}
-            </h2>
-            <p className="mt-2 text-sm">
-              {participationStatus === "approved"
-                ? "Tu credencial ya está disponible y también la recibirás por correo."
-                : "El organizador revisará tu solicitud y te notificará cuando sea aprobada."}
-            </p>
-            {participationStatus === "approved" && credentialToken && (
-              <Link
-                to={`/credencial/${credentialToken}`}
-                className="mt-4 inline-flex rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white"
-              >
-                Ver mi credencial
-              </Link>
-            )}
-          </div>
-        ) : error ? (
-          <div role="alert" className="mt-8 rounded-xl bg-red-50 p-5 text-red-800"><p>{error}</p><button className="mt-3 underline" onClick={() => window.location.reload()}>Volver a intentar</button></div>
-        ) : !passes.length ? (
-          <section className="mt-8 rounded-xl border bg-zinc-50 p-5">
-            <h2 className="text-xl font-bold">Registro conjunto no disponible</h2>
-            <p className="mt-3">El organizador todavía no ha habilitado pases para este programa. Puedes consultar las entradas disponibles de cada evento.</p>
-            <div className="mt-4 grid gap-3">{events.map(item => {
-              const linked = Array.isArray(item.events) ? item.events[0] : item.events;
-              return linked ? <Link className="font-semibold text-emerald-700 underline" key={item.event_id} to={registrationCampaignUrl(`/e/${item.event_id}`, item.event_id, item.event_id === trackingEventId ? programId ?? null : null)}>Ver entradas de {linked.name}</Link> : null;
-            })}</div>
-            <Link className="mt-4 inline-block underline" to="/">Volver al inicio</Link>
-          </section>
-        ) : (
-          <form className="mt-8 grid gap-4 sm:grid-cols-2" onSubmit={submit}>
-            <Field label="Perfil">
-              <select
-                value={form.participation_type}
-                onChange={(e) => change("participation_type", e.target.value)}
-              >
-                {profiles.map((p) => (
-                  <option key={p} value={p}>
-                    {PROFILE_LABEL[p]}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Acceso">
-              <select
-                value={form.pass_id}
-                onChange={(e) => change("pass_id", e.target.value)}
-              >
-                {passes.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} · {ACCESS_LABEL[p.access_mode]}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            {events.length > 1 && (
-              <Field label="Componente inicial">
-                <select
-                  value={form.event_id}
-                  onChange={(e) => change("event_id", e.target.value)}
-                >
-                  {events.map((e) => (
-                    <option key={e.event_id} value={e.event_id}>
-                      {(Array.isArray(e.events) ? e.events[0] : e.events)
-                        ?.name ?? e.component_type}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            )}
-            <Field label="Nombre">
-              <input
-                required
-                value={form.first_name}
-                onChange={(e) => change("first_name", e.target.value)}
-              />
-            </Field>
-            <Field label="Apellido">
-              <input
-                value={form.last_name}
-                onChange={(e) => change("last_name", e.target.value)}
-              />
-            </Field>
-            <Field label="Correo">
-              <input
-                required
-                type="email"
-                value={form.email}
-                onChange={(e) => change("email", e.target.value)}
-              />
-            </Field>
-            <Field label="Teléfono">
-              <input
-                required
-                value={form.phone}
-                onChange={(e) => change("phone", e.target.value)}
-              />
-            </Field>
-            <Field label="Cédula / documento">
-              <input
-                value={form.cedula}
-                onChange={(e) => change("cedula", e.target.value)}
-              />
-            </Field>
-            <Field label="Empresa / organización">
-              <input
-                value={form.company}
-                onChange={(e) => change("company", e.target.value)}
-              />
-            </Field>
-            <Field label="Cargo">
-              <input
-                value={form.job_title}
-                onChange={(e) => change("job_title", e.target.value)}
-              />
-            </Field>
-            <Field label="Ciudad">
-              <input
-                value={form.city}
-                onChange={(e) => change("city", e.target.value)}
-              />
-            </Field>
-            <Field label="País">
-              <input
-                value={form.country}
-                onChange={(e) => change("country", e.target.value)}
-              />
-            </Field>
-            {error && (
-              <p className="sm:col-span-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                {error}
-              </p>
-            )}
-            <div className="sm:col-span-2">
-              <PurchaseSummary snapshot={{ event_name: program.name, starts_at: program.starts_at, venue: program.venue_name, timezone: typeof program.registration_config.timezone === 'string' ? program.registration_config.timezone : 'America/Caracas', amount: null, benefits: passes.filter(pass => pass.id === form.pass_id).map(pass => pass.name) }} />
-            </div>
-            <button
-              disabled={saving || !passes.length}
-              className="sm:col-span-2 inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"
-              style={{ backgroundColor: accent }}
-            >
-              <Ticket className="h-4 w-4" />
-              {saving ? "Enviando…" : "Registrarme"}
-            </button>
-          </form>
-        )}
-      </section>
-    </main>
-  );
+  return <main className="min-h-[100dvh] bg-zinc-50 px-5 py-10">
+    <section className="mx-auto max-w-4xl rounded-3xl border bg-white p-6 shadow-sm sm:p-10">
+      <p className="text-sm font-semibold" style={{ color: accent }}>{programName} · registro</p>
+      <h1 className="mt-2 text-3xl font-bold tracking-tight">{catalog.program.name}</h1>
+      {catalog.program.description && <p className="mt-3 text-zinc-600">{catalog.program.description}</p>}
+      <p className="mt-3 text-sm text-zinc-500">{catalog.program.venue_name ?? 'Sede por confirmar'}{catalog.program.starts_at ? ` · ${new Date(catalog.program.starts_at).toLocaleDateString('es-VE', { day: 'numeric', month: 'long', year: 'numeric' })}` : ''}</p>
+      <ParticipantAccessLink token={result?.credential_token ?? null} programId={catalog.program.id} />
+
+      {result ? <Success result={result} accent={accent} /> : catalog.program.mode === 'separate' ? <SeparateRegistration events={catalog.events} programId={programId!} /> : !catalog.items.length ? <Notice title="Registro en configuración" body="El organizador todavía no ha publicado accesos para este programa." /> : <form className="mt-8" onSubmit={submit}>
+        <section><h2 className="text-xl font-bold">1. Elige tus accesos</h2><p className="mt-1 text-sm text-zinc-600">Los componentes incluidos ya están seleccionados. Puedes combinar eventos, talleres y presentaciones disponibles.</p><div className="mt-4 grid gap-3 sm:grid-cols-2">{catalog.items.map(item => {
+          const soldOut = item.capacity !== null && item.reserved >= item.capacity
+          const checked = selected.includes(item.id)
+          return <label key={item.id} className={`relative rounded-2xl border p-4 ${checked ? 'border-emerald-600 bg-emerald-50' : 'border-zinc-200'} ${soldOut ? 'opacity-60' : ''}`}><div className="flex items-start gap-3"><input type="checkbox" className="mt-1 h-4 w-4 accent-emerald-700" checked={checked} disabled={item.selection_type === 'required' || soldOut} onChange={() => toggle(item)} /><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-3"><strong>{item.name}</strong><span className="whitespace-nowrap font-bold text-emerald-800">{money(Number(item.price), item.currency)}</span></div>{item.description && <p className="mt-1 text-sm text-zinc-600">{item.description}</p>}<p className="mt-2 text-xs text-zinc-500">{item.entitlements.map(entitlement => entitlement.label).join(' · ')}</p><p className="mt-2 text-xs font-semibold">{item.selection_type === 'required' ? 'Incluido obligatoriamente' : soldOut ? 'Agotado' : item.capacity == null ? 'Sin límite' : `${Math.max(item.capacity - item.reserved, 0)} plazas disponibles`}</p></div></div></label>
+        })}</div></section>
+
+        <section className="mt-8"><h2 className="text-xl font-bold">2. Datos del participante</h2><div className="mt-4 grid gap-4 sm:grid-cols-2"><Field label="Perfil"><select value={form.participation_type} onChange={event => change('participation_type', event.target.value)}>{Object.entries(PROFILE_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field><Field label="Nombre"><input required value={form.first_name} onChange={event => change('first_name', event.target.value)} /></Field><Field label="Apellido"><input value={form.last_name} onChange={event => change('last_name', event.target.value)} /></Field><Field label="Correo"><input required type="email" value={form.email} onChange={event => change('email', event.target.value)} /></Field><Field label="Teléfono"><input required value={form.phone} onChange={event => change('phone', event.target.value)} /></Field><Field label="Cédula / documento"><input value={form.cedula} onChange={event => change('cedula', event.target.value)} /></Field><Field label="Empresa / organización"><input value={form.company} onChange={event => change('company', event.target.value)} /></Field><Field label="Cargo"><input value={form.job_title} onChange={event => change('job_title', event.target.value)} /></Field><Field label="Ciudad"><input value={form.city} onChange={event => change('city', event.target.value)} /></Field><Field label="País"><input value={form.country} onChange={event => change('country', event.target.value)} /></Field></div></section>
+
+        <section className="mt-8"><h2 className="text-xl font-bold">3. Revisa y confirma</h2><div className="mt-4"><PurchaseSummary snapshot={{ event_name: catalog.program.name, starts_at: catalog.program.starts_at, venue: catalog.program.venue_name, timezone: catalog.program.timezone, amount: total, currency, benefits: chosen.map(item => item.name) }} /></div>{error && <p role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}<button disabled={saving || selected.length < required.length || !chosen.length} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 font-semibold text-white disabled:opacity-50" style={{ backgroundColor: accent }}><Ticket className="h-4 w-4" />{saving ? 'Procesando…' : total > 0 ? `Continuar · ${money(total, currency)}` : 'Confirmar registro gratuito'}</button></section>
+      </form>}
+    </section>
+  </main>
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="flex flex-col gap-1.5 text-sm font-medium text-zinc-800">
-      {label}
-      <span className="[&>input]:w-full [&>input]:rounded-lg [&>input]:border [&>input]:border-zinc-300 [&>input]:px-3 [&>input]:py-2.5 [&>input]:font-normal [&>input]:outline-none [&>select]:w-full [&>select]:rounded-lg [&>select]:border [&>select]:border-zinc-300 [&>select]:bg-white [&>select]:px-3 [&>select]:py-2.5 [&>select]:font-normal">
-        {children}
-      </span>
-    </label>
-  );
+function Success({ result, accent }: { result: Result; accent: string }) {
+  const paid = Number(result.total) > 0
+  return <div className="mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center text-emerald-900"><CheckCircle2 className="mx-auto h-10 w-10" /><h2 className="mt-3 text-xl font-bold">{paid ? 'Reserva creada' : 'Registro confirmado'}</h2><p className="mt-2 text-sm">{paid ? 'Tus plazas están reservadas. Realiza el pago y carga el comprobante antes del vencimiento.' : 'Tu credencial única ya está disponible para todos los accesos seleccionados.'}</p><div className="mt-5 flex flex-wrap justify-center gap-3">{paid ? <Link to={`/programa/comprobante/${result.order_token}`} className="rounded-lg px-4 py-2.5 font-semibold text-white" style={{ backgroundColor: accent }}>Cargar comprobante</Link> : <Link to={`/credencial/${result.credential_token}`} className="rounded-lg px-4 py-2.5 font-semibold text-white" style={{ backgroundColor: accent }}>Ver mi credencial</Link>}</div></div>
 }
+
+function SeparateRegistration({ events, programId }: { events: CatalogEvent[]; programId: string }) {
+  const available = events.filter(event => event.policy !== 'invite_only')
+  return <section className="mt-8 rounded-2xl border bg-zinc-50 p-5"><h2 className="text-xl font-bold">Registros independientes</h2><p className="mt-2 text-zinc-600">El organizador configuró cada componente con su propio registro.</p><div className="mt-4 grid gap-3">{available.map(event => <Link key={event.id} className="flex items-center justify-between rounded-xl border bg-white p-4 font-semibold text-emerald-700" to={registrationCampaignUrl(`/e/${event.id}`, event.id, programId)}><span>{event.name}</span><span>Registrarme →</span></Link>)}{!available.length && <p className="text-sm text-zinc-500">No hay registros públicos disponibles.</p>}</div></section>
+}
+function Notice({ title, body }: { title: string; body: string }) { return <section className="mt-8 rounded-xl border bg-zinc-50 p-5"><h2 className="text-xl font-bold">{title}</h2><p className="mt-2 text-zinc-600">{body}</p></section> }
+function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="flex flex-col gap-1.5 text-sm font-medium text-zinc-800">{label}<span className="[&>input]:w-full [&>input]:rounded-lg [&>input]:border [&>input]:border-zinc-300 [&>input]:px-3 [&>input]:py-2.5 [&>select]:w-full [&>select]:rounded-lg [&>select]:border [&>select]:border-zinc-300 [&>select]:bg-white [&>select]:px-3 [&>select]:py-2.5">{children}</span></label> }

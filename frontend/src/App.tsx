@@ -17,6 +17,7 @@ const AgendaPublica = lazy(() => import('./pages/AgendaPublica'))
 const ProgramaAgenda = lazy(() => import('./pages/ProgramaAgenda'))
 const ProgramaAgendaAdmin = lazy(() => import('./pages/admin/ProgramaAgendaAdmin'))
 const CargarComprobante = lazy(() => import('./pages/CargarComprobante'))
+const CargarComprobantePrograma = lazy(() => import('./pages/CargarComprobantePrograma'))
 const CredencialEvento = lazy(() => import('./pages/CredencialEvento'))
 const CrearCuenta = lazy(() => import('./pages/CrearCuenta'))
 const Bienvenida = lazy(() => import('./pages/Bienvenida'))
@@ -88,6 +89,7 @@ function App() {
         <Route path="/p/:programId/agenda" element={<ProgramaAgenda />} />
         <Route path="/admin/programas/:programId/agenda" element={<RequireAuth><ProgramaAgendaAdmin /></RequireAuth>} />
         <Route path="/comprobante/:token" element={<CargarComprobante />} />
+        <Route path="/programa/comprobante/:token" element={<CargarComprobantePrograma />} />
         <Route path="/credencial/:token" element={<CredencialEvento />} />
         <Route path="/crear-cuenta" element={<CrearCuenta />} />
         <Route path="/bienvenida" element={<Bienvenida />} />

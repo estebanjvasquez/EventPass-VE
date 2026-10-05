@@ -278,7 +278,7 @@ app.post('/api/program-participations/notify', async (c) => {
     .select('id,status,credential_token,people(first_name,email),event_programs(name,organization_id,venue_name,starts_at,ends_at)')
     .eq('id', parsed.data.participation_id)
     .maybeSingle()
-  if (error || !data || data.status !== 'approved') return c.json({ ok: true })
+  if (error || !data) return c.json({ ok: true })
   const personRaw = Array.isArray(data.people) ? data.people[0] : data.people
   const programRaw = Array.isArray(data.event_programs) ? data.event_programs[0] : data.event_programs
   const person = personRaw as { first_name?: string; email?: string } | null
@@ -287,6 +287,38 @@ app.post('/api/program-participations/notify', async (c) => {
   const { data: organization } = await supabase.from('organizations').select('name,branding').eq('id', program.organization_id).maybeSingle()
   const branding = organization?.branding && typeof organization.branding === 'object' ? organization.branding as Record<string, unknown> : {}
   const base = c.env.APP_BASE_URL.replace(/\/$/, '')
+  if (data.status !== 'approved') {
+    const { data: order } = await supabase
+      .from('program_registration_orders')
+      .select('payment_token,status,total,currency')
+      .eq('participation_id', data.id)
+      .in('status', ['pending_payment', 'payment_submitted'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (!order?.payment_token) return c.json({ ok: true })
+    const { data: methods } = await supabase.from('payment_methods').select('name,details').eq('organization_id', program.organization_id).eq('is_active', true)
+    const paymentResult = await sendUploadLinkEmail({
+      email: c.env.EMAIL,
+      from: c.env.EMAIL_FROM,
+      to: person.email,
+      firstName: person.first_name ?? 'Participante',
+      eventName: program.name ?? 'Tu evento',
+      uploadUrl: `${base}/programa/comprobante/${order.payment_token}`,
+      paymentMethods: methods ?? [],
+      context: {
+        organizerName: String(branding.name ?? organization?.name ?? 'EventosFácil'),
+        logoUrl: typeof branding.logo_url === 'string' ? branding.logo_url : null,
+        accentColor: typeof branding.color === 'string' ? branding.color : null,
+        startsAt: program.starts_at,
+        endsAt: program.ends_at,
+        venueName: program.venue_name,
+      },
+    })
+    await recordEmailAttempt(supabase, { organizationId: program.organization_id, registrationId: null, recipient: person.email, emailType: 'program_payment_required', result: paymentResult })
+    if (!paymentResult.ok) return c.json({ ok: false, status: 'failed', code: paymentResult.errorCode }, 502)
+    return c.json({ ok: true, status: 'accepted', message_id: paymentResult.providerMessageId })
+  }
   const result = await sendConfirmationEmail({
     email: c.env.EMAIL,
     from: c.env.EMAIL_FROM,
