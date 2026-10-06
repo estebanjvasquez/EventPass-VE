@@ -34,7 +34,7 @@ export default function DefinirClave() {
       </div>
     )
 
-  if (!session)
+  if (!session || authError)
     return (
       <div className="grid min-h-[100dvh] place-items-center bg-[#fafafa] px-5 text-center">
         <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-7 shadow-sm">
