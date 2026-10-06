@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { KeyRound, Ticket } from 'lucide-react'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
@@ -13,6 +13,7 @@ export default function DefinirClave() {
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const authError = new URLSearchParams(location.search).get('auth_error')
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -36,10 +37,21 @@ export default function DefinirClave() {
   if (!session)
     return (
       <div className="grid min-h-[100dvh] place-items-center bg-[#fafafa] px-5 text-center">
-        <div>
-          <h1 className="text-2xl font-bold text-zinc-900">Enlace no válido</h1>
-          <p className="mt-2 text-sm text-zinc-600">El enlace de invitación expiró o ya se usó. Pide uno nuevo o inicia sesión.</p>
-          <a href="/admin/login" className="mt-6 inline-block text-sm font-medium text-emerald-700 hover:underline">Ir al inicio de sesión</a>
+        <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-7 shadow-sm">
+          <h1 className="text-2xl font-bold text-zinc-900">
+            {authError === 'otp_expired' ? 'El enlace expiró o ya fue utilizado' : 'No pudimos validar el enlace'}
+          </h1>
+          <p className="mt-3 text-sm leading-6 text-zinc-600">
+            Los enlaces enviados por correo son de un solo uso y caducan por seguridad. Solicita uno nuevo y abre solamente el correo más reciente.
+          </p>
+          <div className="mt-6 flex flex-col gap-3">
+            <Link to="/recuperar-clave" className="rounded-lg bg-zinc-900 px-5 py-3 text-sm font-semibold text-white">
+              Solicitar un enlace nuevo
+            </Link>
+            <Link to="/admin/login" className="text-sm font-medium text-emerald-700 hover:underline">
+              Ir al inicio de sesión
+            </Link>
+          </div>
         </div>
       </div>
     )
