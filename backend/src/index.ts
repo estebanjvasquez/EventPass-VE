@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { z } from 'zod'
-import { sendUploadLinkEmail, sendConfirmationEmail, sendPortalInviteEmail, sendProviderNoticeEmail, type EmailSendBinding, type EventEmailContext } from './email'
+import { sendUploadLinkEmail, sendConfirmationEmail, sendPortalInviteEmail, sendProviderNoticeEmail, sendPlatformAccessEmail, sendMembershipNoticeEmail, type EmailSendBinding, type EventEmailContext } from './email'
 import { runScheduledJobs } from './jobs'
 import { participantApi } from './participant'
 import { normalizeSlug, provisionDomain, getDomainStatus, type CfEnv } from './tenants'
@@ -55,7 +55,7 @@ function allowedAppOrigin(origin: string): string | undefined {
 app.use('*', cors({
   origin: allowedAppOrigin,
   allowHeaders: ['Content-Type', 'Authorization'],
-  allowMethods: ['GET', 'POST', 'OPTIONS'],
+  allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   maxAge: 86400,
 }))
 app.route('/api/participant', participantApi)
@@ -369,6 +369,11 @@ async function authUserId(supabase: SupabaseAdmin, authorization?: string): Prom
   const { data, error } = await supabase.auth.getUser(authorization.slice(7))
   if (error || !data.user) return null
   return data.user.id
+}
+
+async function isPlatformAdmin(supabase: SupabaseAdmin, userId: string): Promise<boolean> {
+  const { data } = await supabase.from('platform_admins').select('user_id').eq('user_id', userId).maybeSingle()
+  return Boolean(data)
 }
 
 const blueprintMimeByExtension: Record<string, string> = {
@@ -786,6 +791,24 @@ const createClientSchema = z.object({
   admin_emails: z.array(z.string().email()).min(1).max(10),
 })
 
+type AccountLink = { userId: string; actionLink: string; status: 'invited' | 'linked' }
+
+async function accountAccessLink(supabase: SupabaseAdmin, email: string, redirectTo: string): Promise<{ data: AccountLink | null; error: string | null }> {
+  const invited = await supabase.auth.admin.generateLink({ type: 'invite', email, options: { redirectTo } })
+  if (invited.data?.user?.id && invited.data.properties?.action_link) {
+    return { data: { userId: invited.data.user.id, actionLink: invited.data.properties.action_link, status: 'invited' }, error: null }
+  }
+  if (!invited.error || !/registered|exist|already/i.test(invited.error.message)) {
+    return { data: null, error: invited.error?.message ?? 'No se pudo generar el enlace de acceso' }
+  }
+  const found = await supabase.rpc('get_user_id_by_email', { p_email: email })
+  const userId = (found.data as string | null) ?? null
+  if (!userId) return { data: null, error: 'No se pudo resolver el usuario' }
+  const recovery = await supabase.auth.admin.generateLink({ type: 'recovery', email, options: { redirectTo } })
+  if (recovery.error || !recovery.data?.properties?.action_link) return { data: null, error: recovery.error?.message ?? 'No se pudo generar el enlace de acceso' }
+  return { data: { userId, actionLink: recovery.data.properties.action_link, status: 'linked' }, error: null }
+}
+
 app.post('/api/admin/clients', async (c) => {
   const parsed = createClientSchema.safeParse(await c.req.json().catch(() => null))
   if (!parsed.success) return c.json({ error: 'Datos inválidos' }, 400)
@@ -820,33 +843,21 @@ app.post('/api/admin/clients', async (c) => {
   const admins: { email: string; status: 'invited' | 'linked' | 'error'; error?: string }[] = []
 
   for (const email of emails) {
-    let uid: string | null = null
-    let status: 'invited' | 'linked' = 'invited'
-
-    const inv = await supabase.auth.admin.inviteUserByEmail(email, { redirectTo: `${base}/definir-clave` })
-    if (inv.data?.user) {
-      uid = inv.data.user.id
-    } else if (inv.error && /registered|exist/i.test(inv.error.message)) {
-      const { data: found } = await supabase.rpc('get_user_id_by_email', { p_email: email })
-      uid = (found as string | null) ?? null
-      status = 'linked'
-    } else {
-      admins.push({ email, status: 'error', error: inv.error?.message })
-      continue
-    }
-    if (!uid) {
-      admins.push({ email, status: 'error', error: 'No se pudo resolver el usuario' })
+    const account = await accountAccessLink(supabase, email, `${base}/definir-clave`)
+    if (!account.data) {
+      admins.push({ email, status: 'error', error: account.error ?? undefined })
       continue
     }
 
     const { error: memErr } = await supabase
       .from('memberships')
-      .insert({ organization_id: org.id, user_id: uid, role: 'owner' })
+      .insert({ organization_id: org.id, user_id: account.data.userId, role: 'owner' })
     if (memErr && !/duplicate|unique/i.test(memErr.message)) {
       admins.push({ email, status: 'error', error: memErr.message })
       continue
     }
-    admins.push({ email, status })
+    const mail = await sendPlatformAccessEmail({ email: c.env.EMAIL, from: c.env.EMAIL_FROM, to: email, actionUrl: account.data.actionLink, kind: 'access_link', organizationName: parsed.data.name.trim() })
+    admins.push(mail.ok ? { email, status: account.data.status } : { email, status: 'error', error: `La cuenta se creó, pero el correo falló: ${mail.errorDetail ?? 'error de entrega'}` })
   }
 
   // Aprovisiona el subdominio automáticamente (DNS + custom domain en Pages).
@@ -864,12 +875,103 @@ app.post('/api/admin/clients/:orgId/owners', async (c) => {
   const parsed=z.object({email:z.string().email()}).safeParse(await c.req.json().catch(()=>null)); if (!parsed.success) return c.json({error:'Correo inválido'},400)
   const supabase=createClient(c.env.SUPABASE_URL,c.env.SUPABASE_SERVICE_ROLE_KEY); const userId=await authUserId(supabase,c.req.header('Authorization')); if (!userId) return c.json({error:'no autorizado'},401)
   const {data:pa}=await supabase.from('platform_admins').select('user_id').eq('user_id',userId).maybeSingle(); if (!pa) return c.json({error:'no autorizado'},403)
-  const orgId=c.req.param('orgId'); const base=c.env.APP_BASE_URL.replace(/\/$/,''); let uid:string|null=null
-  const invited=await supabase.auth.admin.inviteUserByEmail(parsed.data.email.toLowerCase(),{redirectTo:`${base}/definir-clave`})
-  if (invited.data?.user) uid=invited.data.user.id; else if (invited.error && /registered|exist/i.test(invited.error.message)) { const found=await supabase.rpc('get_user_id_by_email',{p_email:parsed.data.email}); uid=(found.data as string|null)??null } else return c.json({error:invited.error?.message??'No se pudo invitar'},400)
-  if (!uid) return c.json({error:'No se pudo resolver el usuario'},400)
-  const {error}=await supabase.from('memberships').insert({organization_id:orgId,user_id:uid,role:'owner'}); if (error && !/duplicate|unique/i.test(error.message)) return c.json({error:error.message},400)
+  const orgId=c.req.param('orgId'); const base=c.env.APP_BASE_URL.replace(/\/$/,''); const email=parsed.data.email.toLowerCase().trim()
+  const [{data:org},account]=await Promise.all([supabase.from('organizations').select('name').eq('id',orgId).maybeSingle(),accountAccessLink(supabase,email,`${base}/definir-clave`)]); if(!org)return c.json({error:'Organización no encontrada'},404); if(!account.data)return c.json({error:account.error??'No se pudo resolver el usuario'},400)
+  const {error}=await supabase.from('memberships').upsert({organization_id:orgId,user_id:account.data.userId,role:'owner'},{onConflict:'organization_id,user_id'}); if (error) return c.json({error:error.message},400)
+  const mail=await sendPlatformAccessEmail({email:c.env.EMAIL,from:c.env.EMAIL_FROM,to:email,actionUrl:account.data.actionLink,kind:'access_link',organizationName:org.name}); if(!mail.ok)return c.json({error:`El acceso fue asignado, pero el correo falló: ${mail.errorDetail??'error de entrega'}`,saved:true},502)
   return c.json({ok:true})
+})
+
+const membershipRoleSchema = z.enum(['owner', 'admin', 'staff'])
+
+async function platformSupportContext(c: any) {
+  const supabase = createClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY)
+  const caller = await authUserId(supabase, c.req.header('Authorization'))
+  if (!caller) return { supabase, caller: null, allowed: false }
+  return { supabase, caller, allowed: await isPlatformAdmin(supabase, caller) }
+}
+
+app.post('/api/admin/users/:userId/password-reset', async (c) => {
+  const ctx = await platformSupportContext(c)
+  if (!ctx.caller) return c.json({ error: 'no autorizado' }, 401)
+  if (!ctx.allowed) return c.json({ error: 'no autorizado' }, 403)
+  const target = c.req.param('userId')
+  if (!z.string().uuid().safeParse(target).success) return c.json({ error: 'Usuario inválido' }, 400)
+  const { data, error } = await ctx.supabase.auth.admin.getUserById(target)
+  const email = data?.user?.email
+  if (error || !email) return c.json({ error: 'Usuario no encontrado' }, 404)
+  const redirectTo = `${c.env.APP_BASE_URL.replace(/\/$/, '')}/definir-clave`
+  const generated = await ctx.supabase.auth.admin.generateLink({ type: 'recovery', email, options: { redirectTo } })
+  const actionUrl = generated.data?.properties?.action_link
+  if (generated.error || !actionUrl) return c.json({ error: generated.error?.message ?? 'No se pudo generar el enlace' }, 400)
+  const result = await sendPlatformAccessEmail({ email: c.env.EMAIL, from: c.env.EMAIL_FROM, to: email, actionUrl, kind: 'password_reset' })
+  if (!result.ok) return c.json({ error: `No se pudo enviar el correo: ${result.errorDetail ?? 'error de entrega'}` }, 502)
+  return c.json({ ok: true, message: 'Enlace de restablecimiento enviado' })
+})
+
+app.post('/api/admin/users/:userId/resend-access', async (c) => {
+  const ctx = await platformSupportContext(c)
+  if (!ctx.caller) return c.json({ error: 'no autorizado' }, 401)
+  if (!ctx.allowed) return c.json({ error: 'no autorizado' }, 403)
+  const target = c.req.param('userId')
+  if (!z.string().uuid().safeParse(target).success) return c.json({ error: 'Usuario inválido' }, 400)
+  const { data, error } = await ctx.supabase.auth.admin.getUserById(target)
+  const email = data?.user?.email
+  if (error || !email) return c.json({ error: 'Usuario no encontrado' }, 404)
+  const redirectTo = `${c.env.APP_BASE_URL.replace(/\/$/, '')}/definir-clave`
+  const generated = await ctx.supabase.auth.admin.generateLink({ type: 'recovery', email, options: { redirectTo } })
+  const actionUrl = generated.data?.properties?.action_link
+  if (generated.error || !actionUrl) return c.json({ error: generated.error?.message ?? 'No se pudo generar el enlace' }, 400)
+  const result = await sendPlatformAccessEmail({ email: c.env.EMAIL, from: c.env.EMAIL_FROM, to: email, actionUrl, kind: 'access_link' })
+  if (!result.ok) return c.json({ error: `No se pudo enviar el correo: ${result.errorDetail ?? 'error de entrega'}` }, 502)
+  return c.json({ ok: true, message: 'Enlace de acceso reenviado' })
+})
+
+app.post('/api/admin/users/:userId/memberships', async (c) => {
+  const parsed = z.object({ organization_id: z.string().uuid(), role: membershipRoleSchema }).safeParse(await c.req.json().catch(() => null))
+  if (!parsed.success) return c.json({ error: 'Organización o perfil inválido' }, 400)
+  const ctx = await platformSupportContext(c)
+  if (!ctx.caller) return c.json({ error: 'no autorizado' }, 401)
+  if (!ctx.allowed) return c.json({ error: 'no autorizado' }, 403)
+  const target = c.req.param('userId')
+  if (!z.string().uuid().safeParse(target).success) return c.json({ error: 'Usuario inválido' }, 400)
+  const [{ data: user }, { data: organization }, { data: previous }] = await Promise.all([
+    ctx.supabase.auth.admin.getUserById(target),
+    ctx.supabase.from('organizations').select('id,name').eq('id', parsed.data.organization_id).maybeSingle(),
+    ctx.supabase.from('memberships').select('role').eq('organization_id', parsed.data.organization_id).eq('user_id', target).maybeSingle(),
+  ])
+  if (!user?.user?.email) return c.json({ error: 'Usuario no encontrado' }, 404)
+  if (!organization) return c.json({ error: 'Organización no encontrada' }, 404)
+  const { error } = await ctx.supabase.from('memberships').upsert({ organization_id: organization.id, user_id: target, role: parsed.data.role }, { onConflict: 'organization_id,user_id' })
+  if (error) return c.json({ error: error.message }, 400)
+  const change = previous ? 'updated' : 'added'
+  const result = await sendMembershipNoticeEmail({ email: c.env.EMAIL, from: c.env.EMAIL_FROM, to: user.user.email, organizationName: organization.name, role: parsed.data.role, change, loginUrl: `${c.env.APP_BASE_URL.replace(/\/$/, '')}/admin` })
+  if (!result.ok) return c.json({ error: `El acceso se guardó, pero la notificación falló: ${result.errorDetail ?? 'error de entrega'}`, saved: true }, 502)
+  return c.json({ ok: true, message: change === 'added' ? 'Organización asignada y usuario notificado' : 'Perfil actualizado y usuario notificado' })
+})
+
+app.delete('/api/admin/users/:userId/memberships/:orgId', async (c) => {
+  const ctx = await platformSupportContext(c)
+  if (!ctx.caller) return c.json({ error: 'no autorizado' }, 401)
+  if (!ctx.allowed) return c.json({ error: 'no autorizado' }, 403)
+  const target = c.req.param('userId'), orgId = c.req.param('orgId')
+  if (!z.string().uuid().safeParse(target).success || !z.string().uuid().safeParse(orgId).success) return c.json({ error: 'Datos inválidos' }, 400)
+  const [{ data: user }, { data: organization }, { data: membership }] = await Promise.all([
+    ctx.supabase.auth.admin.getUserById(target),
+    ctx.supabase.from('organizations').select('id,name').eq('id', orgId).maybeSingle(),
+    ctx.supabase.from('memberships').select('role').eq('organization_id', orgId).eq('user_id', target).maybeSingle(),
+  ])
+  if (!user?.user?.email || !organization || !membership) return c.json({ error: 'Membresía no encontrada' }, 404)
+  if (membership.role === 'owner') {
+    const { count } = await ctx.supabase.from('memberships').select('user_id', { count: 'exact', head: true }).eq('organization_id', orgId).eq('role', 'owner')
+    if ((count ?? 0) <= 1) return c.json({ error: 'Debe permanecer al menos un propietario' }, 400)
+  }
+  const { error } = await ctx.supabase.from('memberships').delete().eq('organization_id', orgId).eq('user_id', target)
+  if (error) return c.json({ error: error.message }, 400)
+  const role = membershipRoleSchema.parse(membership.role)
+  const result = await sendMembershipNoticeEmail({ email: c.env.EMAIL, from: c.env.EMAIL_FROM, to: user.user.email, organizationName: organization.name, role, change: 'removed', loginUrl: `${c.env.APP_BASE_URL.replace(/\/$/, '')}/admin` })
+  if (!result.ok) return c.json({ error: `El acceso se retiró, pero la notificación falló: ${result.errorDetail ?? 'error de entrega'}`, saved: true }, 502)
+  return c.json({ ok: true, message: 'Acceso retirado y usuario notificado' })
 })
 
 const exhibitorInviteSchema = z.object({

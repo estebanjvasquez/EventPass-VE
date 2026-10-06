@@ -115,6 +115,71 @@ export async function sendRecoveryEmail(p: { email: EmailSendBinding; from: stri
   } catch(error) { return failed(error); }
 }
 
+type PlatformAccessParams = {
+  email: EmailSendBinding
+  from: string
+  to: string
+  actionUrl: string
+  kind: 'password_reset' | 'access_link'
+  organizationName?: string
+}
+
+function platformEmailShell(preheader: string, title: string, body: string, footer = 'Este es un mensaje transaccional enviado por EventosFácil.') {
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(title)}</title></head><body style="margin:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"><div style="display:none;max-height:0;overflow:hidden;opacity:0">${esc(preheader)}</div><div style="max-width:580px;margin:0 auto;padding:32px 18px"><div style="background:#ffffff;border:1px solid #e4e4e7;border-radius:18px;overflow:hidden"><div style="background:#071a17;padding:22px 30px"><div style="font-size:20px;font-weight:800;letter-spacing:.02em;color:#ffffff"><span style="display:inline-block;background:#10b981;color:#071a17;border-radius:7px;padding:4px 7px;margin-right:8px">EF</span> EVENTOSFÁCIL</div><div style="font-size:12px;color:#a7f3d0;margin-top:7px">Gestión profesional de eventos</div></div><div style="padding:30px">${body}</div></div><p style="margin:16px 8px 0;text-align:center;font-size:12px;line-height:1.5;color:#71717a">${esc(footer)}<br>Soporte: <a href="mailto:${replyTo}" style="color:#047857">${replyTo}</a></p></div></body></html>`
+}
+
+export async function sendPlatformAccessEmail(p: PlatformAccessParams): Promise<EmailDeliveryResult> {
+  const reset = p.kind === 'password_reset'
+  const title = reset ? 'Restablece tu contraseña' : 'Tu enlace de acceso'
+  const intro = reset
+    ? 'El equipo de soporte generó un enlace seguro para que establezcas una nueva contraseña.'
+    : p.organizationName
+      ? `Tu cuenta fue agregada a <strong>${esc(p.organizationName)}</strong> con el perfil <strong>Propietario</strong>. Usa este enlace para activar o recuperar tu acceso.`
+      : 'El equipo de soporte te reenvió el enlace para activar o recuperar el acceso a tu cuenta.'
+  const label = reset ? 'Restablecer contraseña' : 'Acceder a EventosFácil'
+  const html = platformEmailShell(
+    `${title} en EventosFácil`,
+    title,
+    `<p style="margin:0;color:#059669;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase">Soporte de cuenta</p><h1 style="margin:8px 0 0;color:#18181b;font-size:26px;line-height:1.25">${title}</h1><p style="margin:18px 0 0;color:#52525b;font-size:15px;line-height:1.65">${intro}</p><p style="margin:26px 0"><a href="${esc(p.actionUrl)}" style="display:inline-block;background:#059669;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:13px 22px;border-radius:9px">${label}</a></p><div style="padding:14px 16px;border-radius:10px;background:#f4f4f5;color:#52525b;font-size:13px;line-height:1.55">Por seguridad, el enlace es personal, se usa una sola vez y tiene una vigencia limitada. Si no solicitaste ayuda, puedes ignorar este correo.</div><p style="margin:22px 0 0;color:#a1a1aa;font-size:11px;line-height:1.5;word-break:break-all">Si el botón no funciona, copia este enlace:<br>${esc(p.actionUrl)}</p>`,
+  )
+  const textIntro = reset ? 'El equipo de soporte generó un enlace seguro para que establezcas una nueva contraseña.' : p.organizationName ? `Tu cuenta fue agregada a ${p.organizationName} con el perfil Propietario. Usa este enlace para activar o recuperar tu acceso.` : 'El equipo de soporte te reenvió el enlace para activar o recuperar el acceso a tu cuenta.'
+  const text = `${title}\n\n${textIntro}\n\n${p.actionUrl}\n\nPor seguridad, el enlace es personal, se usa una sola vez y tiene una vigencia limitada. Si no solicitaste ayuda, puedes ignorar este correo.\n\n— EventosFácil\nSoporte: ${replyTo}`
+  try {
+    return accepted(await p.email.send({ to: p.to, from: sender(p.from), replyTo, subject: `${title} — EventosFácil`, html, text }))
+  } catch (error) { return failed(error) }
+}
+
+type MembershipNoticeParams = {
+  email: EmailSendBinding
+  from: string
+  to: string
+  organizationName: string
+  role: 'owner' | 'admin' | 'staff'
+  change: 'added' | 'updated' | 'removed'
+  loginUrl: string
+}
+
+const membershipRoleLabel: Record<MembershipNoticeParams['role'], string> = {
+  owner: 'Propietario', admin: 'Administrador', staff: 'Personal',
+}
+
+export async function sendMembershipNoticeEmail(p: MembershipNoticeParams): Promise<EmailDeliveryResult> {
+  const role = membershipRoleLabel[p.role]
+  const copy = p.change === 'added'
+    ? `Tu cuenta fue agregada a la organización <strong>${esc(p.organizationName)}</strong> con el perfil <strong>${role}</strong>.`
+    : p.change === 'updated'
+      ? `Tu perfil en <strong>${esc(p.organizationName)}</strong> cambió a <strong>${role}</strong>.`
+      : `Tu acceso a la organización <strong>${esc(p.organizationName)}</strong> fue retirado.`
+  const title = p.change === 'added' ? 'Te agregaron a una organización' : p.change === 'updated' ? 'Tu perfil fue actualizado' : 'Tu acceso fue actualizado'
+  const button = p.change === 'removed' ? '' : `<p style="margin:26px 0"><a href="${esc(p.loginUrl)}" style="display:inline-block;background:#059669;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:13px 22px;border-radius:9px">Entrar al panel</a></p>`
+  const html = platformEmailShell(`Actualización de acceso en ${p.organizationName}`, title, `<p style="margin:0;color:#059669;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase">Acceso a organización</p><h1 style="margin:8px 0 0;color:#18181b;font-size:26px;line-height:1.25">${title}</h1><p style="margin:18px 0 0;color:#52525b;font-size:15px;line-height:1.65">${copy}</p>${button}<p style="margin:20px 0 0;color:#71717a;font-size:13px;line-height:1.55">Si no reconoces este cambio, responde a este correo para que soporte lo revise.</p>`)
+  const plainCopy = p.change === 'added' ? `Tu cuenta fue agregada a ${p.organizationName} con el perfil ${role}.` : p.change === 'updated' ? `Tu perfil en ${p.organizationName} cambió a ${role}.` : `Tu acceso a ${p.organizationName} fue retirado.`
+  const text = `${title}\n\n${plainCopy}${p.change === 'removed' ? '' : `\n\nAccede al panel: ${p.loginUrl}`}\n\nSi no reconoces este cambio, escribe a ${replyTo}.\n\n— EventosFácil`
+  try {
+    return accepted(await p.email.send({ to: p.to, from: sender(p.from), replyTo, subject: `${title} — ${p.organizationName}`, html, text }))
+  } catch (error) { return failed(error) }
+}
+
 function paymentMethodsHtml(methods: PaymentMethod[]): string {
   if (methods.length === 0) return ''
   const items = methods
