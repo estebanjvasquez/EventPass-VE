@@ -122,6 +122,9 @@ type PlatformAccessParams = {
   actionUrl: string
   kind: 'password_reset' | 'access_link'
   organizationName?: string
+  displayName?: string
+  role?: 'owner' | 'admin' | 'staff'
+  manualUrl?: string
 }
 
 function platformEmailShell(preheader: string, title: string, body: string, footer = 'Este es un mensaje transaccional enviado por EventosFácil.') {
@@ -130,22 +133,25 @@ function platformEmailShell(preheader: string, title: string, body: string, foot
 
 export async function sendPlatformAccessEmail(p: PlatformAccessParams): Promise<EmailDeliveryResult> {
   const reset = p.kind === 'password_reset'
-  const title = reset ? 'Restablece tu contraseña' : 'Tu enlace de acceso'
+  const role = p.role ? ({ owner: 'Propietario', admin: 'Administrador', staff: 'Personal' } as const)[p.role] : 'Propietario'
+  const title = reset ? 'Restablece tu contraseña' : p.organizationName ? 'Bienvenido a EventosFácil' : 'Tu enlace de acceso'
+  const greeting = p.displayName ? `<p style="margin:0 0 14px;color:#18181b;font-size:15px;font-weight:600">Hola, ${esc(p.displayName)}.</p>` : ''
   const intro = reset
     ? 'El equipo de soporte generó un enlace seguro para que establezcas una nueva contraseña.'
     : p.organizationName
-      ? `Tu cuenta fue agregada a <strong>${esc(p.organizationName)}</strong> con el perfil <strong>Propietario</strong>. Usa este enlace para activar o recuperar tu acceso.`
+      ? `Creamos tu cuenta y te dimos acceso a <strong>${esc(p.organizationName)}</strong> con el perfil <strong>${role}</strong>. Define tu contraseña para comenzar.`
       : 'El equipo de soporte te reenvió el enlace para activar o recuperar el acceso a tu cuenta.'
-  const label = reset ? 'Restablecer contraseña' : 'Acceder a EventosFácil'
+  const label = reset ? 'Restablecer contraseña' : p.organizationName ? 'Definir mi contraseña' : 'Acceder a EventosFácil'
+  const manual = p.manualUrl ? `<div style="margin:22px 0 0;padding:16px;border:1px solid #d1fae5;border-radius:10px;background:#ecfdf5;color:#065f46;font-size:13px;line-height:1.55"><strong>Conoce la plataforma antes de comenzar.</strong><br><a href="${esc(p.manualUrl)}" style="color:#047857;font-weight:700">Abrir el manual interactivo de EventosFácil</a></div>` : ''
   const html = platformEmailShell(
     `${title} en EventosFácil`,
     title,
-    `<p style="margin:0;color:#059669;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase">Soporte de cuenta</p><h1 style="margin:8px 0 0;color:#18181b;font-size:26px;line-height:1.25">${title}</h1><p style="margin:18px 0 0;color:#52525b;font-size:15px;line-height:1.65">${intro}</p><p style="margin:26px 0"><a href="${esc(p.actionUrl)}" style="display:inline-block;background:#059669;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:13px 22px;border-radius:9px">${label}</a></p><div style="padding:14px 16px;border-radius:10px;background:#f4f4f5;color:#52525b;font-size:13px;line-height:1.55">Por seguridad, el enlace es personal, se usa una sola vez y tiene una vigencia limitada. Si no solicitaste ayuda, puedes ignorar este correo.</div><p style="margin:22px 0 0;color:#a1a1aa;font-size:11px;line-height:1.5;word-break:break-all">Si el botón no funciona, copia este enlace:<br>${esc(p.actionUrl)}</p>`,
+    `<p style="margin:0;color:#059669;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase">Soporte de cuenta</p><h1 style="margin:8px 0 18px;color:#18181b;font-size:26px;line-height:1.25">${title}</h1>${greeting}<p style="margin:0;color:#52525b;font-size:15px;line-height:1.65">${intro}</p><p style="margin:26px 0"><a href="${esc(p.actionUrl)}" style="display:inline-block;background:#059669;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:13px 22px;border-radius:9px">${label}</a></p><div style="padding:14px 16px;border-radius:10px;background:#f4f4f5;color:#52525b;font-size:13px;line-height:1.55">Por seguridad, el enlace es personal, se usa una sola vez y tiene una vigencia limitada. Si no solicitaste ayuda, puedes ignorar este correo.</div>${manual}<p style="margin:22px 0 0;color:#a1a1aa;font-size:11px;line-height:1.5;word-break:break-all">Si el botón no funciona, copia este enlace:<br>${esc(p.actionUrl)}</p>`,
   )
-  const textIntro = reset ? 'El equipo de soporte generó un enlace seguro para que establezcas una nueva contraseña.' : p.organizationName ? `Tu cuenta fue agregada a ${p.organizationName} con el perfil Propietario. Usa este enlace para activar o recuperar tu acceso.` : 'El equipo de soporte te reenvió el enlace para activar o recuperar el acceso a tu cuenta.'
-  const text = `${title}\n\n${textIntro}\n\n${p.actionUrl}\n\nPor seguridad, el enlace es personal, se usa una sola vez y tiene una vigencia limitada. Si no solicitaste ayuda, puedes ignorar este correo.\n\n— EventosFácil\nSoporte: ${replyTo}`
+  const textIntro = reset ? 'El equipo de soporte generó un enlace seguro para que establezcas una nueva contraseña.' : p.organizationName ? `Creamos tu cuenta y te dimos acceso a ${p.organizationName} con el perfil ${role}. Define tu contraseña para comenzar.` : 'El equipo de soporte te reenvió el enlace para activar o recuperar el acceso a tu cuenta.'
+  const text = `${title}\n\n${p.displayName ? `Hola, ${p.displayName}.\n\n` : ''}${textIntro}\n\n${p.actionUrl}\n\nPor seguridad, el enlace es personal, se usa una sola vez y tiene una vigencia limitada.${p.manualUrl ? `\n\nManual interactivo: ${p.manualUrl}` : ''}\n\n— EventosFácil\nSoporte: ${replyTo}`
   try {
-    return accepted(await p.email.send({ to: p.to, from: sender(p.from), replyTo, subject: `${title} — EventosFácil`, html, text }))
+    return accepted(await p.email.send({ to: p.to, from: sender(p.from), replyTo, subject: p.organizationName ? `Invitación a ${p.organizationName} — EventosFácil` : `${title} — EventosFácil`, html, text }))
   } catch (error) { return failed(error) }
 }
 

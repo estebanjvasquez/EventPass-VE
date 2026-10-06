@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, BarChart3, Building2, CalendarRange, CircleDollarSign, ExternalLink, KeyRound, LogIn, Mail, Search, ShieldCheck, Trash2, UserCog, Users, X } from 'lucide-react'
+import { ArrowLeft, BarChart3, Building2, CalendarRange, CircleDollarSign, ExternalLink, KeyRound, LogIn, Mail, Search, ShieldCheck, Trash2, UserCog, UserPlus, Users, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { setImpersonatedOrg } from '../../lib/activeOrg'
 import { slugAvailable, slugify } from '../../lib/onboarding'
@@ -136,22 +136,132 @@ function OverviewTab({ onError }: { onError: (m: string) => void }) {
   return <section><div className="flex items-end justify-between gap-4"><div><p className="text-sm font-semibold text-emerald-700">Control de plataforma</p><h1 className="mt-1 text-3xl font-bold tracking-tight">Resumen ejecutivo</h1></div><Link to="/eventos" target="_blank" className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700">Ver catálogo <ExternalLink className="h-4 w-4" /></Link></div><div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">{cards.map(([label,value,detail,Icon])=><article key={label} className="rounded-2xl border bg-white p-5"><Icon className="h-5 w-5 text-emerald-700"/><p className="mt-5 text-3xl font-bold">{Number(value).toLocaleString('es-VE')}</p><p className="mt-1 font-semibold">{label}</p><p className="mt-1 text-xs text-zinc-500">{detail}</p></article>)}</div><div className="mt-6 rounded-2xl border bg-white p-6"><h2 className="font-semibold">Organizaciones con mayor actividad</h2><div className="mt-4 space-y-3">{stats.top_organizations.map((org,index)=><div key={org.id} className="flex items-center gap-3"><span className="grid h-8 w-8 place-items-center rounded-lg bg-zinc-100 text-sm font-bold">{index+1}</span><div className="min-w-0 flex-1"><p className="truncate font-medium">{org.name}</p><p className="text-xs text-zinc-500">{PLAN_LABEL[org.plan]??org.plan} · {ORG_STATUS[org.status]?.text??org.status}</p></div><strong>{Number(org.registration_count).toLocaleString('es-VE')} reg.</strong></div>)}</div></div></section>
 }
 
-type PlatformUser = { user_id: string; email: string; created_at: string; last_sign_in_at: string | null; organizations: {id:string;name:string;role:string;status:string}[]; member_count: number; suspended: boolean; suspension_reason: string | null }
-function UsersTab({ onError }: { onError: (m: string) => void }) {
-  const [users,setUsers]=useState<PlatformUser[]>([]); const [organizations,setOrganizations]=useState<Org[]>([]); const [adminIds,setAdminIds]=useState<Set<string>>(new Set()); const [query,setQuery]=useState(''); const [busy,setBusy]=useState<string|null>(null); const [selectedId,setSelectedId]=useState<string|null>(null); const [notice,setNotice]=useState<string|null>(null); const [newOrg,setNewOrg]=useState(''); const [newRole,setNewRole]=useState<'owner'|'admin'|'staff'>('staff')
-  const load=useCallback(async()=>{const [userResult,adminResult,orgResult]=await Promise.all([supabase.rpc('admin_users'),supabase.rpc('admin_list_platform_admins'),supabase.rpc('admin_organizations')]); if(userResult.error)onError(userResult.error.message); else setUsers((userResult.data??[]) as PlatformUser[]); if(adminResult.error)onError(adminResult.error.message); else setAdminIds(new Set(((adminResult.data??[]) as PlatformAdmin[]).map(item=>item.user_id))); if(orgResult.error)onError(orgResult.error.message); else setOrganizations((orgResult.data??[]) as Org[])},[onError])
-  useEffect(()=>{void load()},[load])
-  const visible=users.filter(user=>`${user.email} ${user.organizations.map(org=>org.name).join(' ')}`.toLowerCase().includes(query.toLowerCase()))
-  const selected=users.find(user=>user.user_id===selectedId)??null
-  const availableOrganizations=selected?organizations.filter(org=>!selected.organizations.some(item=>item.id===org.id)):[]
-  async function toggle(user:PlatformUser){const reason=user.suspended?null:window.prompt('Motivo de la pausa (pago, seguridad o soporte):','Pago pendiente'); if(!user.suspended&&reason===null)return; setBusy(user.user_id); const {error}=await supabase.rpc('admin_set_user_suspension',{p_user:user.user_id,p_suspended:!user.suspended,p_reason:reason}); setBusy(null); if(error)onError(error.message); else await load()}
-  async function support(path:string,init:RequestInit,message:string){setBusy(path);setNotice(null);const response=await authFetch(path,init);const data=await response.json().catch(()=>({})) as {error?:string;message?:string;saved?:boolean};setBusy(null);if(!response.ok){onError(data.error??'No se pudo completar la acción');if(data.saved)await load();return false}setNotice(data.message??message);await load();return true}
-  async function assign(){if(!selected||!newOrg)return;const ok=await support(`/api/admin/users/${selected.user_id}/memberships`,{method:'POST',body:JSON.stringify({organization_id:newOrg,role:newRole})},'Organización asignada');if(ok)setNewOrg('')}
-  async function changeRole(orgId:string,role:'owner'|'admin'|'staff'){if(!selected)return;await support(`/api/admin/users/${selected.user_id}/memberships`,{method:'POST',body:JSON.stringify({organization_id:orgId,role})},'Perfil actualizado')}
-  async function removeMembership(orgId:string){if(!selected||!window.confirm('¿Retirar el acceso de este usuario a la organización? Se le enviará una notificación.'))return;await support(`/api/admin/users/${selected.user_id}/memberships/${orgId}`,{method:'DELETE'},'Acceso retirado')}
-  return <section><div className="flex flex-wrap items-end justify-between gap-4"><div><h1 className="text-2xl font-bold">Usuarios</h1><p className="mt-1 text-sm text-zinc-600">Acceso, soporte, organizaciones y perfiles.</p></div><label className="flex items-center gap-2 rounded-xl border bg-white px-3 py-2"><Search className="h-4 w-4 text-zinc-400"/><input value={query} onChange={event=>setQuery(event.target.value)} className="outline-none" placeholder="Buscar usuario"/></label></div>{notice&&<p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{notice}</p>}<div className="mt-5 overflow-x-auto rounded-xl border bg-white"><table className="w-full min-w-[940px] text-left text-sm"><thead><tr className="border-b text-xs uppercase text-zinc-400"><th className="px-5 py-3">Usuario</th><th className="px-5 py-3">Organizaciones</th><th className="px-5 py-3">Último acceso</th><th className="px-5 py-3">Estado</th><th className="px-5 py-3 text-right">Acciones</th></tr></thead><tbody className="divide-y">{visible.map(user=><tr key={user.user_id} className={selectedId===user.user_id?'bg-emerald-50/50':''}><td className="px-5 py-4"><p className="font-medium">{user.email}</p><p className="text-xs text-zinc-500">Alta {new Date(user.created_at).toLocaleDateString('es-VE')}</p></td><td className="px-5 py-4"><div className="flex flex-wrap gap-1">{user.organizations.map(org=><span key={org.id} className="rounded-full bg-zinc-100 px-2 py-1 text-xs">{org.name} · {roleLabel(org.role)}</span>)}{!user.organizations.length&&<span className="text-zinc-400">Sin organización</span>}</div></td><td className="px-5 py-4 text-zinc-600">{user.last_sign_in_at?new Date(user.last_sign_in_at).toLocaleString('es-VE'):'Nunca'}</td><td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${user.suspended?'bg-red-100 text-red-700':'bg-emerald-100 text-emerald-700'}`}>{adminIds.has(user.user_id)?'Superadmin':user.suspended?'Pausado':'Activo'}</span>{user.suspension_reason&&<p className="mt-1 max-w-48 text-xs text-zinc-500">{user.suspension_reason}</p>}</td><td className="px-5 py-4"><div className="flex justify-end gap-2"><button onClick={()=>{setSelectedId(user.user_id);setNotice(null)}} className="rounded-lg border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-700">Gestionar</button>{adminIds.has(user.user_id)?<span className="self-center text-xs text-zinc-400">Protegido</span>:<button disabled={busy===user.user_id} onClick={()=>toggle(user)} className={`rounded-lg px-3 py-2 text-xs font-semibold ${user.suspended?'bg-emerald-600 text-white':'border border-red-200 text-red-700'}`}>{user.suspended?'Reactivar':'Pausar'}</button>}</div></td></tr>)}</tbody></table></div>{selected&&<div className="mt-6 rounded-2xl border bg-white p-6"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Centro de soporte</p><h2 className="mt-1 text-xl font-bold">{selected.email}</h2><p className="mt-1 text-sm text-zinc-500">Los enlaces son personales, de un solo uso y se envían con la identidad de EventosFácil.</p></div><button aria-label="Cerrar" onClick={()=>setSelectedId(null)} className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100"><X className="h-5 w-5"/></button></div><div className="mt-5 grid gap-3 sm:grid-cols-2"><button disabled={busy!==null} onClick={()=>void support(`/api/admin/users/${selected.user_id}/password-reset`,{method:'POST'},'Enlace de restablecimiento enviado')} className="inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-900 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"><KeyRound className="h-4 w-4"/>Restablecer clave</button><button disabled={busy!==null} onClick={()=>void support(`/api/admin/users/${selected.user_id}/resend-access`,{method:'POST'},'Enlace de acceso reenviado')} className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-300 px-4 py-3 text-sm font-semibold disabled:opacity-50"><Mail className="h-4 w-4"/>Reenviar enlace de acceso</button></div><div className="mt-7"><h3 className="flex items-center gap-2 font-semibold"><UserCog className="h-4 w-4 text-emerald-700"/>Organizaciones y perfiles</h3><div className="mt-3 space-y-2">{selected.organizations.map(org=><div key={org.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-zinc-200 p-3"><div className="min-w-48 flex-1"><p className="font-medium">{org.name}</p><p className="text-xs text-zinc-500">{ORG_STATUS[org.status]?.text??org.status}</p></div><select aria-label={`Perfil en ${org.name}`} value={org.role} disabled={busy!==null} onChange={event=>void changeRole(org.id,event.target.value as 'owner'|'admin'|'staff')} className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"><option value="owner">Propietario</option><option value="admin">Administrador</option><option value="staff">Personal</option></select><button aria-label={`Retirar acceso a ${org.name}`} disabled={busy!==null} onClick={()=>void removeMembership(org.id)} className="rounded-lg border border-red-200 p-2 text-red-700 disabled:opacity-50"><Trash2 className="h-4 w-4"/></button></div>)}{!selected.organizations.length&&<p className="rounded-xl bg-zinc-50 p-4 text-sm text-zinc-500">Este usuario aún no pertenece a una organización.</p>}</div><div className="mt-4 grid gap-3 rounded-xl bg-zinc-50 p-4 md:grid-cols-[1fr_180px_auto]"><select value={newOrg} onChange={event=>setNewOrg(event.target.value)} className={inputCls}><option value="">Seleccionar organización</option>{availableOrganizations.map(org=><option key={org.id} value={org.id}>{org.name}</option>)}</select><select value={newRole} onChange={event=>setNewRole(event.target.value as 'owner'|'admin'|'staff')} className={inputCls}><option value="owner">Propietario</option><option value="admin">Administrador</option><option value="staff">Personal</option></select><button disabled={!newOrg||busy!==null} onClick={()=>void assign()} className="rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40">Asignar y notificar</button></div></div></div>}</section>
-}
+type PlatformUser = { user_id: string; email: string; display_name: string | null; created_at: string; last_sign_in_at: string | null; organizations: {id:string;name:string;role:string;status:string}[]; member_count: number; suspended: boolean; suspension_reason: string | null }
+type MembershipRole = 'owner' | 'admin' | 'staff'
 
+function UsersTab({ onError }: { onError: (m: string) => void }) {
+  const [users, setUsers] = useState<PlatformUser[]>([])
+  const [organizations, setOrganizations] = useState<Org[]>([])
+  const [adminIds, setAdminIds] = useState<Set<string>>(new Set())
+  const [query, setQuery] = useState('')
+  const [busy, setBusy] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [newOrg, setNewOrg] = useState('')
+  const [newRole, setNewRole] = useState<MembershipRole>('staff')
+  const [creating, setCreating] = useState(false)
+  const [createName, setCreateName] = useState('')
+  const [createEmail, setCreateEmail] = useState('')
+  const [createOrg, setCreateOrg] = useState('')
+  const [createRole, setCreateRole] = useState<MembershipRole>('staff')
+
+  const load = useCallback(async () => {
+    const [userResult, adminResult, orgResult, namesResponse] = await Promise.all([
+      supabase.rpc('admin_users'),
+      supabase.rpc('admin_list_platform_admins'),
+      supabase.rpc('admin_organizations'),
+      authFetch('/api/admin/users/display-names'),
+    ])
+    if (userResult.error) onError(userResult.error.message)
+    else {
+      const namesData = namesResponse.ok ? await namesResponse.json() as { names?: Record<string, string> } : {}
+      const names = namesData.names ?? {}
+      setUsers(((userResult.data ?? []) as Omit<PlatformUser, 'display_name'>[]).map(user => ({ ...user, display_name: names[user.user_id] ?? null })))
+    }
+    if (adminResult.error) onError(adminResult.error.message)
+    else setAdminIds(new Set(((adminResult.data ?? []) as PlatformAdmin[]).map(item => item.user_id)))
+    if (orgResult.error) onError(orgResult.error.message)
+    else setOrganizations((orgResult.data ?? []) as Org[])
+  }, [onError])
+
+  useEffect(() => { void load() }, [load])
+
+  const visible = users.filter(user => `${user.display_name ?? ''} ${user.email} ${user.organizations.map(org => org.name).join(' ')}`.toLowerCase().includes(query.toLowerCase()))
+  const selected = users.find(user => user.user_id === selectedId) ?? null
+  const availableOrganizations = selected ? organizations.filter(org => !selected.organizations.some(item => item.id === org.id)) : []
+
+  async function toggle(user: PlatformUser) {
+    const reason = user.suspended ? null : window.prompt('Motivo de la pausa (pago, seguridad o soporte):', 'Pago pendiente')
+    if (!user.suspended && reason === null) return
+    setBusy(user.user_id)
+    const { error } = await supabase.rpc('admin_set_user_suspension', { p_user: user.user_id, p_suspended: !user.suspended, p_reason: reason })
+    setBusy(null)
+    if (error) onError(error.message)
+    else await load()
+  }
+
+  async function support(path: string, init: RequestInit, message: string) {
+    setBusy(path)
+    setNotice(null)
+    const response = await authFetch(path, init)
+    const data = await response.json().catch(() => ({})) as {error?:string;message?:string;saved?:boolean}
+    setBusy(null)
+    if (!response.ok) {
+      onError(data.error ?? 'No se pudo completar la acción')
+      if (data.saved) await load()
+      return false
+    }
+    setNotice(data.message ?? message)
+    await load()
+    return true
+  }
+
+  async function createUser(event: React.FormEvent) {
+    event.preventDefault()
+    const ok = await support('/api/admin/users', {
+      method: 'POST',
+      body: JSON.stringify({ display_name: createName, email: createEmail, organization_id: createOrg, role: createRole }),
+    }, 'Usuario creado e invitación enviada')
+    if (ok) {
+      setCreating(false)
+      setCreateName('')
+      setCreateEmail('')
+      setCreateOrg('')
+      setCreateRole('staff')
+    }
+  }
+
+  async function assign() {
+    if (!selected || !newOrg) return
+    const ok = await support(`/api/admin/users/${selected.user_id}/memberships`, { method: 'POST', body: JSON.stringify({ organization_id: newOrg, role: newRole }) }, 'Organización asignada')
+    if (ok) setNewOrg('')
+  }
+  async function changeRole(orgId: string, role: MembershipRole) {
+    if (!selected) return
+    await support(`/api/admin/users/${selected.user_id}/memberships`, { method: 'POST', body: JSON.stringify({ organization_id: orgId, role }) }, 'Perfil actualizado')
+  }
+  async function removeMembership(orgId: string) {
+    if (!selected || !window.confirm('¿Retirar el acceso de este usuario a la organización? Se le enviará una notificación.')) return
+    await support(`/api/admin/users/${selected.user_id}/memberships/${orgId}`, { method: 'DELETE' }, 'Acceso retirado')
+  }
+
+  return <section>
+    <div className="flex flex-wrap items-end justify-between gap-4">
+      <div><h1 className="text-2xl font-bold">Usuarios</h1><p className="mt-1 text-sm text-zinc-600">Alta, acceso, soporte, organizaciones y perfiles.</p></div>
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-2 rounded-xl border bg-white px-3 py-2"><Search className="h-4 w-4 text-zinc-400"/><input value={query} onChange={event => setQuery(event.target.value)} className="outline-none" placeholder="Buscar usuario"/></label>
+        <button type="button" onClick={() => setCreating(value => !value)} className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white"><UserPlus className="h-4 w-4"/>{creating ? 'Cerrar alta' : 'Crear usuario'}</button>
+      </div>
+    </div>
+
+    {notice && <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{notice}</p>}
+
+    {creating && <form onSubmit={createUser} className="mt-5 rounded-2xl border border-emerald-200 bg-white p-6 shadow-sm">
+      <div><p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Nuevo acceso</p><h2 className="mt-1 text-xl font-bold">Crear usuario e invitarlo</h2><p className="mt-1 text-sm text-zinc-500">Recibirá un correo con su organización, perfil, enlace para definir la contraseña y acceso al manual interactivo.</p></div>
+      <div className="mt-5 grid gap-4 md:grid-cols-2">
+        <label className="block text-xs font-medium text-zinc-700">Nombre a mostrar<input required minLength={2} maxLength={100} autoComplete="name" value={createName} onChange={event => setCreateName(event.target.value)} className={`${inputCls} mt-1`} placeholder="Nombre y apellido"/></label>
+        <label className="block text-xs font-medium text-zinc-700">Correo electrónico<input required type="email" autoComplete="email" value={createEmail} onChange={event => setCreateEmail(event.target.value)} className={`${inputCls} mt-1`} placeholder="usuario@empresa.com"/></label>
+        <label className="block text-xs font-medium text-zinc-700">Organización<select required value={createOrg} onChange={event => setCreateOrg(event.target.value)} className={`${inputCls} mt-1`}><option value="">Seleccionar organización</option>{organizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}</select></label>
+        <label className="block text-xs font-medium text-zinc-700">Perfil<select value={createRole} onChange={event => setCreateRole(event.target.value as MembershipRole)} className={`${inputCls} mt-1`}><option value="owner">Propietario</option><option value="admin">Administrador</option><option value="staff">Personal</option></select></label>
+      </div>
+      <div className="mt-5 flex flex-wrap justify-end gap-3"><button type="button" onClick={() => setCreating(false)} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold">Cancelar</button><button disabled={busy !== null || !createName.trim() || !createEmail.trim() || !createOrg} className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"><Mail className="h-4 w-4"/>{busy === '/api/admin/users' ? 'Creando y enviando…' : 'Crear y enviar invitación'}</button></div>
+    </form>}
+
+    <div className="mt-5 overflow-x-auto rounded-xl border bg-white"><table className="w-full min-w-[940px] text-left text-sm"><thead><tr className="border-b text-xs uppercase text-zinc-400"><th className="px-5 py-3">Usuario</th><th className="px-5 py-3">Organizaciones</th><th className="px-5 py-3">Último acceso</th><th className="px-5 py-3">Estado</th><th className="px-5 py-3 text-right">Acciones</th></tr></thead><tbody className="divide-y">{visible.map(user => <tr key={user.user_id} className={selectedId === user.user_id ? 'bg-emerald-50/50' : ''}><td className="px-5 py-4">{user.display_name && <p className="font-semibold text-zinc-900">{user.display_name}</p>}<p className={user.display_name ? 'text-sm text-zinc-600' : 'font-medium'}>{user.email}</p><p className="text-xs text-zinc-500">Alta {new Date(user.created_at).toLocaleDateString('es-VE')}</p></td><td className="px-5 py-4"><div className="flex flex-wrap gap-1">{user.organizations.map(org => <span key={org.id} className="rounded-full bg-zinc-100 px-2 py-1 text-xs">{org.name} · {roleLabel(org.role)}</span>)}{!user.organizations.length && <span className="text-zinc-400">Sin organización</span>}</div></td><td className="px-5 py-4 text-zinc-600">{user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleString('es-VE') : 'Nunca'}</td><td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${user.suspended ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>{adminIds.has(user.user_id) ? 'Superadmin' : user.suspended ? 'Pausado' : 'Activo'}</span>{user.suspension_reason && <p className="mt-1 max-w-48 text-xs text-zinc-500">{user.suspension_reason}</p>}</td><td className="px-5 py-4"><div className="flex justify-end gap-2"><button onClick={() => { setSelectedId(user.user_id); setNotice(null) }} className="rounded-lg border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-700">Gestionar</button>{adminIds.has(user.user_id) ? <span className="self-center text-xs text-zinc-400">Protegido</span> : <button disabled={busy === user.user_id} onClick={() => toggle(user)} className={`rounded-lg px-3 py-2 text-xs font-semibold ${user.suspended ? 'bg-emerald-600 text-white' : 'border border-red-200 text-red-700'}`}>{user.suspended ? 'Reactivar' : 'Pausar'}</button>}</div></td></tr>)}</tbody></table></div>
+
+    {selected && <div className="mt-6 rounded-2xl border bg-white p-6"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Centro de soporte</p><h2 className="mt-1 text-xl font-bold">{selected.display_name || selected.email}</h2>{selected.display_name && <p className="text-sm text-zinc-600">{selected.email}</p>}<p className="mt-1 text-sm text-zinc-500">Los enlaces son personales, de un solo uso y se envían con la identidad de EventosFácil.</p></div><button aria-label="Cerrar" onClick={() => setSelectedId(null)} className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100"><X className="h-5 w-5"/></button></div><div className="mt-5 grid gap-3 sm:grid-cols-2"><button disabled={busy !== null} onClick={() => void support(`/api/admin/users/${selected.user_id}/password-reset`, { method: 'POST' }, 'Enlace de restablecimiento enviado')} className="inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-900 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"><KeyRound className="h-4 w-4"/>Restablecer clave</button><button disabled={busy !== null} onClick={() => void support(`/api/admin/users/${selected.user_id}/resend-access`, { method: 'POST' }, 'Enlace de acceso reenviado')} className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-300 px-4 py-3 text-sm font-semibold disabled:opacity-50"><Mail className="h-4 w-4"/>Reenviar enlace de acceso</button></div><div className="mt-7"><h3 className="flex items-center gap-2 font-semibold"><UserCog className="h-4 w-4 text-emerald-700"/>Organizaciones y perfiles</h3><div className="mt-3 space-y-2">{selected.organizations.map(org => <div key={org.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-zinc-200 p-3"><div className="min-w-48 flex-1"><p className="font-medium">{org.name}</p><p className="text-xs text-zinc-500">{ORG_STATUS[org.status]?.text ?? org.status}</p></div><select aria-label={`Perfil en ${org.name}`} value={org.role} disabled={busy !== null} onChange={event => void changeRole(org.id, event.target.value as MembershipRole)} className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"><option value="owner">Propietario</option><option value="admin">Administrador</option><option value="staff">Personal</option></select><button aria-label={`Retirar acceso a ${org.name}`} disabled={busy !== null} onClick={() => void removeMembership(org.id)} className="rounded-lg border border-red-200 p-2 text-red-700 disabled:opacity-50"><Trash2 className="h-4 w-4"/></button></div>)}{!selected.organizations.length && <p className="rounded-xl bg-zinc-50 p-4 text-sm text-zinc-500">Este usuario aún no pertenece a una organización.</p>}</div><div className="mt-4 grid gap-3 rounded-xl bg-zinc-50 p-4 md:grid-cols-[1fr_180px_auto]"><select value={newOrg} onChange={event => setNewOrg(event.target.value)} className={inputCls}><option value="">Seleccionar organización</option>{availableOrganizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}</select><select value={newRole} onChange={event => setNewRole(event.target.value as MembershipRole)} className={inputCls}><option value="owner">Propietario</option><option value="admin">Administrador</option><option value="staff">Personal</option></select><button disabled={!newOrg || busy !== null} onClick={() => void assign()} className="rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40">Asignar y notificar</button></div></div></div>}
+  </section>
+}
 function roleLabel(role:string){return role==='owner'?'Propietario':role==='admin'?'Administrador':role==='staff'?'Personal':role}
 
 type AdminPlan = { plan:string;name:string;description:string|null;price_usd:number;max_events:number|null;max_regs_per_event:number|null;features:Record<string,unknown>;sort_order:number;is_active:boolean }
