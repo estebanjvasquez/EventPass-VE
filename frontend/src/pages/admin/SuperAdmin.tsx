@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Building2, ExternalLink, LogIn, ShieldCheck, Trash2, Users } from 'lucide-react'
+import { ArrowLeft, BarChart3, Building2, CalendarRange, CircleDollarSign, ExternalLink, LogIn, Search, ShieldCheck, Trash2, Users } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { setImpersonatedOrg } from '../../lib/activeOrg'
 import { slugAvailable, slugify } from '../../lib/onboarding'
@@ -33,11 +33,11 @@ const ORG_STATUS: Record<string, { text: string; cls: string }> = {
 }
 const ROOT_DOMAIN = 'eventosfacil.net'
 
-type Tab = 'clientes' | 'pagos' | 'supers' | 'pagos_plataforma'
+type Tab = 'resumen' | 'clientes' | 'usuarios' | 'planes' | 'catalogo' | 'pagos' | 'supers' | 'pagos_plataforma'
 
 export default function SuperAdmin() {
   const [allowed, setAllowed] = useState<boolean | null>(null)
-  const [tab, setTab] = useState<Tab>('clientes')
+  const [tab, setTab] = useState<Tab>('resumen')
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -62,7 +62,11 @@ export default function SuperAdmin() {
     )
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'clientes', label: 'Clientes' },
+    { id: 'resumen', label: 'Resumen' },
+    { id: 'clientes', label: 'Organizaciones y soporte' },
+    { id: 'usuarios', label: 'Usuarios' },
+    { id: 'planes', label: 'Planes de venta' },
+    { id: 'catalogo', label: 'Eventos públicos' },
     { id: 'pagos', label: 'Pagos' },
     { id: 'supers', label: 'Superadmins' },
     { id: 'pagos_plataforma', label: 'Datos de pago' },
@@ -99,13 +103,68 @@ export default function SuperAdmin() {
 
         {error && <p className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
+        {tab === 'resumen' && <OverviewTab onError={setError} />}
         {tab === 'clientes' && <ClientsTab onError={setError} />}
+        {tab === 'usuarios' && <UsersTab onError={setError} />}
+        {tab === 'planes' && <PlansTab onError={setError} />}
+        {tab === 'catalogo' && <CatalogTab onError={setError} />}
         {tab === 'pagos' && <PaymentsTab onError={setError} />}
         {tab === 'supers' && <SuperadminsTab onError={setError} />}
         {tab === 'pagos_plataforma' && <PlatformMethods onError={setError} />}
       </main>
     </div>
   )
+}
+
+type DashboardStats = {
+  organizations: number; active_organizations: number; suspended_organizations: number; users: number; suspended_users: number
+  events: number; published_events: number; featured_events: number; registrations: number; registrations_30d: number; pending_payments: number
+  top_organizations: { id: string; name: string; plan: string; status: string; registration_count: number }[]
+}
+
+function OverviewTab({ onError }: { onError: (m: string) => void }) {
+  const [stats, setStats] = useState<DashboardStats | null>(null)
+  useEffect(() => { void supabase.rpc('admin_dashboard_stats').then(({data,error})=>error?onError(error.message):setStats(data as DashboardStats)) }, [onError])
+  if (!stats) return <div className="h-48 animate-pulse rounded-2xl bg-white" />
+  const cards = [
+    ['Organizaciones',stats.organizations,`${stats.active_organizations} activas · ${stats.suspended_organizations} pausadas`,Building2],
+    ['Usuarios',stats.users,`${stats.suspended_users} pausados`,Users],
+    ['Eventos',stats.events,`${stats.published_events} publicados · ${stats.featured_events} en catálogo`,CalendarRange],
+    ['Registros',stats.registrations,`${stats.registrations_30d} en los últimos 30 días`,BarChart3],
+    ['Pagos pendientes',stats.pending_payments,'Requieren revisión',CircleDollarSign],
+  ] as const
+  return <section><div className="flex items-end justify-between gap-4"><div><p className="text-sm font-semibold text-emerald-700">Control de plataforma</p><h1 className="mt-1 text-3xl font-bold tracking-tight">Resumen ejecutivo</h1></div><Link to="/eventos" target="_blank" className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700">Ver catálogo <ExternalLink className="h-4 w-4" /></Link></div><div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">{cards.map(([label,value,detail,Icon])=><article key={label} className="rounded-2xl border bg-white p-5"><Icon className="h-5 w-5 text-emerald-700"/><p className="mt-5 text-3xl font-bold">{Number(value).toLocaleString('es-VE')}</p><p className="mt-1 font-semibold">{label}</p><p className="mt-1 text-xs text-zinc-500">{detail}</p></article>)}</div><div className="mt-6 rounded-2xl border bg-white p-6"><h2 className="font-semibold">Organizaciones con mayor actividad</h2><div className="mt-4 space-y-3">{stats.top_organizations.map((org,index)=><div key={org.id} className="flex items-center gap-3"><span className="grid h-8 w-8 place-items-center rounded-lg bg-zinc-100 text-sm font-bold">{index+1}</span><div className="min-w-0 flex-1"><p className="truncate font-medium">{org.name}</p><p className="text-xs text-zinc-500">{PLAN_LABEL[org.plan]??org.plan} · {ORG_STATUS[org.status]?.text??org.status}</p></div><strong>{Number(org.registration_count).toLocaleString('es-VE')} reg.</strong></div>)}</div></div></section>
+}
+
+type PlatformUser = { user_id: string; email: string; created_at: string; last_sign_in_at: string | null; organizations: {id:string;name:string;role:string;status:string}[]; member_count: number; suspended: boolean; suspension_reason: string | null }
+function UsersTab({ onError }: { onError: (m: string) => void }) {
+  const [users,setUsers]=useState<PlatformUser[]>([]); const [query,setQuery]=useState(''); const [busy,setBusy]=useState<string|null>(null)
+  const load=useCallback(async()=>{const {data,error}=await supabase.rpc('admin_users'); if(error)onError(error.message); else setUsers((data??[]) as PlatformUser[])},[onError])
+  useEffect(()=>{void load()},[load])
+  const visible=users.filter(user=>`${user.email} ${user.organizations.map(org=>org.name).join(' ')}`.toLowerCase().includes(query.toLowerCase()))
+  async function toggle(user:PlatformUser){const reason=user.suspended?null:window.prompt('Motivo de la pausa (pago, seguridad o soporte):','Pago pendiente'); if(!user.suspended&&reason===null)return; setBusy(user.user_id); const {error}=await supabase.rpc('admin_set_user_suspension',{p_user:user.user_id,p_suspended:!user.suspended,p_reason:reason}); setBusy(null); if(error)onError(error.message); else await load()}
+  return <section><div className="flex flex-wrap items-end justify-between gap-4"><div><h1 className="text-2xl font-bold">Usuarios</h1><p className="mt-1 text-sm text-zinc-600">Acceso, organizaciones asociadas y última sesión.</p></div><label className="flex items-center gap-2 rounded-xl border bg-white px-3 py-2"><Search className="h-4 w-4 text-zinc-400"/><input value={query} onChange={event=>setQuery(event.target.value)} className="outline-none" placeholder="Buscar usuario"/></label></div><div className="mt-5 overflow-x-auto rounded-xl border bg-white"><table className="w-full min-w-[820px] text-left text-sm"><thead><tr className="border-b text-xs uppercase text-zinc-400"><th className="px-5 py-3">Usuario</th><th className="px-5 py-3">Organizaciones</th><th className="px-5 py-3">Último acceso</th><th className="px-5 py-3">Estado</th><th className="px-5 py-3 text-right">Acción</th></tr></thead><tbody className="divide-y">{visible.map(user=><tr key={user.user_id}><td className="px-5 py-4"><p className="font-medium">{user.email}</p><p className="text-xs text-zinc-500">Alta {new Date(user.created_at).toLocaleDateString('es-VE')}</p></td><td className="px-5 py-4"><div className="flex flex-wrap gap-1">{user.organizations.map(org=><span key={org.id} className="rounded-full bg-zinc-100 px-2 py-1 text-xs">{org.name} · {org.role}</span>)}{!user.organizations.length&&<span className="text-zinc-400">Sin organización</span>}</div></td><td className="px-5 py-4 text-zinc-600">{user.last_sign_in_at?new Date(user.last_sign_in_at).toLocaleString('es-VE'):'Nunca'}</td><td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${user.suspended?'bg-red-100 text-red-700':'bg-emerald-100 text-emerald-700'}`}>{user.suspended?'Pausado':'Activo'}</span>{user.suspension_reason&&<p className="mt-1 max-w-48 text-xs text-zinc-500">{user.suspension_reason}</p>}</td><td className="px-5 py-4 text-right"><button disabled={busy===user.user_id} onClick={()=>toggle(user)} className={`rounded-lg px-3 py-2 text-xs font-semibold ${user.suspended?'bg-emerald-600 text-white':'border border-red-200 text-red-700'}`}>{user.suspended?'Reactivar':'Pausar'}</button></td></tr>)}</tbody></table></div></section>
+}
+
+type AdminPlan = { plan:string;name:string;description:string|null;price_usd:number;max_events:number|null;max_regs_per_event:number|null;features:Record<string,unknown>;sort_order:number;is_active:boolean }
+function PlansTab({onError}:{onError:(m:string)=>void}){
+  const [plans,setPlans]=useState<AdminPlan[]>([]); const [busy,setBusy]=useState<string|null>(null)
+  const load=useCallback(async()=>{const {data,error}=await supabase.from('plans').select('*').order('sort_order'); if(error)onError(error.message); else setPlans((data??[]) as AdminPlan[])},[onError])
+  useEffect(()=>{void load()},[load])
+  function set(plan:string,key:keyof AdminPlan,value:unknown){setPlans(current=>current.map(item=>item.plan===plan?{...item,[key]:value}:item))}
+  async function save(item:AdminPlan){setBusy(item.plan);const {error}=await supabase.rpc('admin_update_plan',{p_plan:item.plan,p_name:item.name,p_description:item.description??'',p_price:Number(item.price_usd),p_max_events:item.max_events,p_max_regs:item.max_regs_per_event,p_active:item.is_active});setBusy(null);if(error)onError(error.message);else await load()}
+  return <section><h1 className="text-2xl font-bold">Planes de venta</h1><p className="mt-1 text-sm text-zinc-600">Precios, límites y disponibilidad comercial.</p><div className="mt-5 grid gap-5 lg:grid-cols-3">{plans.map(plan=><article key={plan.plan} className="rounded-2xl border bg-white p-5"><div className="flex items-center justify-between"><span className="text-xs font-bold uppercase tracking-wide text-emerald-700">{plan.plan}</span><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={plan.is_active} onChange={event=>set(plan.plan,'is_active',event.target.checked)}/>En venta</label></div><label className="mt-4 block text-xs font-medium">Nombre<input className={`${inputCls} mt-1`} value={plan.name} onChange={event=>set(plan.plan,'name',event.target.value)}/></label><label className="mt-3 block text-xs font-medium">Descripción<textarea className={`${inputCls} mt-1`} rows={3} value={plan.description??''} onChange={event=>set(plan.plan,'description',event.target.value)}/></label><label className="mt-3 block text-xs font-medium">Precio mensual USD<input type="number" min="0" step="0.01" className={`${inputCls} mt-1`} value={plan.price_usd} onChange={event=>set(plan.plan,'price_usd',Number(event.target.value))}/></label><div className="mt-3 grid grid-cols-2 gap-3"><label className="block text-xs font-medium">Máx. eventos<input type="number" min="1" className={`${inputCls} mt-1`} value={plan.max_events??''} placeholder="Ilimitado" onChange={event=>set(plan.plan,'max_events',event.target.value?Number(event.target.value):null)}/></label><label className="block text-xs font-medium">Registros/evento<input type="number" min="1" className={`${inputCls} mt-1`} value={plan.max_regs_per_event??''} placeholder="Ilimitado" onChange={event=>set(plan.plan,'max_regs_per_event',event.target.value?Number(event.target.value):null)}/></label></div><button disabled={busy===plan.plan} onClick={()=>save(plan)} className="mt-5 w-full rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{busy===plan.plan?'Guardando…':'Guardar plan'}</button></article>)}</div></section>
+}
+
+type CatalogAdminEvent={id:string;organization_id:string;organization_name:string;name:string;event_type:string;status:string;start_date:string|null;end_date:string|null;location:string|null;featured:boolean;feature_order:number;registration_count:number}
+function CatalogTab({onError}:{onError:(m:string)=>void}){
+  const [events,setEvents]=useState<CatalogAdminEvent[]>([]); const [query,setQuery]=useState('');const [busy,setBusy]=useState<string|null>(null)
+  const load=useCallback(async()=>{const {data,error}=await supabase.rpc('admin_catalog_events');if(error)onError(error.message);else setEvents((data??[]) as CatalogAdminEvent[])},[onError])
+  useEffect(()=>{void load()},[load])
+  const visible=events.filter(event=>`${event.name} ${event.organization_name}`.toLowerCase().includes(query.toLowerCase()))
+  function setOrder(id:string,value:number){setEvents(current=>current.map(item=>item.id===id?{...item,feature_order:value}:item))}
+  async function save(event:CatalogAdminEvent,featured=!event.featured){setBusy(event.id);const {error}=await supabase.rpc('admin_set_event_featured',{p_event:event.id,p_featured:featured,p_order:event.feature_order});setBusy(null);if(error)onError(error.message);else await load()}
+  return <section><div className="flex flex-wrap items-end justify-between gap-4"><div><h1 className="text-2xl font-bold">Eventos públicos</h1><p className="mt-1 text-sm text-zinc-600">Selecciona y ordena los eventos visibles en el catálogo general.</p></div><div className="flex gap-3"><label className="flex items-center gap-2 rounded-xl border bg-white px-3 py-2"><Search className="h-4 w-4 text-zinc-400"/><input value={query} onChange={event=>setQuery(event.target.value)} className="outline-none" placeholder="Buscar evento"/></label><Link to="/eventos" target="_blank" className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">Vista pública <ExternalLink className="h-4 w-4"/></Link></div></div><div className="mt-5 overflow-x-auto rounded-xl border bg-white"><table className="w-full min-w-[850px] text-left text-sm"><thead><tr className="border-b text-xs uppercase text-zinc-400"><th className="px-5 py-3">Evento</th><th className="px-5 py-3">Fecha</th><th className="px-5 py-3">Registros</th><th className="px-5 py-3">Orden</th><th className="px-5 py-3 text-right">Catálogo</th></tr></thead><tbody className="divide-y">{visible.map(event=><tr key={event.id}><td className="px-5 py-4"><p className="font-medium">{event.name}</p><p className="text-xs text-zinc-500">{event.organization_name} · {displayLabel(EVENT_STATUS_LABEL,event.status)}</p></td><td className="px-5 py-4 text-zinc-600">{event.start_date?new Date(event.start_date).toLocaleDateString('es-VE'):'Sin fecha'}</td><td className="px-5 py-4">{Number(event.registration_count)}</td><td className="px-5 py-4"><input type="number" min="0" value={event.feature_order} onChange={e=>setOrder(event.id,Number(e.target.value))} onBlur={()=>event.featured&&void save(event,true)} className="w-20 rounded-lg border px-2 py-1.5"/></td><td className="px-5 py-4 text-right"><button disabled={busy===event.id||(!event.featured&&event.status!=='published')} onClick={()=>save(event)} className={`rounded-lg px-3 py-2 text-xs font-semibold ${event.featured?'border border-red-200 text-red-700':'bg-emerald-700 text-white'} disabled:opacity-40`}>{event.featured?'Retirar':'Mostrar'}</button></td></tr>)}</tbody></table></div><p className="mt-3 text-xs text-zinc-500">Solo pueden mostrarse eventos publicados pertenecientes a organizaciones activas.</p></section>
 }
 
 // ---------------------------------------------------------------------------

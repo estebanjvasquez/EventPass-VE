@@ -59,6 +59,7 @@ function Header() {
           </span>
         </a>
         <nav className="hidden items-center gap-7 text-sm font-medium text-white/72 md:flex">
+          <Link to="/eventos" className="transition-colors hover:text-white">Eventos</Link>
           <a
             href="#caracteristicas"
             className="transition-colors hover:text-white"
@@ -126,6 +127,7 @@ function Hero() {
             una experiencia clara para cada persona.
           </p>
           <div className="mt-9 flex flex-wrap gap-3">
+            <Link to="/eventos" className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-zinc-950 transition-transform hover:bg-emerald-50 active:scale-[0.98]">Explorar eventos <ArrowRight className="h-4 w-4" /></Link>
             <Link
               to="/crear-cuenta"
               className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-5 py-3 text-sm font-semibold text-zinc-950 transition-transform hover:bg-emerald-300 active:scale-[0.98]"

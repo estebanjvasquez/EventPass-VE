@@ -65,7 +65,7 @@ export default function SuscripcionAdmin() {
     setCurrentPlan(org?.plan ?? 'arranque')
 
     const [{ data: plansData }, { data: sub }, { count }, { data: pm }, { data: pays }] = await Promise.all([
-      supabase.from('plans').select('*').order('sort_order'),
+      supabase.from('plans').select('*').eq('is_active', true).order('sort_order'),
       supabase
         .from('subscriptions')
         .select('current_period_end')
