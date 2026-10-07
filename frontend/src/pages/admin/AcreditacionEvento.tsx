@@ -18,6 +18,9 @@ import { credentialQrValue, extractCredentialToken } from "../../lib/credentialQ
 import { supabase } from "../../lib/supabase";
 import { resolveActiveOrg } from "../../lib/activeOrg";
 import ImpersonationBanner from "../../components/ImpersonationBanner";
+import BadgeStudio from "../../components/badges/BadgeStudio";
+import { defaultBadgeLayout, renderBadgePng, type BadgeTemplateV2 } from "../../lib/badgeStudio";
+import { bridgeHealth, bridgePrinters, getBridgeJob, loadBridgeConfig, saveBridgeConfig, submitBridgeJob, type BridgeConfig, type BridgePrinter } from "../../lib/printBridge";
 
 type Reg = {
   id: string;
@@ -49,6 +52,7 @@ type PrintLog = {
   reason: string | null;
   created_at: string;
 };
+type PrintJob = { id:string;status:"queued"|"rendering"|"sent"|"spooled"|"failed"|"cancelled";print_kind:"initial"|"reprint";station_label:string;printer_name:string;error_message:string|null;queued_at:string;requested_by_name:string|null };
 type Metrics = {
   initial_prints: number;
   reprints: number;
@@ -58,21 +62,7 @@ type Metrics = {
   failures: number;
   average_service_seconds: number | null;
 };
-type BadgeTemplate = {
-  id?: string;
-  participation_type: string;
-  name: string;
-  size_key: SizeKey;
-  primary_color: string;
-  background_color: string;
-  text_color: string;
-  header_text: string;
-  footer_text: string;
-  show_company: boolean;
-  show_job_title: boolean;
-  show_identification: boolean;
-  show_qr: boolean;
-};
+type BadgeTemplate = BadgeTemplateV2;
 type WalkInForm = {
   first_name: string;
   last_name: string;
@@ -84,13 +74,6 @@ type WalkInForm = {
   participation_type: string;
 };
 
-const SIZES = {
-  etiqueta: { label: "Etiqueta 10 × 6 cm", w: 100, h: 60 },
-  credencial: { label: "Credencial 9 × 13 cm", w: 90, h: 130 },
-  a6: { label: "A6 · 10.5 × 14.8 cm", w: 105, h: 148 },
-  media_carta: { label: "Media carta · 14 × 21.6 cm", w: 140, h: 216 },
-} as const;
-type SizeKey = keyof typeof SIZES;
 const TYPES = [
   "attendee",
   "guest",
@@ -134,6 +117,14 @@ const defaultTemplate = (type = "attendee"): BadgeTemplate => ({
   show_job_title: true,
   show_identification: false,
   show_qr: true,
+  width_mm: 100,
+  height_mm: 60,
+  dpi: 300,
+  double_sided: false,
+  layout: defaultBadgeLayout(),
+  back_layout: { version: 1, elements: [] },
+  template_status: "published",
+  version: 1,
 });
 const isConfirmed = (reg: Reg) =>
   reg.status === "confirmed" || reg.status === "approved";
@@ -155,6 +146,7 @@ export default function AcreditacionEvento() {
     job_title: "",
   });
   const [printLogs, setPrintLogs] = useState<PrintLog[]>([]);
+  const [printJobs, setPrintJobs] = useState<PrintJob[]>([]);
   const [metrics, setMetrics] = useState<Metrics>(emptyMetrics);
   const [templates, setTemplates] = useState<BadgeTemplate[]>([]);
   const [templateDraft, setTemplateDraft] =
@@ -176,6 +168,10 @@ export default function AcreditacionEvento() {
   const [busy, setBusy] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [printed, setPrinted] = useState(false);
+  const [pendingJobId, setPendingJobId] = useState<string | null>(null);
+  const [bridgeConfig, setBridgeConfig] = useState<BridgeConfig>(() => loadBridgeConfig());
+  const [bridgeState, setBridgeState] = useState<"unknown" | "connected" | "offline">("unknown");
+  const [bridgeDevices, setBridgeDevices] = useState<BridgePrinter[]>([]);
   const serviceStarted = useRef(Date.now());
 
   useEffect(() => {
@@ -196,30 +192,54 @@ export default function AcreditacionEvento() {
       if (rows[0]) setEventId(rows[0].id);
     })();
   }, []);
+  const connectBridge = useCallback(async (config = bridgeConfig) => {
+    try {
+      await bridgeHealth(config);
+      const value = await bridgePrinters(config);
+      setBridgeDevices(value.printers);
+      setBridgeState("connected");
+      if (!config.printer) {
+        const printer = value.printers.find(item => item.isDefault)?.name ?? value.printers[0]?.name ?? "";
+        const next = { ...config, printer };
+        setBridgeConfig(next);
+        saveBridgeConfig(next);
+      }
+    } catch {
+      setBridgeState("offline");
+      setBridgeDevices([]);
+    }
+  }, [bridgeConfig]);
+  useEffect(() => { void connectBridge(); }, [connectBridge]);
   const loadOperationalData = useCallback(async () => {
     if (!eventId) return;
-    const [templateResult, metricResult] = await Promise.all([
+    const [templateResult, metricResult, jobsResult] = await Promise.all([
       supabase
         .from("badge_templates")
         .select(
-          "id,participation_type,name,size_key,primary_color,background_color,text_color,header_text,footer_text,show_company,show_job_title,show_identification,show_qr",
+          "id,participation_type,name,size_key,primary_color,background_color,text_color,header_text,footer_text,show_company,show_job_title,show_identification,show_qr,width_mm,height_mm,dpi,double_sided,layout,back_layout,template_status,version",
         )
         .eq("event_id", eventId)
         .eq("active", true)
         .order("participation_type"),
       supabase.rpc("get_accreditation_metrics", { p_event_id: eventId }),
+      supabase.from("badge_print_jobs").select("id,status,print_kind,station_label,printer_name,error_message,queued_at,requested_by_name").eq("event_id",eventId).order("queued_at",{ascending:false}).limit(12),
     ]);
     setTemplates(
       ((templateResult.data ?? []) as BadgeTemplate[]).map((item) => ({
         ...item,
         header_text: item.header_text ?? "",
         footer_text: item.footer_text ?? "",
+        width_mm: Number(item.width_mm || 100),
+        height_mm: Number(item.height_mm || 60),
+        layout: item.layout?.elements?.length ? item.layout : defaultBadgeLayout(Number(item.width_mm || 100), Number(item.height_mm || 60), item.primary_color),
+        back_layout: item.back_layout ?? { version: 1, elements: [] },
       })),
     );
     const row = Array.isArray(metricResult.data)
       ? (metricResult.data[0] as Metrics | undefined)
       : undefined;
     setMetrics(row ?? emptyMetrics);
+    setPrintJobs((jobsResult.data ?? []) as PrintJob[]);
   }, [eventId]);
   useEffect(() => {
     setSelected(null);
@@ -227,6 +247,7 @@ export default function AcreditacionEvento() {
     setHasSearched(false);
     void loadOperationalData();
   }, [eventId, loadOperationalData]);
+  useEffect(()=>{if(!eventId)return;const timer=window.setInterval(()=>void loadOperationalData(),5000);return()=>window.clearInterval(timer)},[eventId,loadOperationalData]);
 
   function choose(reg: Reg) {
     setSelected(reg);
@@ -440,32 +461,25 @@ export default function AcreditacionEvento() {
       setError("La reimpresión requiere un motivo.");
       return;
     }
-    const { error: insertError } = await supabase
-      .from("badge_print_logs")
-      .insert({
-        organization_id: orgId,
-        event_id: eventId,
-        registration_id:
-          selected.record_type === "registration" ? selected.id : null,
-        participation_id:
-          selected.record_type === "participation" ? selected.id : null,
-        print_kind: kind,
-        reason,
-        device_label: navigator.userAgent.slice(0, 120),
-      });
-    if (insertError) {
-      setError(insertError.message);
-      return;
+    setBusy(true); setError(null);
+    const printer = bridgeState === "connected" && bridgeConfig.printer ? bridgeConfig.printer : "Diálogo del sistema";
+    const created = await supabase.rpc("create_badge_print_job", { p_event_id:eventId,p_record_type:selected.record_type,p_record_id:selected.id,p_template_id:activeTemplate.id??null,p_station_label:bridgeConfig.station||"Mostrador principal",p_printer_name:printer,p_reason:reason });
+    const jobId=created.data as string|null;
+    if(created.error||!jobId){setBusy(false);setError(created.error?.message??"No se pudo crear el trabajo de impresión.");return}
+    await supabase.rpc("update_badge_print_job",{p_job_id:jobId,p_status:"rendering",p_bridge_job_id:null,p_payload_hash:null,p_error_message:null});
+    if(bridgeState!=="connected"||!bridgeConfig.printer){
+      await supabase.rpc("update_badge_print_job",{p_job_id:jobId,p_status:"sent",p_bridge_job_id:"browser-dialog",p_payload_hash:null,p_error_message:null});
+      setPendingJobId(jobId);setPrinted(true);setBusy(false);setInfo("Trabajo abierto en el diálogo del sistema. Confirma la entrega para cerrar la auditoría.");window.print();return
     }
-    setPrinted(true);
-    setInfo(
-      kind === "reprint"
-        ? "Reimpresión auditada."
-        : "Impresión inicial auditada.",
-    );
-    window.print();
-    await loadPrints();
-    await loadOperationalData();
+    try{
+      const pngDataUrl=await renderBadgePng(activeTemplate,{...selected,...edit,last_name:edit.last_name||null,company:edit.company||null,job_title:edit.job_title||null,cedula:edit.cedula||null,event_name:eventName,organization_name:orgName,participation_type:TYPE_LABELS[selected.participation_type]??selected.participation_type});
+      let bridgeJob=await submitBridgeJob(bridgeConfig,{cloudJobId:jobId,printer:bridgeConfig.printer,title:`${eventName} · ${selected.first_name} ${selected.last_name??""}`.trim(),pngDataUrl,widthMm:activeTemplate.width_mm,heightMm:activeTemplate.height_mm});
+      await supabase.rpc("update_badge_print_job",{p_job_id:jobId,p_status:"sent",p_bridge_job_id:bridgeJob.id,p_payload_hash:bridgeJob.payloadHash??null,p_error_message:null});
+      for(let attempt=0;attempt<75&&bridgeJob.status!=="spooled"&&bridgeJob.status!=="failed";attempt+=1){await new Promise(resolve=>setTimeout(resolve,400));bridgeJob=await getBridgeJob(bridgeConfig,bridgeJob.id)}
+      if(bridgeJob.status!=="spooled")throw new Error(bridgeJob.error??"La impresora no confirmó el trabajo a tiempo.")
+      await supabase.rpc("update_badge_print_job",{p_job_id:jobId,p_status:"spooled",p_bridge_job_id:bridgeJob.id,p_payload_hash:bridgeJob.payloadHash??null,p_error_message:null});
+      setPrinted(true);setPendingJobId(null);setInfo(kind==="reprint"?"Reimpresión enviada y confirmada por la cola local.":"Credencial enviada y confirmada por la cola local.");await loadPrints();await loadOperationalData()
+    }catch(printError){const message=printError instanceof Error?printError.message:"No se pudo imprimir la credencial.";await supabase.rpc("update_badge_print_job",{p_job_id:jobId,p_status:"failed",p_bridge_job_id:null,p_payload_hash:null,p_error_message:message});setError(message);setPrinted(false)}finally{setBusy(false)}
   }
   async function recordOutcome(outcome: "delivered" | "failed") {
     if (!selected) return;
@@ -474,6 +488,7 @@ export default function AcreditacionEvento() {
         ? window.prompt("Describe el fallo de impresión")?.trim()
         : null;
     if (outcome === "failed" && !failure) return;
+    if(pendingJobId){const finalized=await supabase.rpc("update_badge_print_job",{p_job_id:pendingJobId,p_status:outcome==="delivered"?"spooled":"failed",p_bridge_job_id:"browser-dialog",p_payload_hash:null,p_error_message:failure});if(finalized.error){setError(finalized.error.message);return}}
     const { error: rpcError } = await supabase.rpc(
       "record_accreditation_service",
       {
@@ -493,6 +508,7 @@ export default function AcreditacionEvento() {
           : "Fallo registrado para seguimiento.",
       );
       setPrinted(false);
+      setPendingJobId(null);
       if (outcome === "delivered") setSelected(null);
       await loadOperationalData();
     }
@@ -526,8 +542,8 @@ export default function AcreditacionEvento() {
         defaultTemplate(type),
     );
   }
-  async function saveTemplate(e: React.FormEvent) {
-    e.preventDefault();
+  async function saveTemplate(e?: React.FormEvent) {
+    e?.preventDefault();
     if (!eventId || !orgId) return;
     setBusy(true);
     const { id: _id, ...draft } = templateDraft;
@@ -536,6 +552,9 @@ export default function AcreditacionEvento() {
       .upsert(
         {
           ...draft,
+          template_status: "published",
+          published_at: new Date().toISOString(),
+          version: (templateDraft.version ?? 0) + 1,
           organization_id: orgId,
           event_id: eventId,
           updated_at: new Date().toISOString(),
@@ -593,6 +612,7 @@ export default function AcreditacionEvento() {
             </p>
           </div>
           <div className="flex gap-2">
+            {eventId && <Link to={`/admin/acreditacion/kiosco/${eventId}`} className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-semibold text-emerald-800"><IdCard className="h-4 w-4" />Modo kiosco</Link>}
             <button
               type="button"
               onClick={() => setShowWalkIn((v) => !v)}
@@ -664,14 +684,10 @@ export default function AcreditacionEvento() {
             {info}
           </p>
         )}
+        <PrintStationPanel config={bridgeConfig} setConfig={setBridgeConfig} state={bridgeState} printers={bridgeDevices} connect={connectBridge} />
+        <PrintQueuePanel jobs={printJobs} />
         {showDesigner && canConfigure && (
-          <Designer
-            template={templateDraft}
-            setTemplate={setTemplateDraft}
-            selectType={selectTemplateType}
-            save={saveTemplate}
-            busy={busy}
-          />
+          <><div className="mt-5 flex max-w-sm items-end gap-2"><label className="grid flex-1 gap-1 text-xs font-semibold">Diseño por tipo<select className={input} value={templateDraft.participation_type} onChange={e=>selectTemplateType(e.target.value)}>{TYPES.map(type=><option key={type} value={type}>{TYPE_LABELS[type]}</option>)}</select></label></div><BadgeStudio template={templateDraft} onChange={setTemplateDraft} onSave={()=>void saveTemplate()} busy={busy}/></>
         )}
         {showWalkIn && (
           <WalkIn
@@ -1068,149 +1084,15 @@ function WalkIn({
   );
 }
 
-function Designer({
-  template,
-  setTemplate,
-  selectType,
-  save,
-  busy,
-}: {
-  template: BadgeTemplate;
-  setTemplate: (value: BadgeTemplate) => void;
-  selectType: (type: string) => void;
-  save: (e: React.FormEvent) => void;
-  busy: boolean;
-}) {
-  return (
-    <form
-      onSubmit={save}
-      className="mt-5 rounded-2xl border border-violet-200 bg-violet-50 p-5"
-    >
-      <h2 className="font-semibold">Diseñador por tipo de participante</h2>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <label className="grid gap-1 text-xs font-medium">
-          Tipo
-          <select
-            className={input}
-            value={template.participation_type}
-            onChange={(e) => selectType(e.target.value)}
-          >
-            {TYPES.map((type) => (
-              <option key={type} value={type}>
-                {TYPE_LABELS[type]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="grid gap-1 text-xs font-medium">
-          Nombre
-          <input
-            className={input}
-            value={template.name}
-            onChange={(e) => setTemplate({ ...template, name: e.target.value })}
-          />
-        </label>
-        <label className="grid gap-1 text-xs font-medium">
-          Formato
-          <select
-            className={input}
-            value={template.size_key}
-            onChange={(e) =>
-              setTemplate({ ...template, size_key: e.target.value as SizeKey })
-            }
-          >
-            {Object.entries(SIZES).map(([key, value]) => (
-              <option key={key} value={key}>
-                {value.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="grid gap-1 text-xs font-medium">
-          Encabezado
-          <input
-            className={input}
-            value={template.header_text}
-            onChange={(e) =>
-              setTemplate({ ...template, header_text: e.target.value })
-            }
-          />
-        </label>
-        <label className="grid gap-1 text-xs font-medium">
-          Color principal
-          <input
-            type="color"
-            className={input + " h-10"}
-            value={template.primary_color}
-            onChange={(e) =>
-              setTemplate({ ...template, primary_color: e.target.value })
-            }
-          />
-        </label>
-        <label className="grid gap-1 text-xs font-medium">
-          Fondo
-          <input
-            type="color"
-            className={input + " h-10"}
-            value={template.background_color}
-            onChange={(e) =>
-              setTemplate({ ...template, background_color: e.target.value })
-            }
-          />
-        </label>
-        <label className="grid gap-1 text-xs font-medium">
-          Texto
-          <input
-            type="color"
-            className={input + " h-10"}
-            value={template.text_color}
-            onChange={(e) =>
-              setTemplate({ ...template, text_color: e.target.value })
-            }
-          />
-        </label>
-        <label className="grid gap-1 text-xs font-medium">
-          Pie
-          <input
-            className={input}
-            value={template.footer_text}
-            onChange={(e) =>
-              setTemplate({ ...template, footer_text: e.target.value })
-            }
-          />
-        </label>
-      </div>
-      <div className="mt-3 flex flex-wrap gap-4 text-sm">
-        {(
-          [
-            ["show_company", "Empresa"],
-            ["show_job_title", "Cargo"],
-            ["show_identification", "Identificación"],
-            ["show_qr", "Código QR"],
-          ] as const
-        ).map(([key, label]) => (
-          <label key={key} className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={template[key]}
-              onChange={(e) =>
-                setTemplate({ ...template, [key]: e.target.checked })
-              }
-            />
-            {label}
-          </label>
-        ))}
-      </div>
-      <button
-        disabled={busy}
-        className="mt-3 rounded-lg bg-violet-700 px-4 py-2 text-sm font-semibold text-white"
-      >
-        Guardar diseño
-      </button>
-    </form>
-  );
+function PrintQueuePanel({jobs}:{jobs:PrintJob[]}) {
+  const labels:Record<PrintJob["status"],string>={queued:"En cola",rendering:"Renderizando",sent:"Enviada",spooled:"En spool",failed:"Fallida",cancelled:"Cancelada"}
+  return <details className="mt-4 rounded-2xl border bg-white"><summary className="cursor-pointer list-none p-5 font-bold">Cola de impresión · {jobs.filter(job=>!["spooled","cancelled"].includes(job.status)).length} activas</summary><div className="border-t px-5 pb-5"><div className="divide-y">{jobs.map(job=><div key={job.id} className="grid gap-1 py-3 text-sm md:grid-cols-[110px_1fr_1fr_auto]"><span className={`font-bold ${job.status==="failed"?"text-red-700":job.status==="spooled"?"text-emerald-700":"text-amber-700"}`}>{labels[job.status]}</span><span>{job.station_label}</span><span className="truncate text-zinc-600">{job.printer_name}</span><time className="text-xs text-zinc-500">{new Date(job.queued_at).toLocaleTimeString("es-VE")}</time>{job.error_message&&<p className="text-xs text-red-700 md:col-span-4">{job.error_message}</p>}</div>)}{!jobs.length&&<p className="py-4 text-sm text-zinc-500">Todavía no hay trabajos para este evento.</p>}</div></div></details>
 }
 
+function PrintStationPanel({config,setConfig,state,printers,connect}:{config:BridgeConfig;setConfig:(value:BridgeConfig)=>void;state:"unknown"|"connected"|"offline";printers:BridgePrinter[];connect:(config?:BridgeConfig)=>Promise<void>}) {
+  const update=(values:Partial<BridgeConfig>)=>{const next={...config,...values};setConfig(next);saveBridgeConfig(next)}
+  return <section className="mt-5 rounded-2xl border bg-white p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-bold">Estación de impresión</h2><p className="mt-1 text-xs text-zinc-600">Vincula el bridge local para imprimir sin diálogos y recibir confirmación de la cola de Windows.</p></div><span className={`rounded-full px-3 py-1 text-xs font-bold ${state==="connected"?"bg-emerald-100 text-emerald-800":state==="offline"?"bg-red-100 text-red-800":"bg-zinc-100 text-zinc-700"}`}>{state==="connected"?"Bridge conectado":state==="offline"?"Bridge sin conexión":"Comprobando"}</span></div><div className="mt-4 grid gap-3 md:grid-cols-4"><label className="grid gap-1 text-xs font-semibold">Nombre de estación<input className={input} value={config.station} onChange={e=>update({station:e.target.value})}/></label><label className="grid gap-1 text-xs font-semibold">Dirección local<input className={input} value={config.url} onChange={e=>update({url:e.target.value})}/></label><label className="grid gap-1 text-xs font-semibold">Código de vinculación<input className={input} type="password" value={config.token} onChange={e=>update({token:e.target.value})}/></label><label className="grid gap-1 text-xs font-semibold">Impresora<select className={input} value={config.printer} onChange={e=>update({printer:e.target.value})}><option value="">Selecciona una impresora</option>{printers.map(printer=><option key={printer.name} value={printer.name}>{printer.name}{printer.isDefault?" · predeterminada":""}</option>)}</select></label></div><div className="mt-3 flex flex-wrap gap-3"><button type="button" onClick={()=>void connect(config)} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white">Probar conexión</button>{state!=="connected"&&<p className="self-center text-xs text-zinc-500">Puedes seguir usando el diálogo del sistema como respaldo.</p>}</div></section>
+}
 function BadgePrint({
   reg,
   eventName,
@@ -1222,7 +1104,7 @@ function BadgePrint({
   orgName: string;
   template: BadgeTemplate;
 }) {
-  const size = SIZES[template.size_key];
+  const size = { w: Number(template.width_mm) || 100, h: Number(template.height_mm) || 60 };
   const landscape = size.w > size.h;
   const qr = Math.round(
     Math.min(size.w, size.h) * (landscape ? 0.62 : 0.45) * 3.78,

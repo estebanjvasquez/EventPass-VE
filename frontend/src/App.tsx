@@ -31,6 +31,7 @@ const OrganizadorDashboard = lazy(() => import('./pages/admin/OrganizadorDashboa
 const CheckinEvento = lazy(() => import('./pages/admin/CheckinEvento'))
 const CheckinReportAdmin = lazy(() => import('./pages/admin/CheckinReportAdmin'))
 const AcreditacionEvento = lazy(() => import('./pages/admin/AcreditacionEvento'))
+const AcreditacionKiosco = lazy(() => import('./pages/admin/AcreditacionKiosco'))
 const EventosAdmin = lazy(() => import('./pages/admin/EventosAdmin'))
 const EventoAdministracion = lazy(() => import('./pages/admin/EventoAdministracion'))
 const EventOverview = lazy(() => import('./pages/admin/EventOverview'))
@@ -129,6 +130,7 @@ function App() {
             </RequireAuth>
           }
         />
+        <Route path="/admin/acreditacion/kiosco/:eventId" element={<RequireAuth><AcreditacionKiosco /></RequireAuth>} />
         <Route
           path="/admin/eventos"
           element={
