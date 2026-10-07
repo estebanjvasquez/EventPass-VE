@@ -897,6 +897,11 @@ async function platformSupportContext(c: any) {
   return { supabase, caller, allowed: await isPlatformAdmin(supabase, caller) }
 }
 
+function authUserDisplayName(user: { email?: string | null; user_metadata?: Record<string, unknown> | null }): string | null {
+  const candidate = user.user_metadata?.display_name ?? user.user_metadata?.full_name
+  return typeof candidate === 'string' && candidate.trim() ? candidate.trim() : user.email?.trim() || null
+}
+
 app.get('/api/admin/users/display-names', async (c) => {
   const ctx = await platformSupportContext(c)
   if (!ctx.caller) return c.json({ error: 'no autorizado' }, 401)
@@ -951,6 +956,22 @@ app.post('/api/admin/users', async (c) => {
     return c.json({ error: membershipError.message }, 400)
   }
 
+  const { error: auditError } = await ctx.supabase.from('platform_user_audit').insert({
+    action: 'user_created',
+    target_user_id: account.data.userId,
+    target_name: parsed.data.display_name,
+    target_email: email,
+    actor_user_id: ctx.caller,
+    organization_id: organization.id,
+    organization_name: organization.name,
+    role: parsed.data.role,
+  })
+  if (auditError) {
+    await ctx.supabase.from('memberships').delete().eq('organization_id', organization.id).eq('user_id', account.data.userId)
+    await ctx.supabase.auth.admin.deleteUser(account.data.userId)
+    return c.json({ error: `No se pudo auditar la creación: ${auditError.message}` }, 500)
+  }
+
   const mail = await sendPlatformAccessEmail({
     email: c.env.EMAIL,
     from: c.env.EMAIL_FROM,
@@ -1002,6 +1023,52 @@ app.post('/api/admin/users/:userId/resend-access', async (c) => {
   return c.json({ ok: true, message: 'Enlace de acceso reenviado' })
 })
 
+app.delete('/api/admin/users/:userId', async (c) => {
+  const ctx = await platformSupportContext(c)
+  if (!ctx.caller) return c.json({ error: 'no autorizado' }, 401)
+  if (!ctx.allowed) return c.json({ error: 'no autorizado' }, 403)
+  const target = c.req.param('userId')
+  if (!z.string().uuid().safeParse(target).success) return c.json({ error: 'Usuario inválido' }, 400)
+  if (target === ctx.caller) return c.json({ error: 'No puedes eliminar tu propia cuenta' }, 409)
+
+  const [{ data: userData, error: userError }, { data: platformAdmin }, { data: memberships, error: membershipsError }] = await Promise.all([
+    ctx.supabase.auth.admin.getUserById(target),
+    ctx.supabase.from('platform_admins').select('user_id').eq('user_id', target).maybeSingle(),
+    ctx.supabase.from('memberships').select('organization_id,role,organizations(name)').eq('user_id', target),
+  ])
+  const targetUser = userData?.user
+  if (userError || !targetUser?.email) return c.json({ error: 'Usuario no encontrado' }, 404)
+  if (platformAdmin) return c.json({ error: 'Retira primero el perfil de superadministrador' }, 409)
+  if (membershipsError) return c.json({ error: membershipsError.message }, 400)
+  if ((memberships ?? []).length > 0) {
+    const organizationNames = (memberships ?? []).map((membership: any) => membership.organizations?.name).filter(Boolean)
+    return c.json({
+      error: `Retira primero al usuario de ${organizationNames.length ? organizationNames.join(', ') : 'todas sus organizaciones'}`,
+      organizations: organizationNames,
+    }, 409)
+  }
+
+  const targetName = authUserDisplayName(targetUser)
+  const { data: audit, error: auditError } = await ctx.supabase.from('platform_user_audit').insert({
+    action: 'user_delete_requested',
+    target_user_id: target,
+    target_name: targetName,
+    target_email: targetUser.email,
+    actor_user_id: ctx.caller,
+    details: { source: 'superadmin_user_support' },
+  }).select('id').single()
+  if (auditError || !audit) return c.json({ error: `No se pudo iniciar la auditoría de eliminación: ${auditError?.message ?? 'error desconocido'}` }, 500)
+
+  const { error: deleteError } = await ctx.supabase.auth.admin.deleteUser(target)
+  if (deleteError) {
+    await ctx.supabase.from('platform_user_audit').update({ action: 'user_delete_failed', details: { source: 'superadmin_user_support', error: deleteError.message } }).eq('id', audit.id)
+    return c.json({ error: `No se pudo eliminar el usuario: ${deleteError.message}` }, 409)
+  }
+  const { error: completedAuditError } = await ctx.supabase.from('platform_user_audit').update({ action: 'user_deleted' }).eq('id', audit.id)
+  if (completedAuditError) return c.json({ error: `El usuario fue eliminado, pero no se pudo cerrar la auditoría: ${completedAuditError.message}`, saved: true }, 500)
+  return c.json({ ok: true, message: 'Usuario eliminado y trazabilidad conservada' })
+})
+
 app.post('/api/admin/users/:userId/memberships', async (c) => {
   const parsed = z.object({ organization_id: z.string().uuid(), role: membershipRoleSchema }).safeParse(await c.req.json().catch(() => null))
   if (!parsed.success) return c.json({ error: 'Organización o perfil inválido' }, 400)
@@ -1020,7 +1087,19 @@ app.post('/api/admin/users/:userId/memberships', async (c) => {
   const { error } = await ctx.supabase.from('memberships').upsert({ organization_id: organization.id, user_id: target, role: parsed.data.role }, { onConflict: 'organization_id,user_id' })
   if (error) return c.json({ error: error.message }, 400)
   const change = previous ? 'updated' : 'added'
+  const { error: auditError } = await ctx.supabase.from('platform_user_audit').insert({
+    action: previous ? 'membership_updated' : 'membership_added',
+    target_user_id: target,
+    target_name: authUserDisplayName(user.user),
+    target_email: user.user.email,
+    actor_user_id: ctx.caller,
+    organization_id: organization.id,
+    organization_name: organization.name,
+    role: parsed.data.role,
+    details: previous ? { previous_role: previous.role } : {},
+  })
   const result = await sendMembershipNoticeEmail({ email: c.env.EMAIL, from: c.env.EMAIL_FROM, to: user.user.email, organizationName: organization.name, role: parsed.data.role, change, loginUrl: `${c.env.APP_BASE_URL.replace(/\/$/, '')}/admin` })
+  if (auditError) return c.json({ error: `El acceso se guardó, pero la auditoría falló: ${auditError.message}`, saved: true }, 500)
   if (!result.ok) return c.json({ error: `El acceso se guardó, pero la notificación falló: ${result.errorDetail ?? 'error de entrega'}`, saved: true }, 502)
   return c.json({ ok: true, message: change === 'added' ? 'Organización asignada y usuario notificado' : 'Perfil actualizado y usuario notificado' })
 })
@@ -1044,7 +1123,18 @@ app.delete('/api/admin/users/:userId/memberships/:orgId', async (c) => {
   const { error } = await ctx.supabase.from('memberships').delete().eq('organization_id', orgId).eq('user_id', target)
   if (error) return c.json({ error: error.message }, 400)
   const role = membershipRoleSchema.parse(membership.role)
+  const { error: auditError } = await ctx.supabase.from('platform_user_audit').insert({
+    action: 'membership_removed',
+    target_user_id: target,
+    target_name: authUserDisplayName(user.user),
+    target_email: user.user.email,
+    actor_user_id: ctx.caller,
+    organization_id: organization.id,
+    organization_name: organization.name,
+    role,
+  })
   const result = await sendMembershipNoticeEmail({ email: c.env.EMAIL, from: c.env.EMAIL_FROM, to: user.user.email, organizationName: organization.name, role, change: 'removed', loginUrl: `${c.env.APP_BASE_URL.replace(/\/$/, '')}/admin` })
+  if (auditError) return c.json({ error: `El acceso se retiró, pero la auditoría falló: ${auditError.message}`, saved: true }, 500)
   if (!result.ok) return c.json({ error: `El acceso se retiró, pero la notificación falló: ${result.errorDetail ?? 'error de entrega'}`, saved: true }, 502)
   return c.json({ ok: true, message: 'Acceso retirado y usuario notificado' })
 })

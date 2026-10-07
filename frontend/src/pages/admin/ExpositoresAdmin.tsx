@@ -75,6 +75,8 @@ type PortalAudit = {
   id: string;
   action: string;
   entity_type: string;
+  actor_name: string | null;
+  actor_email: string | null;
   created_at: string;
   details: Record<string, unknown>;
 };
@@ -424,7 +426,7 @@ export default function ExpositoresAdmin() {
         .order("created_at", { ascending: false }),
       supabase
         .from("exhibitor_portal_audit")
-        .select("id,action,entity_type,created_at,details")
+        .select("id,action,entity_type,actor_name,actor_email,created_at,details")
         .eq("event_id", eventId)
         .eq("company_id", companyId)
         .order("created_at", { ascending: false })
@@ -1071,7 +1073,7 @@ export default function ExpositoresAdmin() {
                     {portalAudit.map((entry) => (
                       <p key={entry.id}>
                         {new Date(entry.created_at).toLocaleString()} ·{" "}
-                        {entry.action} · {entry.entity_type}
+                        {entry.action} · {entry.entity_type} · {entry.actor_name ?? entry.actor_email ?? "Sistema"}
                       </p>
                     ))}
                     {!portalAudit.length && (
