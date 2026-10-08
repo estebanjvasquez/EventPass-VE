@@ -18,6 +18,12 @@ export type BadgeElement = {
   align?: 'left' | 'center' | 'right'
   radius?: number
   rotation?: number
+  opacity?: number
+  visible?: boolean
+  locked?: boolean
+  fontFamily?: string
+  italic?: boolean
+  uppercase?: boolean
 }
 export type BadgeLayout = { version: 1; elements: BadgeElement[] }
 export type BadgeTemplateV2 = {
@@ -72,6 +78,27 @@ export function defaultBadgeLayout(width = 100, height = 60, color = '#047857'):
   ] }
 }
 
+export type BadgePreset='classic'|'modern'|'portrait'
+export function badgePresetLayout(preset:BadgePreset,width:number,height:number,color:string):BadgeLayout{
+  if(preset==='modern')return{version:1,elements:[
+    {id:id(),kind:'rect',x:0,y:0,width:Math.max(18,width*.24),height,backgroundColor:color},
+    {id:id(),kind:'field',field:'participation_type',x:3,y:5,width:Math.max(12,width*.18),height:6,fontSize:3,fontWeight:'bold',color:'#ffffff',align:'center'},
+    {id:id(),kind:'field',field:'full_name',x:width*.29,y:height*.18,width:width*.64,height:height*.22,fontSize:7,fontWeight:'bold',color:'#18181b'},
+    {id:id(),kind:'field',field:'company',x:width*.29,y:height*.45,width:width*.45,height:6,fontSize:3.4,fontWeight:'bold',color},
+    {id:id(),kind:'field',field:'job_title',x:width*.29,y:height*.57,width:width*.45,height:5,fontSize:2.8,color:'#52525b'},
+    {id:id(),kind:'field',field:'qr',x:width-22,y:height-22,width:18,height:18},
+  ]}
+  if(preset==='portrait')return{version:1,elements:[
+    {id:id(),kind:'rect',x:0,y:0,width,height:height*.17,backgroundColor:color},
+    {id:id(),kind:'field',field:'organization_name',x:5,y:4,width:width-10,height:6,fontSize:3.2,fontWeight:'bold',color:'#ffffff',align:'center'},
+    {id:id(),kind:'field',field:'full_name',x:6,y:height*.22,width:width-12,height:height*.18,fontSize:7,fontWeight:'bold',color:'#18181b',align:'center'},
+    {id:id(),kind:'field',field:'participation_type',x:width*.2,y:height*.43,width:width*.6,height:7,fontSize:3.4,fontWeight:'bold',color:'#ffffff',backgroundColor:color,align:'center',radius:2},
+    {id:id(),kind:'field',field:'company',x:6,y:height*.55,width:width-12,height:6,fontSize:3.2,fontWeight:'bold',color:'#27272a',align:'center'},
+    {id:id(),kind:'field',field:'qr',x:(width-24)/2,y:height-29,width:24,height:24},
+  ]}
+  return defaultBadgeLayout(width,height,color)
+}
+
 export function normalizeBadgeLayout(template: BadgeTemplateV2): BadgeLayout {
   if (template.layout?.elements?.length) return template.layout
   return defaultBadgeLayout(Number(template.width_mm || 100),Number(template.height_mm || 60),template.primary_color)
@@ -109,8 +136,9 @@ export async function renderBadgePng(template: BadgeTemplateV2,data: BadgeRender
   ctx.fillStyle=template.background_color||'#ffffff';ctx.fillRect(0,0,canvas.width,canvas.height)
   const layout=side==='back'?template.back_layout:normalizeBadgeLayout(template)
   for(const element of layout.elements){
+    if(element.visible===false)continue
     const x=element.x*scale,y=element.y*scale,w=element.width*scale,h=element.height*scale
-    ctx.save();ctx.translate(x+w/2,y+h/2);ctx.rotate((element.rotation??0)*Math.PI/180);ctx.translate(-(x+w/2),-(y+h/2))
+    ctx.save();ctx.globalAlpha=element.opacity??1;ctx.translate(x+w/2,y+h/2);ctx.rotate((element.rotation??0)*Math.PI/180);ctx.translate(-(x+w/2),-(y+h/2))
     if(element.kind==='rect'){
       ctx.fillStyle=element.backgroundColor||template.primary_color;ctx.beginPath();ctx.roundRect(x,y,w,h,(element.radius??0)*scale);ctx.fill()
     } else if(element.kind==='image'&&element.src){
@@ -120,13 +148,16 @@ export async function renderBadgePng(template: BadgeTemplateV2,data: BadgeRender
       const qrUrl=await QRCode.toDataURL(value,{errorCorrectionLevel:'M',margin:0,width:Math.max(Math.round(Math.min(w,h)),128)})
       const image=await loadImage(qrUrl);ctx.drawImage(image,x,y,w,h)
     } else {
-      const value=element.kind==='text'?(element.text??''):fieldValue(element.field,data)
+      const raw=element.kind==='text'?(element.text??''):fieldValue(element.field,data)
+      const value=element.uppercase?raw.toLocaleUpperCase('es'):raw
       if(value){
         if(element.backgroundColor){ctx.fillStyle=element.backgroundColor;ctx.beginPath();ctx.roundRect(x,y,w,h,(element.radius??0)*scale);ctx.fill()}
         let fontPx=(element.fontSize??3.5)*scale
         const weight=element.fontWeight==='bold'?700:400
-        ctx.font=`${weight} ${fontPx}px Arial, sans-serif`
-        while(fontPx>6&&ctx.measureText(value).width>w-4*scale){fontPx-=1;ctx.font=`${weight} ${fontPx}px Arial, sans-serif`}
+        const family=element.fontFamily||'Arial'
+        const style=element.italic?'italic ':''
+        ctx.font=`${style}${weight} ${fontPx}px ${family}, sans-serif`
+        while(fontPx>6&&ctx.measureText(value).width>w-4*scale){fontPx-=1;ctx.font=`${style}${weight} ${fontPx}px ${family}, sans-serif`}
         ctx.fillStyle=element.color||template.text_color||'#18181b';ctx.textBaseline='middle';ctx.textAlign=element.align??'left'
         const tx=element.align==='center'?x+w/2:element.align==='right'?x+w-1.5*scale:x+1.5*scale
         ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();ctx.fillText(value,tx,y+h/2);ctx.restore()

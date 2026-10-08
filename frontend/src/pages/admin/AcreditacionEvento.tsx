@@ -18,7 +18,7 @@ import { credentialQrValue, extractCredentialToken } from "../../lib/credentialQ
 import { supabase } from "../../lib/supabase";
 import { resolveActiveOrg } from "../../lib/activeOrg";
 import ImpersonationBanner from "../../components/ImpersonationBanner";
-import BadgeStudio from "../../components/badges/BadgeStudio";
+import BadgeStudio, { type BadgeVersion } from "../../components/badges/BadgeStudio";
 import { defaultBadgeLayout, renderBadgeSides, type BadgeRenderData, type BadgeTemplateV2 } from "../../lib/badgeStudio";
 import { bridgeHealth, bridgePrinters, cancelBridgeJob, getBridgeJob, loadBridgeConfig, prioritizeBridgeJob, saveBridgeConfig, submitBridgeJob, type BridgeConfig, type BridgePrinter } from "../../lib/printBridge";
 
@@ -63,6 +63,7 @@ type Metrics = {
   average_service_seconds: number | null;
 };
 type BadgeTemplate = BadgeTemplateV2;
+type BadgeAsset={id:string;name:string;public_url:string;mime_type:string;size_bytes:number;created_at:string};
 type WalkInForm = {
   first_name: string;
   last_name: string;
@@ -149,9 +150,12 @@ export default function AcreditacionEvento() {
   const [printJobs, setPrintJobs] = useState<PrintJob[]>([]);
   const [metrics, setMetrics] = useState<Metrics>(emptyMetrics);
   const [templates, setTemplates] = useState<BadgeTemplate[]>([]);
+  const [templateVersions,setTemplateVersions]=useState<BadgeVersion[]>([]);
+  const [badgeAssets,setBadgeAssets]=useState<BadgeAsset[]>([]);
   const [templateDraft, setTemplateDraft] =
     useState<BadgeTemplate>(defaultTemplate());
   const [showDesigner, setShowDesigner] = useState(false);
+  const [copyTemplateType,setCopyTemplateType]=useState('vip');
   const [showWalkIn, setShowWalkIn] = useState(false);
   const [walkIn, setWalkIn] = useState({
     first_name: "",
@@ -231,7 +235,7 @@ export default function AcreditacionEvento() {
   useEffect(() => { void connectBridge(initialBridgeConfig.current); }, [connectBridge]);
   const loadOperationalData = useCallback(async () => {
     if (!eventId) return;
-    const [templateResult, metricResult, jobsResult] = await Promise.all([
+    const [templateResult, metricResult, jobsResult,versionsResult,assetsResult] = await Promise.all([
       supabase
         .from("badge_templates")
         .select(
@@ -242,6 +246,8 @@ export default function AcreditacionEvento() {
         .order("participation_type"),
       supabase.rpc("get_accreditation_metrics", { p_event_id: eventId }),
       supabase.from("badge_print_jobs").select("id,status,print_kind,template_id,credential_token_snapshot,station_label,printer_name,bridge_job_id,priority,attempt_count,error_message,queued_at,requested_by_name").eq("event_id",eventId).order("priority",{ascending:true}).order("queued_at",{ascending:false}).limit(20),
+      supabase.from("badge_template_versions").select("id,version,status,created_at,saved_by_name,snapshot").eq("event_id",eventId).order("created_at",{ascending:false}).limit(50),
+      supabase.from("badge_assets").select("id,name,public_url,mime_type,size_bytes,created_at").eq("event_id",eventId).order("created_at",{ascending:false}),
     ]);
     setTemplates(
       ((templateResult.data ?? []) as BadgeTemplate[]).map((item) => ({
@@ -259,6 +265,8 @@ export default function AcreditacionEvento() {
       : undefined;
     setMetrics(row ?? emptyMetrics);
     setPrintJobs((jobsResult.data ?? []) as PrintJob[]);
+    setTemplateVersions((versionsResult.data??[]) as BadgeVersion[]);
+    setBadgeAssets((assetsResult.data??[]) as BadgeAsset[]);
   }, [eventId]);
   useEffect(() => {
     setSelected(null);
@@ -610,36 +618,52 @@ export default function AcreditacionEvento() {
         defaultTemplate(type),
     );
   }
-  async function saveTemplate(e?: React.FormEvent) {
-    e?.preventDefault();
+  async function saveTemplate(status:'draft'|'published'='published') {
     if (!eventId || !orgId) return;
     setBusy(true);
     const { id: _id, ...draft } = templateDraft;
-    const { error: saveError } = await supabase
-      .from("badge_templates")
-      .upsert(
-        {
-          ...draft,
-          template_status: "published",
-          published_at: new Date().toISOString(),
-          version: (templateDraft.version ?? 0) + 1,
-          organization_id: orgId,
-          event_id: eventId,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "event_id,participation_type" },
-      );
+    const nextVersion=Math.max(templateDraft.version??0,...templateVersions.filter(item=>item.snapshot.participation_type===templateDraft.participation_type).map(item=>item.version),0)+1;
+    const snapshot={...templateDraft,version:nextVersion,template_status:status};
+    let templateId=templateDraft.id??null;
+    let saveError:null|{message:string}=null;
+    if(status==='published'){
+      const saved=await supabase.from("badge_templates").upsert({...draft,template_status:"published",published_at:new Date().toISOString(),version:nextVersion,organization_id:orgId,event_id:eventId,updated_at:new Date().toISOString()},{onConflict:"event_id,participation_type"}).select("id").single();
+      saveError=saved.error;templateId=saved.data?.id??templateId;
+    }
+    if(!saveError){
+      const user=await supabase.auth.getUser();
+      const metadata=user.data.user?.user_metadata??{};
+      const versioned=await supabase.from("badge_template_versions").insert({organization_id:orgId,event_id:eventId,template_id:templateId,participation_type:templateDraft.participation_type,version:nextVersion,status,snapshot,saved_by:user.data.user?.id??null,saved_by_name:metadata.display_name||metadata.full_name||user.data.user?.email||null});
+      saveError=versioned.error;
+    }
     setBusy(false);
     if (saveError) setError(saveError.message);
     else {
       setInfo(
-        "Diseño guardado para " +
+        (status==='draft'?"Borrador guardado para ":"Diseño publicado para ") +
           (TYPE_LABELS[templateDraft.participation_type] ??
             templateDraft.participation_type) +
           ".",
       );
       await loadOperationalData();
     }
+  }
+  async function uploadBadgeAsset(file:File){
+    if(!orgId||!eventId)throw new Error("Selecciona un evento.");
+    if(file.size>5*1024*1024)throw new Error("La imagen supera el límite de 5 MB.");
+    if(!['image/png','image/jpeg','image/webp','image/svg+xml'].includes(file.type))throw new Error("Usa una imagen PNG, JPG, WebP o SVG.");
+    const safe=file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+    const path=`${orgId}/${eventId}/${crypto.randomUUID()}-${safe}`;
+    const uploaded=await supabase.storage.from('badge-assets').upload(path,file,{contentType:file.type,upsert:false});
+    if(uploaded.error)throw uploaded.error;
+    const publicUrl=supabase.storage.from('badge-assets').getPublicUrl(path).data.publicUrl;
+    const saved=await supabase.from('badge_assets').insert({organization_id:orgId,event_id:eventId,name:file.name,storage_path:path,public_url:publicUrl,mime_type:file.type,size_bytes:file.size});
+    if(saved.error){
+      await supabase.storage.from('badge-assets').remove([path]);
+      throw saved.error;
+    }
+    setBadgeAssets(items=>[{id:crypto.randomUUID(),name:file.name,public_url:publicUrl,mime_type:file.type,size_bytes:file.size,created_at:new Date().toISOString()},...items]);
+    return publicUrl;
   }
 
   const currentEvent = events.find((item) => item.id === eventId);
@@ -756,7 +780,7 @@ export default function AcreditacionEvento() {
         <PrintStationPanel config={bridgeConfig} setConfig={setBridgeConfig} state={bridgeState} message={bridgeMessage} printers={bridgeDevices} connect={connectBridge} />
         <PrintQueuePanel jobs={printJobs} onAction={manageQueueJob} bridgeConnected={bridgeState==="connected"} />
         {showDesigner && canConfigure && (
-          <><div className="mt-5 flex max-w-sm items-end gap-2"><label className="grid flex-1 gap-1 text-xs font-semibold">Diseño por tipo<select className={input} value={templateDraft.participation_type} onChange={e=>selectTemplateType(e.target.value)}>{TYPES.map(type=><option key={type} value={type}>{TYPE_LABELS[type]}</option>)}</select></label></div><BadgeStudio template={templateDraft} onChange={setTemplateDraft} onSave={()=>void saveTemplate()} busy={busy} previewData={previewData} onTestPrint={()=>void testPrint()} testBusy={testBusy}/></>
+          <><div className="mt-5 flex flex-wrap items-end gap-2"><label className="grid min-w-56 flex-1 gap-1 text-xs font-semibold">Diseño por tipo<select className={input} value={templateDraft.participation_type} onChange={e=>selectTemplateType(e.target.value)}>{TYPES.map(type=><option key={type} value={type}>{TYPE_LABELS[type]}</option>)}</select></label><label className="grid min-w-44 gap-1 text-xs font-semibold">Copiar diseño a<select className={input} value={copyTemplateType===templateDraft.participation_type?(TYPES.find(type=>type!==templateDraft.participation_type)??''):copyTemplateType} onChange={e=>setCopyTemplateType(e.target.value)}>{TYPES.filter(type=>type!==templateDraft.participation_type).map(type=><option key={type} value={type}>{TYPE_LABELS[type]}</option>)}</select></label><button type="button" onClick={()=>{const target=copyTemplateType===templateDraft.participation_type?(TYPES.find(type=>type!==templateDraft.participation_type)??'vip'):copyTemplateType;setTemplateDraft({...templateDraft,id:undefined,participation_type:target,name:`${templateDraft.name} · ${TYPE_LABELS[target]??target}`,version:0});setInfo(`Diseño copiado a ${TYPE_LABELS[target]??target}. Revísalo y publícalo.`)}} className="rounded-lg border bg-white px-3 py-2 text-sm font-semibold">Copiar</button></div><BadgeStudio template={templateDraft} onChange={setTemplateDraft} onSave={status=>void saveTemplate(status)} busy={busy} previewData={previewData} onTestPrint={()=>void testPrint()} testBusy={testBusy} onUploadImage={uploadBadgeAsset} assets={badgeAssets} versions={templateVersions.filter(item=>item.snapshot.participation_type===templateDraft.participation_type)} onRestore={snapshot=>{setTemplateDraft(snapshot);setInfo("Versión cargada en el editor. Publícala para activarla.")}}/></>
         )}
         {showWalkIn && (
           <WalkIn
