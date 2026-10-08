@@ -136,3 +136,10 @@ export async function renderBadgePng(template: BadgeTemplateV2,data: BadgeRender
   }
   return canvas.toDataURL('image/png')
 }
+
+export async function renderBadgeSides(template: BadgeTemplateV2,data: BadgeRenderData) {
+  const front=await renderBadgePng(template,data,'front')
+  if(!template.double_sided)return [front]
+  const back=await renderBadgePng(template,data,'back')
+  return [front,back]
+}

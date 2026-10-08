@@ -19,8 +19,8 @@ import { supabase } from "../../lib/supabase";
 import { resolveActiveOrg } from "../../lib/activeOrg";
 import ImpersonationBanner from "../../components/ImpersonationBanner";
 import BadgeStudio from "../../components/badges/BadgeStudio";
-import { defaultBadgeLayout, renderBadgePng, type BadgeTemplateV2 } from "../../lib/badgeStudio";
-import { bridgeHealth, bridgePrinters, getBridgeJob, loadBridgeConfig, saveBridgeConfig, submitBridgeJob, type BridgeConfig, type BridgePrinter } from "../../lib/printBridge";
+import { defaultBadgeLayout, renderBadgeSides, type BadgeRenderData, type BadgeTemplateV2 } from "../../lib/badgeStudio";
+import { bridgeHealth, bridgePrinters, cancelBridgeJob, getBridgeJob, loadBridgeConfig, prioritizeBridgeJob, saveBridgeConfig, submitBridgeJob, type BridgeConfig, type BridgePrinter } from "../../lib/printBridge";
 
 type Reg = {
   id: string;
@@ -52,7 +52,7 @@ type PrintLog = {
   reason: string | null;
   created_at: string;
 };
-type PrintJob = { id:string;status:"queued"|"rendering"|"sent"|"spooled"|"failed"|"cancelled";print_kind:"initial"|"reprint";station_label:string;printer_name:string;error_message:string|null;queued_at:string;requested_by_name:string|null };
+type PrintJob = { id:string;status:"queued"|"rendering"|"sent"|"spooled"|"delivered"|"failed"|"cancelled";print_kind:"initial"|"reprint";template_id:string|null;credential_token_snapshot:string;station_label:string;printer_name:string;bridge_job_id:string|null;priority:number;attempt_count:number;error_message:string|null;queued_at:string;requested_by_name:string|null };
 type Metrics = {
   initial_prints: number;
   reprints: number;
@@ -166,9 +166,11 @@ export default function AcreditacionEvento() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [testBusy, setTestBusy] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [printed, setPrinted] = useState(false);
   const [pendingJobId, setPendingJobId] = useState<string | null>(null);
+  const [browserPages,setBrowserPages]=useState<string[]>([]);
   const [bridgeConfig, setBridgeConfig] = useState<BridgeConfig>(() => loadBridgeConfig());
   const [bridgeState, setBridgeState] = useState<"unknown" | "connected" | "offline">("unknown");
   const [bridgeDevices, setBridgeDevices] = useState<BridgePrinter[]>([]);
@@ -208,11 +210,12 @@ export default function AcreditacionEvento() {
       return;
     }
     try {
-      await bridgeHealth(config);
+      const health = await bridgeHealth(config);
       const value = await bridgePrinters(config);
       setBridgeDevices(value.printers);
       setBridgeState("connected");
-      setBridgeMessage(value.printers.length ? `${value.printers.length} impresora${value.printers.length === 1 ? "" : "s"} detectada${value.printers.length === 1 ? "" : "s"}.` : "Bridge conectado, pero Windows no reportó impresoras instaladas.");
+      const offline=value.printers.filter(item=>item.offline).length;
+      setBridgeMessage(value.printers.length ? `Bridge ${health.version} · ${value.printers.length} impresora${value.printers.length === 1 ? "" : "s"} detectada${value.printers.length === 1 ? "" : "s"}${offline?` · ${offline} sin conexión`:""} · ${health.queue} en cola.` : `Bridge ${health.version} conectado, pero Windows no reportó impresoras instaladas.`);
       if (!config.printer) {
         const printer = value.printers.find(item => item.isDefault)?.name ?? value.printers[0]?.name ?? "";
         const next = { ...config, printer };
@@ -238,7 +241,7 @@ export default function AcreditacionEvento() {
         .eq("active", true)
         .order("participation_type"),
       supabase.rpc("get_accreditation_metrics", { p_event_id: eventId }),
-      supabase.from("badge_print_jobs").select("id,status,print_kind,station_label,printer_name,error_message,queued_at,requested_by_name").eq("event_id",eventId).order("queued_at",{ascending:false}).limit(12),
+      supabase.from("badge_print_jobs").select("id,status,print_kind,template_id,credential_token_snapshot,station_label,printer_name,bridge_job_id,priority,attempt_count,error_message,queued_at,requested_by_name").eq("event_id",eventId).order("priority",{ascending:true}).order("queued_at",{ascending:false}).limit(20),
     ]);
     setTemplates(
       ((templateResult.data ?? []) as BadgeTemplate[]).map((item) => ({
@@ -276,6 +279,7 @@ export default function AcreditacionEvento() {
     });
     setResults([]);
     setPrinted(false);
+    setBrowserPages([]);
     serviceStarted.current = Date.now();
   }
   async function search(e?: React.FormEvent) {
@@ -465,37 +469,51 @@ export default function AcreditacionEvento() {
       selected.badge_cancelled_at
     )
       return;
-    const prior = printLogs.filter(
-      (item) => item.print_kind !== "cancelled",
-    ).length;
-    const kind = prior ? "reprint" : "initial";
+    const prior = printLogs.filter((item) => item.print_kind !== "cancelled").length;
+    const expectedKind = prior ? "reprint" : "initial";
     const reason =
-      kind === "reprint"
+      expectedKind === "reprint"
         ? window.prompt("Motivo de la reimpresión")?.trim()
         : null;
-    if (kind === "reprint" && !reason) {
+    if (expectedKind === "reprint" && !reason) {
       setError("La reimpresión requiere un motivo.");
       return;
     }
     setBusy(true); setError(null);
     const printer = bridgeState === "connected" && bridgeConfig.printer ? bridgeConfig.printer : "Diálogo del sistema";
-    const created = await supabase.rpc("create_badge_print_job", { p_event_id:eventId,p_record_type:selected.record_type,p_record_id:selected.id,p_template_id:activeTemplate.id??null,p_station_label:bridgeConfig.station||"Mostrador principal",p_printer_name:printer,p_reason:reason });
-    const jobId=created.data as string|null;
-    if(created.error||!jobId){setBusy(false);setError(created.error?.message??"No se pudo crear el trabajo de impresión.");return}
+    const created = await supabase.rpc("prepare_badge_print_job", { p_event_id:eventId,p_record_type:selected.record_type,p_record_id:selected.id,p_template_id:activeTemplate.id??null,p_station_label:bridgeConfig.station||"Mostrador principal",p_printer_name:printer,p_reason:reason,p_output_sides:activeTemplate.double_sided?2:1,p_profile_snapshot:bridgeConfig.profile });
+    const prepared=(Array.isArray(created.data)?created.data[0]:null) as {job_id:string;print_kind:"initial"|"reprint";credential_token:string}|null;
+    if(created.error||!prepared?.job_id){setBusy(false);setError(created.error?.message??"No se pudo crear el trabajo de impresión.");return}
+    const jobId=prepared.job_id;
+    const printReg={...selected,credential_token:prepared.credential_token};
+    setSelected(printReg);
     await supabase.rpc("update_badge_print_job",{p_job_id:jobId,p_status:"rendering",p_bridge_job_id:null,p_payload_hash:null,p_error_message:null});
     if(bridgeState!=="connected"||!bridgeConfig.printer){
+      const pngDataUrls=await renderBadgeSides(activeTemplate,{...printReg,...edit,last_name:edit.last_name||null,company:edit.company||null,job_title:edit.job_title||null,cedula:edit.cedula||null,event_name:eventName,organization_name:orgName,participation_type:TYPE_LABELS[selected.participation_type]??selected.participation_type});
       await supabase.rpc("update_badge_print_job",{p_job_id:jobId,p_status:"sent",p_bridge_job_id:"browser-dialog",p_payload_hash:null,p_error_message:null});
-      setPendingJobId(jobId);setPrinted(true);setBusy(false);setInfo("Trabajo abierto en el diálogo del sistema. Confirma la entrega para cerrar la auditoría.");window.print();return
+      setBrowserPages(pngDataUrls);setPendingJobId(jobId);setPrinted(true);setBusy(false);setInfo("Trabajo abierto en el diálogo del sistema. Confirma la entrega para cerrar la auditoría.");window.setTimeout(()=>window.print(),150);return
     }
     try{
-      const pngDataUrl=await renderBadgePng(activeTemplate,{...selected,...edit,last_name:edit.last_name||null,company:edit.company||null,job_title:edit.job_title||null,cedula:edit.cedula||null,event_name:eventName,organization_name:orgName,participation_type:TYPE_LABELS[selected.participation_type]??selected.participation_type});
-      let bridgeJob=await submitBridgeJob(bridgeConfig,{cloudJobId:jobId,printer:bridgeConfig.printer,title:`${eventName} · ${selected.first_name} ${selected.last_name??""}`.trim(),pngDataUrl,widthMm:activeTemplate.width_mm,heightMm:activeTemplate.height_mm});
+      const pngDataUrls=await renderBadgeSides(activeTemplate,{...printReg,...edit,last_name:edit.last_name||null,company:edit.company||null,job_title:edit.job_title||null,cedula:edit.cedula||null,event_name:eventName,organization_name:orgName,participation_type:TYPE_LABELS[selected.participation_type]??selected.participation_type});
+      let bridgeJob=await submitBridgeJob(bridgeConfig,{cloudJobId:jobId,printer:bridgeConfig.printer,title:`${eventName} · ${selected.first_name} ${selected.last_name??""}`.trim(),pngDataUrls,widthMm:activeTemplate.width_mm,heightMm:activeTemplate.height_mm});
       await supabase.rpc("update_badge_print_job",{p_job_id:jobId,p_status:"sent",p_bridge_job_id:bridgeJob.id,p_payload_hash:bridgeJob.payloadHash??null,p_error_message:null});
       for(let attempt=0;attempt<75&&bridgeJob.status!=="spooled"&&bridgeJob.status!=="failed";attempt+=1){await new Promise(resolve=>setTimeout(resolve,400));bridgeJob=await getBridgeJob(bridgeConfig,bridgeJob.id)}
       if(bridgeJob.status!=="spooled")throw new Error(bridgeJob.error??"La impresora no confirmó el trabajo a tiempo.")
       await supabase.rpc("update_badge_print_job",{p_job_id:jobId,p_status:"spooled",p_bridge_job_id:bridgeJob.id,p_payload_hash:bridgeJob.payloadHash??null,p_error_message:null});
-      setPrinted(true);setPendingJobId(null);setInfo(kind==="reprint"?"Reimpresión enviada y confirmada por la cola local.":"Credencial enviada y confirmada por la cola local.");await loadPrints();await loadOperationalData()
+      setPrinted(true);setPendingJobId(jobId);setInfo(prepared.print_kind==="reprint"?"Reimpresión enviada a Windows. Confirma la entrega.":"Credencial enviada a Windows. Confirma la entrega.");await loadPrints();await loadOperationalData()
     }catch(printError){const message=printError instanceof Error?printError.message:"No se pudo imprimir la credencial.";await supabase.rpc("update_badge_print_job",{p_job_id:jobId,p_status:"failed",p_bridge_job_id:null,p_payload_hash:null,p_error_message:message});setError(message);setPrinted(false)}finally{setBusy(false)}
+  }
+  async function testPrint() {
+    if(!selected||bridgeState!=="connected"||!bridgeConfig.printer){setError("Selecciona una persona y conecta una impresora antes de probar.");return}
+    setTestBusy(true);setError(null);
+    try{
+      const data:BadgeRenderData={...selected,...edit,last_name:edit.last_name||null,company:edit.company||null,job_title:edit.job_title||null,cedula:edit.cedula||null,event_name:eventName,organization_name:orgName,participation_type:TYPE_LABELS[selected.participation_type]??selected.participation_type};
+      const pngDataUrls=await renderBadgeSides(templateDraft,data);
+      let job=await submitBridgeJob(bridgeConfig,{cloudJobId:crypto.randomUUID(),printer:bridgeConfig.printer,title:`PRUEBA · ${templateDraft.name}`,pngDataUrls,widthMm:templateDraft.width_mm,heightMm:templateDraft.height_mm,test:true,priority:1});
+      for(let attempt=0;attempt<75&&job.status!=="spooled"&&job.status!=="failed";attempt+=1){await new Promise(resolve=>setTimeout(resolve,400));job=await getBridgeJob(bridgeConfig,job.id)}
+      if(job.status!=="spooled")throw new Error(job.error??"La impresora no confirmó la prueba.");
+      setInfo("Prueba enviada a Windows sin crear una impresión en la auditoría.");
+    }catch(testError){setError(testError instanceof Error?testError.message:"No se pudo imprimir la prueba.")}finally{setTestBusy(false)}
   }
   async function recordOutcome(outcome: "delivered" | "failed") {
     if (!selected) return;
@@ -504,7 +522,14 @@ export default function AcreditacionEvento() {
         ? window.prompt("Describe el fallo de impresión")?.trim()
         : null;
     if (outcome === "failed" && !failure) return;
-    if(pendingJobId){const finalized=await supabase.rpc("update_badge_print_job",{p_job_id:pendingJobId,p_status:outcome==="delivered"?"spooled":"failed",p_bridge_job_id:"browser-dialog",p_payload_hash:null,p_error_message:failure});if(finalized.error){setError(finalized.error.message);return}}
+    if(pendingJobId){
+      if(outcome==="delivered"){
+        const spooled=await supabase.rpc("update_badge_print_job",{p_job_id:pendingJobId,p_status:"spooled",p_bridge_job_id:null,p_payload_hash:null,p_error_message:null});if(spooled.error){setError(spooled.error.message);return}
+        const delivered=await supabase.rpc("update_badge_print_job",{p_job_id:pendingJobId,p_status:"delivered",p_bridge_job_id:null,p_payload_hash:null,p_error_message:null});if(delivered.error){setError(delivered.error.message);return}
+      }else{
+        const finalized=await supabase.rpc("update_badge_print_job",{p_job_id:pendingJobId,p_status:"failed",p_bridge_job_id:null,p_payload_hash:null,p_error_message:failure});if(finalized.error){setError(finalized.error.message);return}
+      }
+    }
     const { error: rpcError } = await supabase.rpc(
       "record_accreditation_service",
       {
@@ -524,10 +549,37 @@ export default function AcreditacionEvento() {
           : "Fallo registrado para seguimiento.",
       );
       setPrinted(false);
+      setBrowserPages([]);
       setPendingJobId(null);
       if (outcome === "delivered") setSelected(null);
       await loadOperationalData();
     }
+  }
+  async function manageQueueJob(job:PrintJob,action:"cancel"|"prioritize"|"retry"|"reassign") {
+    setError(null);
+    const targetPrinter=action==="reassign"?window.prompt("Impresora para el reintento",bridgeConfig.printer||job.printer_name)?.trim():null;
+    if(action==="reassign"&&!targetPrinter)return;
+    try{
+      if(action==="cancel"&&job.bridge_job_id)await cancelBridgeJob(bridgeConfig,job.bridge_job_id).catch(()=>undefined);
+      if(action==="prioritize"&&job.bridge_job_id)await prioritizeBridgeJob(bridgeConfig,job.bridge_job_id).catch(()=>undefined);
+      const managed=await supabase.rpc("manage_badge_print_job",{p_job_id:job.id,p_action:action,p_printer_name:targetPrinter});
+      if(managed.error)throw managed.error;
+      if(action==="cancel"||action==="prioritize"){setInfo(action==="cancel"?"Trabajo cancelado.":"Trabajo movido al inicio de la cola.");await loadOperationalData();return}
+      const newJobId=managed.data as string;
+      const found=await supabase.rpc("get_event_badge_for_print",{p_event_id:eventId,p_token:job.credential_token_snapshot});
+      const reg=(Array.isArray(found.data)?found.data[0]:null) as Reg|null;
+      if(found.error||!reg)throw new Error(found.error?.message??"No se pudo recuperar la credencial para reintentar.");
+      const template=templates.find(item=>item.id===job.template_id)||templates.find(item=>item.participation_type===reg.participation_type)||defaultTemplate(reg.participation_type);
+      const printer=targetPrinter||job.printer_name||bridgeConfig.printer;
+      await supabase.rpc("update_badge_print_job",{p_job_id:newJobId,p_status:"rendering",p_bridge_job_id:null,p_payload_hash:null,p_error_message:null});
+      const pngDataUrls=await renderBadgeSides(template,{...reg,event_name:eventName,organization_name:orgName,participation_type:TYPE_LABELS[reg.participation_type]??reg.participation_type});
+      let local=await submitBridgeJob(bridgeConfig,{cloudJobId:newJobId,printer,title:`REINTENTO · ${eventName} · ${reg.first_name}`,pngDataUrls,widthMm:template.width_mm,heightMm:template.height_mm,priority:1});
+      await supabase.rpc("update_badge_print_job",{p_job_id:newJobId,p_status:"sent",p_bridge_job_id:local.id,p_payload_hash:local.payloadHash??null,p_error_message:null});
+      for(let attempt=0;attempt<75&&local.status!=="spooled"&&local.status!=="failed";attempt+=1){await new Promise(resolve=>setTimeout(resolve,400));local=await getBridgeJob(bridgeConfig,local.id)}
+      if(local.status!=="spooled")throw new Error(local.error??"La impresora no confirmó el reintento.");
+      await supabase.rpc("update_badge_print_job",{p_job_id:newJobId,p_status:"spooled",p_bridge_job_id:local.id,p_payload_hash:local.payloadHash??null,p_error_message:null});
+      setInfo("Reintento enviado correctamente. Confirma la entrega desde la atención del participante.");
+    }catch(queueError){setError(queueError instanceof Error?queueError.message:"No se pudo administrar el trabajo.")}finally{await loadOperationalData()}
   }
   async function cancelBadge() {
     if (!selected) return;
@@ -599,6 +651,7 @@ export default function AcreditacionEvento() {
         (item) => item.participation_type === selected.participation_type,
       ) ?? defaultTemplate(selected.participation_type))
     : defaultTemplate();
+  const previewData:BadgeRenderData|undefined=selected?{...selected,...edit,last_name:edit.last_name||null,company:edit.company||null,job_title:edit.job_title||null,cedula:edit.cedula||null,event_name:eventName,organization_name:orgName,participation_type:TYPE_LABELS[selected.participation_type]??selected.participation_type}:undefined;
   return (
     <div className="min-h-[100dvh] bg-zinc-50">
       <ImpersonationBanner />
@@ -701,9 +754,9 @@ export default function AcreditacionEvento() {
           </p>
         )}
         <PrintStationPanel config={bridgeConfig} setConfig={setBridgeConfig} state={bridgeState} message={bridgeMessage} printers={bridgeDevices} connect={connectBridge} />
-        <PrintQueuePanel jobs={printJobs} />
+        <PrintQueuePanel jobs={printJobs} onAction={manageQueueJob} bridgeConnected={bridgeState==="connected"} />
         {showDesigner && canConfigure && (
-          <><div className="mt-5 flex max-w-sm items-end gap-2"><label className="grid flex-1 gap-1 text-xs font-semibold">Diseño por tipo<select className={input} value={templateDraft.participation_type} onChange={e=>selectTemplateType(e.target.value)}>{TYPES.map(type=><option key={type} value={type}>{TYPE_LABELS[type]}</option>)}</select></label></div><BadgeStudio template={templateDraft} onChange={setTemplateDraft} onSave={()=>void saveTemplate()} busy={busy}/></>
+          <><div className="mt-5 flex max-w-sm items-end gap-2"><label className="grid flex-1 gap-1 text-xs font-semibold">Diseño por tipo<select className={input} value={templateDraft.participation_type} onChange={e=>selectTemplateType(e.target.value)}>{TYPES.map(type=><option key={type} value={type}>{TYPE_LABELS[type]}</option>)}</select></label></div><BadgeStudio template={templateDraft} onChange={setTemplateDraft} onSave={()=>void saveTemplate()} busy={busy} previewData={previewData} onTestPrint={()=>void testPrint()} testBusy={testBusy}/></>
         )}
         {showWalkIn && (
           <WalkIn
@@ -992,7 +1045,9 @@ export default function AcreditacionEvento() {
           </section>
         </div>
       </main>
-      {selected && !selected.badge_cancelled_at && (
+      {browserPages.length>0?(
+        <BadgeImagePrint pages={browserPages} widthMm={activeTemplate.width_mm} heightMm={activeTemplate.height_mm}/>
+      ):selected && !selected.badge_cancelled_at && (
         <BadgePrint
           reg={{
             ...selected,
@@ -1100,14 +1155,18 @@ function WalkIn({
   );
 }
 
-function PrintQueuePanel({jobs}:{jobs:PrintJob[]}) {
-  const labels:Record<PrintJob["status"],string>={queued:"En cola",rendering:"Renderizando",sent:"Enviada",spooled:"En spool",failed:"Fallida",cancelled:"Cancelada"}
-  return <details className="mt-4 rounded-2xl border bg-white"><summary className="cursor-pointer list-none p-5 font-bold">Cola de impresión · {jobs.filter(job=>!["spooled","cancelled"].includes(job.status)).length} activas</summary><div className="border-t px-5 pb-5"><div className="divide-y">{jobs.map(job=><div key={job.id} className="grid gap-1 py-3 text-sm md:grid-cols-[110px_1fr_1fr_auto]"><span className={`font-bold ${job.status==="failed"?"text-red-700":job.status==="spooled"?"text-emerald-700":"text-amber-700"}`}>{labels[job.status]}</span><span>{job.station_label}</span><span className="truncate text-zinc-600">{job.printer_name}</span><time className="text-xs text-zinc-500">{new Date(job.queued_at).toLocaleTimeString("es-VE")}</time>{job.error_message&&<p className="text-xs text-red-700 md:col-span-4">{job.error_message}</p>}</div>)}{!jobs.length&&<p className="py-4 text-sm text-zinc-500">Todavía no hay trabajos para este evento.</p>}</div></div></details>
+function PrintQueuePanel({jobs,onAction,bridgeConnected}:{jobs:PrintJob[];onAction:(job:PrintJob,action:"cancel"|"prioritize"|"retry"|"reassign")=>Promise<void>;bridgeConnected:boolean}) {
+  const labels:Record<PrintJob["status"],string>={queued:"En cola",rendering:"Renderizando",sent:"Enviada",spooled:"En spool",delivered:"Entregada",failed:"Fallida",cancelled:"Cancelada"}
+  return <details className="mt-4 rounded-2xl border bg-white"><summary className="cursor-pointer list-none p-5 font-bold">Cola de impresión · {jobs.filter(job=>!["spooled","delivered","cancelled"].includes(job.status)).length} activas</summary><div className="border-t px-5 pb-5"><div className="divide-y">{jobs.map(job=><div key={job.id} className="grid gap-2 py-3 text-sm md:grid-cols-[110px_1fr_1fr_auto]"><span className={`font-bold ${job.status==="failed"?"text-red-700":["spooled","delivered"].includes(job.status)?"text-emerald-700":"text-amber-700"}`}>{labels[job.status]}{job.priority===1?" · Prioridad":""}</span><span>{job.station_label}<small className="block text-zinc-500">Intentos: {job.attempt_count}</small></span><span className="truncate text-zinc-600">{job.printer_name}</span><time className="text-xs text-zinc-500">{new Date(job.queued_at).toLocaleTimeString("es-VE")}</time>{job.error_message&&<p className="text-xs text-red-700 md:col-span-4">{job.error_message}</p>}<div className="flex flex-wrap gap-2 md:col-span-4">{job.status==="queued"&&<button type="button" onClick={()=>void onAction(job,"prioritize")} className="rounded border px-2 py-1 text-xs font-semibold">Priorizar</button>}{!["spooled","delivered","cancelled"].includes(job.status)&&<button type="button" onClick={()=>void onAction(job,"cancel")} className="rounded border border-red-200 px-2 py-1 text-xs font-semibold text-red-700">Cancelar</button>}{["failed","sent","cancelled"].includes(job.status)&&bridgeConnected&&<><button type="button" onClick={()=>void onAction(job,"retry")} className="rounded border px-2 py-1 text-xs font-semibold">Reintentar</button><button type="button" onClick={()=>void onAction(job,"reassign")} className="rounded border px-2 py-1 text-xs font-semibold">Cambiar impresora</button></>}</div></div>)}{!jobs.length&&<p className="py-4 text-sm text-zinc-500">Todavía no hay trabajos para este evento.</p>}</div></div></details>
 }
 
 function PrintStationPanel({config,setConfig,state,message,printers,connect}:{config:BridgeConfig;setConfig:(value:BridgeConfig)=>void;state:"unknown"|"connected"|"offline";message:string;printers:BridgePrinter[];connect:(config:BridgeConfig)=>Promise<void>}) {
   const update=(values:Partial<BridgeConfig>)=>{const next={...config,...values};setConfig(next);saveBridgeConfig(next)}
-  return <section className="mt-5 rounded-2xl border bg-white p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-bold">Estación de impresión</h2><p className="mt-1 text-xs text-zinc-600">Vincula el bridge local para imprimir sin diálogos y recibir confirmación de la cola de Windows.</p></div><span className={`rounded-full px-3 py-1 text-xs font-bold ${state==="connected"?"bg-emerald-100 text-emerald-800":state==="offline"?"bg-red-100 text-red-800":"bg-zinc-100 text-zinc-700"}`}>{state==="connected"?"Bridge conectado":state==="offline"?"Bridge sin conexión":"Comprobando"}</span></div><div className="mt-4 grid gap-3 md:grid-cols-4"><label className="grid gap-1 text-xs font-semibold">Nombre de estación<input className={input} value={config.station} onChange={e=>update({station:e.target.value})}/></label><label className="grid gap-1 text-xs font-semibold">Dirección local<input className={input} value={config.url} onChange={e=>update({url:e.target.value})}/></label><label className="grid gap-1 text-xs font-semibold">Código de vinculación<input className={input} type="password" value={config.token} onChange={e=>update({token:e.target.value})} placeholder="Código mostrado por el bridge"/></label><label className="grid gap-1 text-xs font-semibold">Impresora<select className={input} value={config.printer} onChange={e=>update({printer:e.target.value})}><option value="">Selecciona una impresora</option>{printers.map(printer=><option key={printer.name} value={printer.name}>{printer.name}{printer.isDefault?" · predeterminada":""}</option>)}</select></label></div><div className={`mt-3 rounded-lg px-3 py-2 text-xs font-semibold ${state==="connected"?"bg-emerald-50 text-emerald-800":state==="offline"?"bg-red-50 text-red-800":"bg-zinc-100 text-zinc-700"}`} role="status">{message}</div><div className="mt-3 flex flex-wrap gap-3"><button type="button" disabled={state==="unknown"} onClick={()=>void connect(config)} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{state==="unknown"?"Probando…":"Probar conexión"}</button>{state!=="connected"&&<p className="self-center text-xs text-zinc-500">Puedes seguir usando el diálogo del sistema como respaldo.</p>}</div></section>
+  const profile=(values:Partial<BridgeConfig["profile"]>)=>update({profile:{...config.profile,...values}})
+  return <section className="mt-5 rounded-2xl border bg-white p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-bold">Estación de impresión</h2><p className="mt-1 text-xs text-zinc-600">Vincula el bridge local, calibra el soporte y controla la cola de Windows.</p></div><span className={`rounded-full px-3 py-1 text-xs font-bold ${state==="connected"?"bg-emerald-100 text-emerald-800":state==="offline"?"bg-red-100 text-red-800":"bg-zinc-100 text-zinc-700"}`}>{state==="connected"?"Bridge conectado":state==="offline"?"Bridge sin conexión":"Comprobando"}</span></div><div className="mt-4 grid gap-3 md:grid-cols-4"><label className="grid gap-1 text-xs font-semibold">Nombre de estación<input className={input} value={config.station} onChange={e=>update({station:e.target.value})}/></label><label className="grid gap-1 text-xs font-semibold">Dirección local<input className={input} value={config.url} onChange={e=>update({url:e.target.value})}/></label><label className="grid gap-1 text-xs font-semibold">Código de vinculación<input className={input} type="password" value={config.token} onChange={e=>update({token:e.target.value})} placeholder="Código mostrado por el bridge"/></label><label className="grid gap-1 text-xs font-semibold">Impresora<select className={input} value={config.printer} onChange={e=>update({printer:e.target.value})}><option value="">Selecciona una impresora</option>{printers.map(printer=><option key={printer.name} value={printer.name}>{printer.name}{printer.isDefault?" · predeterminada":""}{printer.offline?" · sin conexión":""}</option>)}</select></label></div><details className="mt-4 rounded-xl border bg-zinc-50 p-4"><summary className="cursor-pointer text-sm font-bold">Calibración y perfil local · {config.profile.name}</summary><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-6"><label className="grid gap-1 text-xs font-semibold lg:col-span-2">Nombre del perfil<input className={input} value={config.profile.name} onChange={e=>profile({name:e.target.value})}/></label><label className="grid gap-1 text-xs font-semibold">X mm<input className={input} type="number" min="-30" max="30" step="0.1" value={config.profile.offsetXmm} onChange={e=>profile({offsetXmm:Number(e.target.value)})}/></label><label className="grid gap-1 text-xs font-semibold">Y mm<input className={input} type="number" min="-30" max="30" step="0.1" value={config.profile.offsetYmm} onChange={e=>profile({offsetYmm:Number(e.target.value)})}/></label><label className="grid gap-1 text-xs font-semibold">Escala %<input className={input} type="number" min="50" max="150" step="0.5" value={config.profile.scalePercent} onChange={e=>profile({scalePercent:Number(e.target.value)})}/></label><label className="grid gap-1 text-xs font-semibold">Copias<input className={input} type="number" min="1" max="10" value={config.profile.copies} onChange={e=>profile({copies:Number(e.target.value)})}/></label><label className="grid gap-1 text-xs font-semibold lg:col-span-2">Doble cara<select className={input} value={config.profile.duplexMode} onChange={e=>profile({duplexMode:e.target.value as BridgeConfig["profile"]["duplexMode"]})}><option value="simplex">Una cara</option><option value="long-edge">Borde largo</option><option value="short-edge">Borde corto</option></select></label></div><p className="mt-3 text-xs text-zinc-500">Los valores se guardan en esta estación y se adjuntan a la auditoría de cada trabajo.</p></details><div className={`mt-3 rounded-lg px-3 py-2 text-xs font-semibold ${state==="connected"?"bg-emerald-50 text-emerald-800":state==="offline"?"bg-red-50 text-red-800":"bg-zinc-100 text-zinc-700"}`} role="status">{message}</div><div className="mt-3 flex flex-wrap gap-3"><button type="button" disabled={state==="unknown"} onClick={()=>void connect(config)} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{state==="unknown"?"Probando…":"Probar conexión"}</button>{state!=="connected"&&<p className="self-center text-xs text-zinc-500">Puedes seguir usando el diálogo del sistema como respaldo.</p>}</div></section>
+}
+function BadgeImagePrint({pages,widthMm,heightMm}:{pages:string[];widthMm:number;heightMm:number}){
+  return createPortal(<div id="badge-print-root"><style>{`@page{size:${widthMm}mm ${heightMm}mm;margin:0}`}</style>{pages.map((page,index)=><img key={page} src={page} alt="" style={{display:'block',width:`${widthMm}mm`,height:`${heightMm}mm`,breakAfter:index<pages.length-1?'page':'auto'}}/>)}</div>,document.body)
 }
 function BadgePrint({
   reg,
