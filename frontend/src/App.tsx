@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { Link, Navigate, Route, Routes } from 'react-router-dom'
 import AuthErrorRedirect from './components/AuthErrorRedirect'
 import RequireAuth from './components/RequireAuth'
+import RequireOrgAdmin from './components/RequireOrgAdmin'
 import EventLandingAdmin from './pages/admin/EventLandingAdmin'
 
 // Carga diferida por ruta: cada página es su propio chunk. Así el visitante
@@ -131,6 +132,8 @@ function App() {
           }
         />
         <Route path="/admin/acreditacion/kiosco/:eventId" element={<RequireAuth><AcreditacionKiosco /></RequireAuth>} />
+        <Route path="/admin/impresion" element={<RequireAuth><RequireOrgAdmin><AcreditacionEvento mode="print-center" /></RequireOrgAdmin></RequireAuth>} />
+        <Route path="/admin/badge-designer" element={<RequireAuth><RequireOrgAdmin><AcreditacionEvento mode="designer" /></RequireOrgAdmin></RequireAuth>} />
         <Route
           path="/admin/eventos"
           element={

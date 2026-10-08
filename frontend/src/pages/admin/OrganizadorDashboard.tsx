@@ -7,6 +7,8 @@ import {
   ClipboardList,
   Handshake,
   IdCard,
+  Palette,
+  Printer,
   ScanLine,
   ShieldCheck,
   Sparkles,
@@ -36,7 +38,9 @@ type DashboardMetrics = {
 const modules = [
   { title: "Eventos", description: "Crea exposiciones y foros, configura fechas y publica cada evento.", to: "/admin/eventos", icon: CalendarCog, featured: true },
   { title: "Registros", description: "Consulta participantes, pagos, estados y asignaciones.", to: "/admin/registros", icon: ClipboardList, featured: true },
-  { title: "Acreditación", description: "Busca participantes, configura credenciales e imprime en el mostrador.", to: "/admin/acreditacion", icon: IdCard, featured: true },
+  { title: "Acreditación", description: "Acredita personas, registra walk-ins, imprime y entrega credenciales durante el evento.", to: "/admin/acreditacion", icon: IdCard, featured: true },
+  { title: "Centro de impresión", description: "Conecta impresoras, controla la cola, prepara lotes y supervisa estaciones.", to: "/admin/impresion", icon: Printer, featured: true, adminOnly: true },
+  { title: "Badge Designer", description: "Diseña, versiona y publica credenciales para cada tipo de participante.", to: "/admin/badge-designer", icon: Palette, featured: true, adminOnly: true },
   { title: "Check-in", description: "Controla accesos y valida credenciales durante el evento.", to: "/admin/checkin", icon: ScanLine, featured: true },
   { title: "Equipo operativo", description: "Administra responsables, proveedores y permisos de trabajo.", to: "/admin/equipo-operativo", icon: Users },
   { title: "Proveedores", description: "Directorio de empresas y personal contratado para la operación.", to: "/admin/proveedores", icon: BriefcaseBusiness },
@@ -102,7 +106,7 @@ export default function OrganizadorDashboard() {
         <section className="mt-9">
           <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Áreas de trabajo</p><h2 className="mt-1 text-xl font-bold">¿Qué necesitas gestionar?</h2></div>
           <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {modules.map((module) => { const Icon = module.icon; return <Link key={module.to} to={module.to} className={`group flex min-h-44 flex-col rounded-2xl border p-5 transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-sm active:scale-[0.99] ${module.featured ? "bg-white" : "bg-zinc-100/70"}`}><div className="flex items-start justify-between"><span className="grid h-11 w-11 place-items-center rounded-xl bg-emerald-100 text-emerald-800"><Icon className="h-5 w-5" /></span><ChevronRight className="h-5 w-5 text-zinc-300 transition group-hover:translate-x-0.5 group-hover:text-emerald-700" /></div><h3 className="mt-4 font-bold">{module.title}</h3><p className="mt-1 text-sm leading-5 text-zinc-600">{module.description}</p></Link> })}
+            {modules.filter(module=>!module.adminOnly||role==="owner"||role==="admin").map((module) => { const Icon = module.icon; return <Link key={module.to} to={module.to} className={`group flex min-h-44 flex-col rounded-2xl border p-5 transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-sm active:scale-[0.99] ${module.featured ? "bg-white" : "bg-zinc-100/70"}`}><div className="flex items-start justify-between"><span className="grid h-11 w-11 place-items-center rounded-xl bg-emerald-100 text-emerald-800"><Icon className="h-5 w-5" /></span><ChevronRight className="h-5 w-5 text-zinc-300 transition group-hover:translate-x-0.5 group-hover:text-emerald-700" /></div><h3 className="mt-4 font-bold">{module.title}</h3><p className="mt-1 text-sm leading-5 text-zinc-600">{module.description}</p></Link> })}
           </div>
         </section>
 

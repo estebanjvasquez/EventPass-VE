@@ -132,7 +132,8 @@ const defaultTemplate = (type = "attendee"): BadgeTemplate => ({
 const isConfirmed = (reg: Reg) =>
   reg.status === "confirmed" || reg.status === "approved";
 
-export default function AcreditacionEvento() {
+export type AccreditationWorkspaceMode="accreditation"|"print-center"|"designer";
+export default function AcreditacionEvento({mode="accreditation"}:{mode?:AccreditationWorkspaceMode}) {
   const [orgName, setOrgName] = useState("");
   const [orgId, setOrgId] = useState<string | null>(null);
   const [events, setEvents] = useState<EventOption[]>([]);
@@ -157,7 +158,6 @@ export default function AcreditacionEvento() {
   const [badgeAssets,setBadgeAssets]=useState<BadgeAsset[]>([]);
   const [templateDraft, setTemplateDraft] =
     useState<BadgeTemplate>(defaultTemplate());
-  const [showDesigner, setShowDesigner] = useState(false);
   const [copyTemplateType,setCopyTemplateType]=useState('vip');
   const [showWalkIn, setShowWalkIn] = useState(false);
   const [walkIn, setWalkIn] = useState({
@@ -185,6 +185,7 @@ export default function AcreditacionEvento() {
   const [bridgeQueue,setBridgeQueue]=useState(0);
   const [bridgeMessage, setBridgeMessage] = useState("Comprobando el servicio local…");
   const initialBridgeConfig = useRef(bridgeConfig);
+  const designerInitializedEvent=useRef<string|null>(null);
   const serviceStarted = useRef(Date.now());
 
   useEffect(() => {
@@ -289,8 +290,11 @@ export default function AcreditacionEvento() {
     setSelected(null);
     setResults([]);
     setHasSearched(false);
+    setTemplates([]);
+    designerInitializedEvent.current=null;
     void loadOperationalData();
   }, [eventId, loadOperationalData]);
+  useEffect(()=>{if(mode!=="designer"||!eventId||!templates.length||designerInitializedEvent.current===eventId)return;setTemplateDraft(templates.find(item=>item.participation_type==="attendee")??templates[0]??defaultTemplate());designerInitializedEvent.current=eventId},[eventId,mode,templates]);
   useEffect(()=>{if(!eventId)return;const timer=window.setInterval(()=>void loadOperationalData(),5000);return()=>window.clearInterval(timer)},[eventId,loadOperationalData]);
   useEffect(()=>{
     if(bridgeState!=="connected")return;
@@ -738,6 +742,9 @@ export default function AcreditacionEvento() {
       ) ?? defaultTemplate(selected.participation_type))
     : defaultTemplate();
   const previewData:BadgeRenderData|undefined=selected?{...selected,...edit,last_name:edit.last_name||null,company:edit.company||null,job_title:edit.job_title||null,cedula:edit.cedula||null,event_name:eventName,organization_name:orgName,participation_type:TYPE_LABELS[selected.participation_type]??selected.participation_type}:undefined;
+  const studioPreview:BadgeRenderData=previewData??{first_name:"Mariana",last_name:"Aquino",company:"Empresa demostración",job_title:"Directora",cedula:"V-12345678",participation_type:TYPE_LABELS[templateDraft.participation_type]??templateDraft.participation_type,event_name:eventName||"Nombre del evento",organization_name:orgName||"Organización",seat_label:"A-12",credential_token:"PREVIEW-EVENTOSFACIL"};
+  const pageTitle=mode==="print-center"?"Centro de impresión":mode==="designer"?"Badge Designer":"Mostrador de acreditación";
+  const pageDescription=mode==="print-center"?"Configura estaciones e impresoras, prepara lotes y supervisa toda la operación.":mode==="designer"?"Diseña y publica las credenciales de cada tipo de participante.":"Busca, acredita, imprime y entrega credenciales durante el evento.";
   return (
     <div className="min-h-[100dvh] bg-zinc-50">
       <ImpersonationBanner />
@@ -751,22 +758,18 @@ export default function AcreditacionEvento() {
             Administración
           </Link>
           <span className="inline-flex items-center gap-2 text-sm font-semibold">
-            <IdCard className="h-4 w-4 text-emerald-600" />
-            Mostrador de acreditación
+            {mode==="designer"?<Palette className="h-4 w-4 text-violet-600"/>:<IdCard className="h-4 w-4 text-emerald-600" />}
+            {pageTitle}
           </span>
         </div>
       </header>
       <main className="mx-auto max-w-7xl px-5 py-7">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold">
-              Mostrador de acreditación
-            </h1>
-            <p className="mt-1 text-sm text-zinc-600">
-              Sigue los pasos: selecciona el evento, busca, confirma, imprime y entrega.
-            </p>
+            <h1 className="text-2xl font-bold">{pageTitle}</h1>
+            <p className="mt-1 text-sm text-zinc-600">{pageDescription}</p>
           </div>
-          <div className="flex gap-2">
+          {mode==="accreditation"&&<div className="flex gap-2">
             {eventId && <Link to={`/admin/acreditacion/kiosco/${eventId}`} className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-semibold text-emerald-800"><IdCard className="h-4 w-4" />Modo kiosco</Link>}
             <button
               type="button"
@@ -776,19 +779,9 @@ export default function AcreditacionEvento() {
               <UserPlus className="h-4 w-4" />
               Registrar walk-in
             </button>
-            {canConfigure && (
-              <button
-                type="button"
-                onClick={() => setShowDesigner((v) => !v)}
-                className="inline-flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm font-semibold"
-              >
-                <Palette className="h-4 w-4" />
-                Configuración de impresión
-              </button>
-            )}
-          </div>
+          </div>}
         </div>
-        <section className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        {mode==="accreditation"&&<section className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {[
             ["1", "Selecciona el evento"],
             ["2", "Busca al participante"],
@@ -801,8 +794,8 @@ export default function AcreditacionEvento() {
               {label}
             </div>
           ))}
-        </section>
-        <section className="mt-5 grid gap-3 sm:grid-cols-3 lg:grid-cols-7">
+        </section>}
+        {mode==="accreditation"&&<section className="mt-5 grid gap-3 sm:grid-cols-3 lg:grid-cols-7">
           {[
             ["Iniciales", metrics.initial_prints],
             ["Reimpresiones", metrics.reprints],
@@ -822,7 +815,7 @@ export default function AcreditacionEvento() {
               <p className="mt-1 text-xl font-bold">{value}</p>
             </div>
           ))}
-        </section>
+        </section>}
         {error && (
           <p
             role="alert"
@@ -839,14 +832,13 @@ export default function AcreditacionEvento() {
             {info}
           </p>
         )}
-        <PrintStationPanel config={bridgeConfig} setConfig={setBridgeConfig} state={bridgeState} message={bridgeMessage} printers={bridgeDevices} connect={connectBridge} />
-        <PrintQueuePanel jobs={printJobs} onAction={manageQueueJob} bridgeConnected={bridgeState==="connected"} />
-        {canPrint&&<BatchPrintPanel eventId={eventId} connected={bridgeState==="connected"} printer={bridgeConfig.printer} batches={printBatches} busy={busy} onStart={startBatchPrint}/>}
-        {canPrint&&<Suspense fallback={<div className="mt-4 rounded-2xl border bg-white p-5 text-sm text-zinc-500">Cargando centro de control…</div>}><BadgeOperationsDashboard eventId={eventId} refreshToken={printJobs.reduce((total,job)=>total+job.attempt_count,printJobs.length)}/></Suspense>}
-        {showDesigner && canConfigure && (
-          <><div className="mt-5 flex flex-wrap items-end gap-2"><label className="grid min-w-56 flex-1 gap-1 text-xs font-semibold">Diseño por tipo<select className={input} value={templateDraft.participation_type} onChange={e=>selectTemplateType(e.target.value)}>{TYPES.map(type=><option key={type} value={type}>{TYPE_LABELS[type]}</option>)}</select></label><label className="grid min-w-44 gap-1 text-xs font-semibold">Copiar diseño a<select className={input} value={copyTemplateType===templateDraft.participation_type?(TYPES.find(type=>type!==templateDraft.participation_type)??''):copyTemplateType} onChange={e=>setCopyTemplateType(e.target.value)}>{TYPES.filter(type=>type!==templateDraft.participation_type).map(type=><option key={type} value={type}>{TYPE_LABELS[type]}</option>)}</select></label><button type="button" onClick={()=>{const target=copyTemplateType===templateDraft.participation_type?(TYPES.find(type=>type!==templateDraft.participation_type)??'vip'):copyTemplateType;setTemplateDraft({...templateDraft,id:undefined,participation_type:target,name:`${templateDraft.name} · ${TYPE_LABELS[target]??target}`,version:0});setInfo(`Diseño copiado a ${TYPE_LABELS[target]??target}. Revísalo y publícalo.`)}} className="rounded-lg border bg-white px-3 py-2 text-sm font-semibold">Copiar</button></div><BadgeStudio template={templateDraft} onChange={setTemplateDraft} onSave={status=>void saveTemplate(status)} busy={busy} previewData={previewData} onTestPrint={()=>void testPrint()} testBusy={testBusy} onUploadImage={uploadBadgeAsset} assets={badgeAssets} versions={templateVersions.filter(item=>item.snapshot.participation_type===templateDraft.participation_type)} onRestore={snapshot=>{setTemplateDraft(snapshot);setInfo("Versión cargada en el editor. Publícala para activarla.")}}/></>
+        {mode!=="accreditation"&&<section className="mt-5 rounded-2xl border bg-white p-4"><label className="grid gap-1 text-sm font-semibold">Evento<select aria-label="Evento de configuración" value={eventId} onChange={event=>setEventId(event.target.value)} className={input}>{events.map(item=><option key={item.id} value={item.id}>{item.name} · {item.total_participants} participantes</option>)}</select></label></section>}
+        {mode==="print-center"&&<><PrintStationPanel config={bridgeConfig} setConfig={setBridgeConfig} state={bridgeState} message={bridgeMessage} printers={bridgeDevices} connect={connectBridge} /><PrintQueuePanel jobs={printJobs} onAction={manageQueueJob} bridgeConnected={bridgeState==="connected"} />{canPrint&&<BatchPrintPanel eventId={eventId} connected={bridgeState==="connected"} printer={bridgeConfig.printer} batches={printBatches} busy={busy} onStart={startBatchPrint}/>} {canPrint&&<Suspense fallback={<div className="mt-4 rounded-2xl border bg-white p-5 text-sm text-zinc-500">Cargando centro de control…</div>}><BadgeOperationsDashboard eventId={eventId} refreshToken={printJobs.reduce((total,job)=>total+job.attempt_count,printJobs.length)}/></Suspense>}</>}
+        {mode==="designer" && canConfigure && (
+          <><div className="mt-5 flex flex-wrap items-end gap-2"><label className="grid min-w-56 flex-1 gap-1 text-xs font-semibold">Diseño por tipo<select className={input} value={templateDraft.participation_type} onChange={e=>selectTemplateType(e.target.value)}>{TYPES.map(type=><option key={type} value={type}>{TYPE_LABELS[type]}</option>)}</select></label><label className="grid min-w-44 gap-1 text-xs font-semibold">Copiar diseño a<select className={input} value={copyTemplateType===templateDraft.participation_type?(TYPES.find(type=>type!==templateDraft.participation_type)??''):copyTemplateType} onChange={e=>setCopyTemplateType(e.target.value)}>{TYPES.filter(type=>type!==templateDraft.participation_type).map(type=><option key={type} value={type}>{TYPE_LABELS[type]}</option>)}</select></label><button type="button" onClick={()=>{const target=copyTemplateType===templateDraft.participation_type?(TYPES.find(type=>type!==templateDraft.participation_type)??'vip'):copyTemplateType;setTemplateDraft({...templateDraft,id:undefined,participation_type:target,name:`${templateDraft.name} · ${TYPE_LABELS[target]??target}`,version:0});setInfo(`Diseño copiado a ${TYPE_LABELS[target]??target}. Revísalo y publícalo.`)}} className="rounded-lg border bg-white px-3 py-2 text-sm font-semibold">Copiar</button></div><BadgeStudio template={templateDraft} onChange={setTemplateDraft} onSave={status=>void saveTemplate(status)} busy={busy} previewData={studioPreview} onTestPrint={selected?()=>void testPrint():undefined} testBusy={testBusy} onUploadImage={uploadBadgeAsset} assets={badgeAssets} versions={templateVersions.filter(item=>item.snapshot.participation_type===templateDraft.participation_type)} onRestore={snapshot=>{setTemplateDraft(snapshot);setInfo("Versión cargada en el editor. Publícala para activarla.")}}/></>
         )}
-        {showWalkIn && (
+        {mode==="designer"&&!canConfigure&&<p className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Solo propietarios y administradores pueden modificar las plantillas.</p>}
+        {mode==="accreditation"&&showWalkIn && (
           <WalkIn
             form={walkIn}
             setForm={setWalkIn}
@@ -854,7 +846,7 @@ export default function AcreditacionEvento() {
             busy={busy}
           />
         )}
-        <div className="mt-5 grid gap-5 lg:grid-cols-[0.85fr_1.15fr]">
+        {mode==="accreditation"&&<div className="mt-5 grid gap-5 lg:grid-cols-[0.85fr_1.15fr]">
           <section className="rounded-2xl border bg-white p-5">
             <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
               <select
@@ -1131,9 +1123,9 @@ export default function AcreditacionEvento() {
               </>
             )}
           </section>
-        </div>
+        </div>}
       </main>
-      {browserPages.length>0?(
+      {mode==="accreditation"&&(browserPages.length>0?(
         <BadgeImagePrint pages={browserPages} widthMm={activeTemplate.width_mm} heightMm={activeTemplate.height_mm}/>
       ):selected && !selected.badge_cancelled_at && (
         <BadgePrint
@@ -1149,7 +1141,7 @@ export default function AcreditacionEvento() {
           orgName={orgName}
           template={activeTemplate}
         />
-      )}
+      ))}
     </div>
   );
 }
