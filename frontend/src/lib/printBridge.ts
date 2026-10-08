@@ -9,7 +9,19 @@ export type BridgeJob={id:string;status:'queued'|'printing'|'spooled'|'failed';e
 
 export function loadBridgeConfig():BridgeConfig{return{url:localStorage.getItem(BRIDGE_URL_KEY)||'http://127.0.0.1:18181',token:localStorage.getItem(BRIDGE_TOKEN_KEY)||'',printer:localStorage.getItem(PRINTER_KEY)||'',station:localStorage.getItem(STATION_KEY)||'Mostrador principal'}}
 export function saveBridgeConfig(config:BridgeConfig){localStorage.setItem(BRIDGE_URL_KEY,config.url.replace(/\/$/,''));localStorage.setItem(BRIDGE_TOKEN_KEY,config.token);localStorage.setItem(PRINTER_KEY,config.printer);localStorage.setItem(STATION_KEY,config.station)}
-async function request<T>(config:BridgeConfig,path:string,init?:RequestInit):Promise<T>{const response=await fetch(`${config.url.replace(/\/$/,'')}${path}`,{...init,headers:{'Content-Type':'application/json','X-Bridge-Token':config.token,...init?.headers}});if(!response.ok){const value=await response.json().catch(()=>({error:`Bridge respondió ${response.status}`})) as {error?:string};throw new Error(value.error||`Bridge respondió ${response.status}`)}return response.json() as Promise<T>}
+async function request<T>(config:BridgeConfig,path:string,init?:RequestInit):Promise<T>{
+  const controller=new AbortController()
+  const timeout=window.setTimeout(()=>controller.abort(),8000)
+  try{
+    const response=await fetch(`${config.url.replace(/\/$/,'')}${path}`,{...init,signal:controller.signal,headers:{'Content-Type':'application/json','X-Bridge-Token':config.token,...init?.headers}})
+    if(!response.ok){const value=await response.json().catch(()=>({error:`Bridge respondió ${response.status}`})) as {error?:string};throw new Error(value.error||`Bridge respondió ${response.status}`)}
+    return response.json() as Promise<T>
+  }catch(error){
+    if(error instanceof DOMException&&error.name==='AbortError')throw new Error('El bridge no respondió en 8 segundos. Reinicia el servicio local.')
+    if(error instanceof TypeError)throw new Error('No se pudo comunicar con el bridge local. Verifica que la ventana siga abierta.')
+    throw error
+  }finally{window.clearTimeout(timeout)}
+}
 export async function bridgeHealth(config:BridgeConfig){return request<{ok:boolean;version:string;queue:number}>(config,'/v1/health')}
 export async function bridgePrinters(config:BridgeConfig){return request<{printers:BridgePrinter[]}>(config,'/v1/printers')}
 export async function submitBridgeJob(config:BridgeConfig,input:{cloudJobId:string;printer:string;title:string;pngDataUrl:string;widthMm:number;heightMm:number;copies?:number}){return request<BridgeJob>(config,'/v1/jobs',{method:'POST',body:JSON.stringify(input)})}

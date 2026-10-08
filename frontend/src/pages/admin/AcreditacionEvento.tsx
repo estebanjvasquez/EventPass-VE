@@ -172,6 +172,8 @@ export default function AcreditacionEvento() {
   const [bridgeConfig, setBridgeConfig] = useState<BridgeConfig>(() => loadBridgeConfig());
   const [bridgeState, setBridgeState] = useState<"unknown" | "connected" | "offline">("unknown");
   const [bridgeDevices, setBridgeDevices] = useState<BridgePrinter[]>([]);
+  const [bridgeMessage, setBridgeMessage] = useState("Comprobando el servicio local…");
+  const initialBridgeConfig = useRef(bridgeConfig);
   const serviceStarted = useRef(Date.now());
 
   useEffect(() => {
@@ -192,24 +194,38 @@ export default function AcreditacionEvento() {
       if (rows[0]) setEventId(rows[0].id);
     })();
   }, []);
-  const connectBridge = useCallback(async (config = bridgeConfig) => {
+  const connectBridge = useCallback(async (config: BridgeConfig) => {
+    setBridgeState("unknown");
+    setBridgeMessage("Comprobando el servicio local…");
+    if (!config.url.trim()) {
+      setBridgeState("offline");
+      setBridgeMessage("Indica la dirección del bridge local.");
+      return;
+    }
+    if (!config.token.trim()) {
+      setBridgeState("offline");
+      setBridgeMessage("Introduce el código de vinculación que aparece en la ventana del bridge.");
+      return;
+    }
     try {
       await bridgeHealth(config);
       const value = await bridgePrinters(config);
       setBridgeDevices(value.printers);
       setBridgeState("connected");
+      setBridgeMessage(value.printers.length ? `${value.printers.length} impresora${value.printers.length === 1 ? "" : "s"} detectada${value.printers.length === 1 ? "" : "s"}.` : "Bridge conectado, pero Windows no reportó impresoras instaladas.");
       if (!config.printer) {
         const printer = value.printers.find(item => item.isDefault)?.name ?? value.printers[0]?.name ?? "";
         const next = { ...config, printer };
         setBridgeConfig(next);
         saveBridgeConfig(next);
       }
-    } catch {
+    } catch (bridgeError) {
       setBridgeState("offline");
       setBridgeDevices([]);
+      setBridgeMessage(bridgeError instanceof Error ? bridgeError.message : "No se pudo conectar con el bridge local.");
     }
-  }, [bridgeConfig]);
-  useEffect(() => { void connectBridge(); }, [connectBridge]);
+  }, []);
+  useEffect(() => { void connectBridge(initialBridgeConfig.current); }, [connectBridge]);
   const loadOperationalData = useCallback(async () => {
     if (!eventId) return;
     const [templateResult, metricResult, jobsResult] = await Promise.all([
@@ -684,7 +700,7 @@ export default function AcreditacionEvento() {
             {info}
           </p>
         )}
-        <PrintStationPanel config={bridgeConfig} setConfig={setBridgeConfig} state={bridgeState} printers={bridgeDevices} connect={connectBridge} />
+        <PrintStationPanel config={bridgeConfig} setConfig={setBridgeConfig} state={bridgeState} message={bridgeMessage} printers={bridgeDevices} connect={connectBridge} />
         <PrintQueuePanel jobs={printJobs} />
         {showDesigner && canConfigure && (
           <><div className="mt-5 flex max-w-sm items-end gap-2"><label className="grid flex-1 gap-1 text-xs font-semibold">Diseño por tipo<select className={input} value={templateDraft.participation_type} onChange={e=>selectTemplateType(e.target.value)}>{TYPES.map(type=><option key={type} value={type}>{TYPE_LABELS[type]}</option>)}</select></label></div><BadgeStudio template={templateDraft} onChange={setTemplateDraft} onSave={()=>void saveTemplate()} busy={busy}/></>
@@ -1089,9 +1105,9 @@ function PrintQueuePanel({jobs}:{jobs:PrintJob[]}) {
   return <details className="mt-4 rounded-2xl border bg-white"><summary className="cursor-pointer list-none p-5 font-bold">Cola de impresión · {jobs.filter(job=>!["spooled","cancelled"].includes(job.status)).length} activas</summary><div className="border-t px-5 pb-5"><div className="divide-y">{jobs.map(job=><div key={job.id} className="grid gap-1 py-3 text-sm md:grid-cols-[110px_1fr_1fr_auto]"><span className={`font-bold ${job.status==="failed"?"text-red-700":job.status==="spooled"?"text-emerald-700":"text-amber-700"}`}>{labels[job.status]}</span><span>{job.station_label}</span><span className="truncate text-zinc-600">{job.printer_name}</span><time className="text-xs text-zinc-500">{new Date(job.queued_at).toLocaleTimeString("es-VE")}</time>{job.error_message&&<p className="text-xs text-red-700 md:col-span-4">{job.error_message}</p>}</div>)}{!jobs.length&&<p className="py-4 text-sm text-zinc-500">Todavía no hay trabajos para este evento.</p>}</div></div></details>
 }
 
-function PrintStationPanel({config,setConfig,state,printers,connect}:{config:BridgeConfig;setConfig:(value:BridgeConfig)=>void;state:"unknown"|"connected"|"offline";printers:BridgePrinter[];connect:(config?:BridgeConfig)=>Promise<void>}) {
+function PrintStationPanel({config,setConfig,state,message,printers,connect}:{config:BridgeConfig;setConfig:(value:BridgeConfig)=>void;state:"unknown"|"connected"|"offline";message:string;printers:BridgePrinter[];connect:(config:BridgeConfig)=>Promise<void>}) {
   const update=(values:Partial<BridgeConfig>)=>{const next={...config,...values};setConfig(next);saveBridgeConfig(next)}
-  return <section className="mt-5 rounded-2xl border bg-white p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-bold">Estación de impresión</h2><p className="mt-1 text-xs text-zinc-600">Vincula el bridge local para imprimir sin diálogos y recibir confirmación de la cola de Windows.</p></div><span className={`rounded-full px-3 py-1 text-xs font-bold ${state==="connected"?"bg-emerald-100 text-emerald-800":state==="offline"?"bg-red-100 text-red-800":"bg-zinc-100 text-zinc-700"}`}>{state==="connected"?"Bridge conectado":state==="offline"?"Bridge sin conexión":"Comprobando"}</span></div><div className="mt-4 grid gap-3 md:grid-cols-4"><label className="grid gap-1 text-xs font-semibold">Nombre de estación<input className={input} value={config.station} onChange={e=>update({station:e.target.value})}/></label><label className="grid gap-1 text-xs font-semibold">Dirección local<input className={input} value={config.url} onChange={e=>update({url:e.target.value})}/></label><label className="grid gap-1 text-xs font-semibold">Código de vinculación<input className={input} type="password" value={config.token} onChange={e=>update({token:e.target.value})}/></label><label className="grid gap-1 text-xs font-semibold">Impresora<select className={input} value={config.printer} onChange={e=>update({printer:e.target.value})}><option value="">Selecciona una impresora</option>{printers.map(printer=><option key={printer.name} value={printer.name}>{printer.name}{printer.isDefault?" · predeterminada":""}</option>)}</select></label></div><div className="mt-3 flex flex-wrap gap-3"><button type="button" onClick={()=>void connect(config)} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white">Probar conexión</button>{state!=="connected"&&<p className="self-center text-xs text-zinc-500">Puedes seguir usando el diálogo del sistema como respaldo.</p>}</div></section>
+  return <section className="mt-5 rounded-2xl border bg-white p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-bold">Estación de impresión</h2><p className="mt-1 text-xs text-zinc-600">Vincula el bridge local para imprimir sin diálogos y recibir confirmación de la cola de Windows.</p></div><span className={`rounded-full px-3 py-1 text-xs font-bold ${state==="connected"?"bg-emerald-100 text-emerald-800":state==="offline"?"bg-red-100 text-red-800":"bg-zinc-100 text-zinc-700"}`}>{state==="connected"?"Bridge conectado":state==="offline"?"Bridge sin conexión":"Comprobando"}</span></div><div className="mt-4 grid gap-3 md:grid-cols-4"><label className="grid gap-1 text-xs font-semibold">Nombre de estación<input className={input} value={config.station} onChange={e=>update({station:e.target.value})}/></label><label className="grid gap-1 text-xs font-semibold">Dirección local<input className={input} value={config.url} onChange={e=>update({url:e.target.value})}/></label><label className="grid gap-1 text-xs font-semibold">Código de vinculación<input className={input} type="password" value={config.token} onChange={e=>update({token:e.target.value})} placeholder="Código mostrado por el bridge"/></label><label className="grid gap-1 text-xs font-semibold">Impresora<select className={input} value={config.printer} onChange={e=>update({printer:e.target.value})}><option value="">Selecciona una impresora</option>{printers.map(printer=><option key={printer.name} value={printer.name}>{printer.name}{printer.isDefault?" · predeterminada":""}</option>)}</select></label></div><div className={`mt-3 rounded-lg px-3 py-2 text-xs font-semibold ${state==="connected"?"bg-emerald-50 text-emerald-800":state==="offline"?"bg-red-50 text-red-800":"bg-zinc-100 text-zinc-700"}`} role="status">{message}</div><div className="mt-3 flex flex-wrap gap-3"><button type="button" disabled={state==="unknown"} onClick={()=>void connect(config)} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{state==="unknown"?"Probando…":"Probar conexión"}</button>{state!=="connected"&&<p className="self-center text-xs text-zinc-500">Puedes seguir usando el diálogo del sistema como respaldo.</p>}</div></section>
 }
 function BadgePrint({
   reg,
