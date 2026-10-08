@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { Html5Qrcode } from "html5-qrcode";
@@ -21,7 +21,7 @@ import ImpersonationBanner from "../../components/ImpersonationBanner";
 import BadgeStudio, { type BadgeVersion } from "../../components/badges/BadgeStudio";
 import BatchPrintPanel, { type BatchCandidate, type BatchSummary } from "../../components/badges/BatchPrintPanel";
 import { defaultBadgeLayout, renderBadgeSides, type BadgeRenderData, type BadgeTemplateV2 } from "../../lib/badgeStudio";
-import { bridgeHealth, bridgePrinters, cancelBridgeJob, getBridgeJob, loadBridgeConfig, prioritizeBridgeJob, saveBridgeConfig, submitBridgeJob, type BridgeConfig, type BridgePrinter } from "../../lib/printBridge";
+import { bridgeHealth, bridgePrinters, cancelBridgeJob, getBridgeJob, getBridgeStationId, loadBridgeConfig, prioritizeBridgeJob, saveBridgeConfig, submitBridgeJob, type BridgeConfig, type BridgePrinter } from "../../lib/printBridge";
 
 type Reg = {
   id: string;
@@ -97,6 +97,7 @@ const TYPE_LABELS: Record<string, string> = {
 const READER_ID = "acred-reader";
 const input =
   "rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500";
+const BadgeOperationsDashboard=lazy(()=>import("../../components/badges/BadgeOperationsDashboard"));
 const emptyMetrics: Metrics = {
   initial_prints: 0,
   reprints: 0,
@@ -180,6 +181,8 @@ export default function AcreditacionEvento() {
   const [bridgeConfig, setBridgeConfig] = useState<BridgeConfig>(() => loadBridgeConfig());
   const [bridgeState, setBridgeState] = useState<"unknown" | "connected" | "offline">("unknown");
   const [bridgeDevices, setBridgeDevices] = useState<BridgePrinter[]>([]);
+  const [bridgeVersion,setBridgeVersion]=useState<string|null>(null);
+  const [bridgeQueue,setBridgeQueue]=useState(0);
   const [bridgeMessage, setBridgeMessage] = useState("Comprobando el servicio local…");
   const initialBridgeConfig = useRef(bridgeConfig);
   const serviceStarted = useRef(Date.now());
@@ -219,6 +222,8 @@ export default function AcreditacionEvento() {
       const health = await bridgeHealth(config);
       const value = await bridgePrinters(config);
       setBridgeDevices(value.printers);
+      setBridgeVersion(health.version);
+      setBridgeQueue(health.queue);
       setBridgeState("connected");
       const offline=value.printers.filter(item=>item.offline).length;
       setBridgeMessage(value.printers.length ? `Bridge ${health.version} · ${value.printers.length} impresora${value.printers.length === 1 ? "" : "s"} detectada${value.printers.length === 1 ? "" : "s"}${offline?` · ${offline} sin conexión`:""} · ${health.queue} en cola.` : `Bridge ${health.version} conectado, pero Windows no reportó impresoras instaladas.`);
@@ -231,10 +236,18 @@ export default function AcreditacionEvento() {
     } catch (bridgeError) {
       setBridgeState("offline");
       setBridgeDevices([]);
+      setBridgeVersion(null);
+      setBridgeQueue(0);
       setBridgeMessage(bridgeError instanceof Error ? bridgeError.message : "No se pudo conectar con el bridge local.");
     }
   }, []);
   useEffect(() => { void connectBridge(initialBridgeConfig.current); }, [connectBridge]);
+  useEffect(()=>{const timer=window.setInterval(()=>void connectBridge(bridgeConfig),30000);return()=>window.clearInterval(timer)},[bridgeConfig,connectBridge]);
+  useEffect(()=>{
+    if(!eventId)return;
+    const report=()=>void supabase.rpc("report_badge_print_station",{p_event_id:eventId,p_station_key:getBridgeStationId(),p_station_label:bridgeConfig.station||"Mostrador principal",p_bridge_state:bridgeState,p_bridge_version:bridgeVersion,p_printer_name:bridgeConfig.printer||null,p_local_queue:bridgeQueue,p_printer_count:bridgeDevices.length,p_offline_printer_count:bridgeDevices.filter(device=>device.offline).length});
+    report();const timer=window.setInterval(report,30000);return()=>window.clearInterval(timer);
+  },[bridgeConfig.printer,bridgeConfig.station,bridgeDevices,bridgeQueue,bridgeState,bridgeVersion,eventId]);
   const loadOperationalData = useCallback(async () => {
     if (!eventId) return;
     const [templateResult, metricResult, jobsResult,versionsResult,assetsResult,batchesResult] = await Promise.all([
@@ -829,6 +842,7 @@ export default function AcreditacionEvento() {
         <PrintStationPanel config={bridgeConfig} setConfig={setBridgeConfig} state={bridgeState} message={bridgeMessage} printers={bridgeDevices} connect={connectBridge} />
         <PrintQueuePanel jobs={printJobs} onAction={manageQueueJob} bridgeConnected={bridgeState==="connected"} />
         {canPrint&&<BatchPrintPanel eventId={eventId} connected={bridgeState==="connected"} printer={bridgeConfig.printer} batches={printBatches} busy={busy} onStart={startBatchPrint}/>}
+        {canPrint&&<Suspense fallback={<div className="mt-4 rounded-2xl border bg-white p-5 text-sm text-zinc-500">Cargando centro de control…</div>}><BadgeOperationsDashboard eventId={eventId} refreshToken={printJobs.reduce((total,job)=>total+job.attempt_count,printJobs.length)}/></Suspense>}
         {showDesigner && canConfigure && (
           <><div className="mt-5 flex flex-wrap items-end gap-2"><label className="grid min-w-56 flex-1 gap-1 text-xs font-semibold">Diseño por tipo<select className={input} value={templateDraft.participation_type} onChange={e=>selectTemplateType(e.target.value)}>{TYPES.map(type=><option key={type} value={type}>{TYPE_LABELS[type]}</option>)}</select></label><label className="grid min-w-44 gap-1 text-xs font-semibold">Copiar diseño a<select className={input} value={copyTemplateType===templateDraft.participation_type?(TYPES.find(type=>type!==templateDraft.participation_type)??''):copyTemplateType} onChange={e=>setCopyTemplateType(e.target.value)}>{TYPES.filter(type=>type!==templateDraft.participation_type).map(type=><option key={type} value={type}>{TYPE_LABELS[type]}</option>)}</select></label><button type="button" onClick={()=>{const target=copyTemplateType===templateDraft.participation_type?(TYPES.find(type=>type!==templateDraft.participation_type)??'vip'):copyTemplateType;setTemplateDraft({...templateDraft,id:undefined,participation_type:target,name:`${templateDraft.name} · ${TYPE_LABELS[target]??target}`,version:0});setInfo(`Diseño copiado a ${TYPE_LABELS[target]??target}. Revísalo y publícalo.`)}} className="rounded-lg border bg-white px-3 py-2 text-sm font-semibold">Copiar</button></div><BadgeStudio template={templateDraft} onChange={setTemplateDraft} onSave={status=>void saveTemplate(status)} busy={busy} previewData={previewData} onTestPrint={()=>void testPrint()} testBusy={testBusy} onUploadImage={uploadBadgeAsset} assets={badgeAssets} versions={templateVersions.filter(item=>item.snapshot.participation_type===templateDraft.participation_type)} onRestore={snapshot=>{setTemplateDraft(snapshot);setInfo("Versión cargada en el editor. Publícala para activarla.")}}/></>
         )}
