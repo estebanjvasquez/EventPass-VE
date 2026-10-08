@@ -19,6 +19,7 @@ import { supabase } from "../../lib/supabase";
 import { resolveActiveOrg } from "../../lib/activeOrg";
 import ImpersonationBanner from "../../components/ImpersonationBanner";
 import BadgeStudio, { type BadgeVersion } from "../../components/badges/BadgeStudio";
+import BatchPrintPanel, { type BatchCandidate, type BatchSummary } from "../../components/badges/BatchPrintPanel";
 import { defaultBadgeLayout, renderBadgeSides, type BadgeRenderData, type BadgeTemplateV2 } from "../../lib/badgeStudio";
 import { bridgeHealth, bridgePrinters, cancelBridgeJob, getBridgeJob, loadBridgeConfig, prioritizeBridgeJob, saveBridgeConfig, submitBridgeJob, type BridgeConfig, type BridgePrinter } from "../../lib/printBridge";
 
@@ -148,6 +149,7 @@ export default function AcreditacionEvento() {
   });
   const [printLogs, setPrintLogs] = useState<PrintLog[]>([]);
   const [printJobs, setPrintJobs] = useState<PrintJob[]>([]);
+  const [printBatches,setPrintBatches]=useState<BatchSummary[]>([]);
   const [metrics, setMetrics] = useState<Metrics>(emptyMetrics);
   const [templates, setTemplates] = useState<BadgeTemplate[]>([]);
   const [templateVersions,setTemplateVersions]=useState<BadgeVersion[]>([]);
@@ -235,7 +237,7 @@ export default function AcreditacionEvento() {
   useEffect(() => { void connectBridge(initialBridgeConfig.current); }, [connectBridge]);
   const loadOperationalData = useCallback(async () => {
     if (!eventId) return;
-    const [templateResult, metricResult, jobsResult,versionsResult,assetsResult] = await Promise.all([
+    const [templateResult, metricResult, jobsResult,versionsResult,assetsResult,batchesResult] = await Promise.all([
       supabase
         .from("badge_templates")
         .select(
@@ -248,6 +250,7 @@ export default function AcreditacionEvento() {
       supabase.from("badge_print_jobs").select("id,status,print_kind,template_id,credential_token_snapshot,station_label,printer_name,bridge_job_id,priority,attempt_count,error_message,queued_at,requested_by_name").eq("event_id",eventId).order("priority",{ascending:true}).order("queued_at",{ascending:false}).limit(20),
       supabase.from("badge_template_versions").select("id,version,status,created_at,saved_by_name,snapshot").eq("event_id",eventId).order("created_at",{ascending:false}).limit(50),
       supabase.from("badge_assets").select("id,name,public_url,mime_type,size_bytes,created_at").eq("event_id",eventId).order("created_at",{ascending:false}),
+      supabase.from("badge_print_batches").select("id,name,status,printer_name,total_jobs,queued_jobs,spooled_jobs,failed_jobs,cancelled_jobs,created_by_name,created_at").eq("event_id",eventId).order("created_at",{ascending:false}).limit(10),
     ]);
     setTemplates(
       ((templateResult.data ?? []) as BadgeTemplate[]).map((item) => ({
@@ -267,6 +270,7 @@ export default function AcreditacionEvento() {
     setPrintJobs((jobsResult.data ?? []) as PrintJob[]);
     setTemplateVersions((versionsResult.data??[]) as BadgeVersion[]);
     setBadgeAssets((assetsResult.data??[]) as BadgeAsset[]);
+    setPrintBatches((batchesResult.data??[]) as BatchSummary[]);
   }, [eventId]);
   useEffect(() => {
     setSelected(null);
@@ -275,6 +279,22 @@ export default function AcreditacionEvento() {
     void loadOperationalData();
   }, [eventId, loadOperationalData]);
   useEffect(()=>{if(!eventId)return;const timer=window.setInterval(()=>void loadOperationalData(),5000);return()=>window.clearInterval(timer)},[eventId,loadOperationalData]);
+  useEffect(()=>{
+    if(bridgeState!=="connected")return;
+    const pending=printJobs.filter(job=>job.status==="sent"&&job.bridge_job_id);
+    if(!pending.length)return;
+    let cancelled=false;
+    let changed=false;
+    void Promise.all(pending.map(async job=>{
+      try{
+        const local=await getBridgeJob(bridgeConfig,job.bridge_job_id!);
+        if(cancelled)return;
+        if(local.status==="spooled"){changed=true;await supabase.rpc("update_badge_print_job",{p_job_id:job.id,p_status:"spooled",p_bridge_job_id:local.id,p_payload_hash:local.payloadHash??null,p_error_message:null})}
+        if(local.status==="failed"){changed=true;await supabase.rpc("update_badge_print_job",{p_job_id:job.id,p_status:"failed",p_bridge_job_id:local.id,p_payload_hash:local.payloadHash??null,p_error_message:local.error??"La impresora rechazó el trabajo."})}
+      }catch{/* El bridge puede desconectarse entre actualizaciones; se reintentará al recuperar la conexión. */}
+    })).then(()=>{if(!cancelled&&changed)void loadOperationalData()});
+    return()=>{cancelled=true};
+  },[bridgeConfig,bridgeState,loadOperationalData,printJobs]);
 
   function choose(reg: Reg) {
     setSelected(reg);
@@ -589,6 +609,35 @@ export default function AcreditacionEvento() {
       setInfo("Reintento enviado correctamente. Confirma la entrega desde la atención del participante.");
     }catch(queueError){setError(queueError instanceof Error?queueError.message:"No se pudo administrar el trabajo.")}finally{await loadOperationalData()}
   }
+  async function startBatchPrint(records:BatchCandidate[],name:string,allowReprints:boolean){
+    if(!eventId||bridgeState!=="connected"||!bridgeConfig.printer||!records.length)return;
+    setBusy(true);setError(null);setInfo(null);
+    try{
+      const created=await supabase.rpc("create_badge_print_batch",{
+        p_event_id:eventId,p_name:name,p_records:records.map(record=>({record_type:record.record_type,id:record.id})),
+        p_station_label:bridgeConfig.station||"Preimpresión",p_printer_name:bridgeConfig.printer,
+        p_profile_snapshot:bridgeConfig.profile,p_allow_reprints:allowReprints,
+        p_filter_snapshot:{selected:records.length,participation_types:[...new Set(records.map(record=>record.participation_type))]},
+      });
+      if(created.error)throw created.error;
+      const prepared=(created.data??[]) as {batch_id:string;job_id:string;record_type:BatchCandidate["record_type"];record_id:string;credential_token:string;template_id:string;batch_sequence:number}[];
+      if(!prepared.length)throw new Error("No se crearon trabajos para el lote.");
+      let sent=0,failed=0;
+      for(const job of prepared){
+        const record=records.find(item=>item.id===job.record_id&&item.record_type===job.record_type);
+        const template=templates.find(item=>item.id===job.template_id);
+        if(!record||!template){failed+=1;await supabase.rpc("update_badge_print_job",{p_job_id:job.job_id,p_status:"failed",p_bridge_job_id:null,p_payload_hash:null,p_error_message:"No se pudo resolver la persona o la plantilla publicada."});continue}
+        try{
+          await supabase.rpc("update_badge_print_job",{p_job_id:job.job_id,p_status:"rendering",p_bridge_job_id:null,p_payload_hash:null,p_error_message:null});
+          const pngDataUrls=await renderBadgeSides(template,{...record,credential_token:job.credential_token,event_name:eventName,organization_name:orgName,participation_type:TYPE_LABELS[record.participation_type]??record.participation_type});
+          const local=await submitBridgeJob(bridgeConfig,{cloudJobId:job.job_id,printer:bridgeConfig.printer,title:`${String(job.batch_sequence).padStart(3,"0")} · ${record.first_name} ${record.last_name??""}`.trim(),pngDataUrls,widthMm:template.width_mm,heightMm:template.height_mm,priority:100});
+          await supabase.rpc("update_badge_print_job",{p_job_id:job.job_id,p_status:"sent",p_bridge_job_id:local.id,p_payload_hash:local.payloadHash??null,p_error_message:null});sent+=1;
+        }catch(batchError){failed+=1;await supabase.rpc("update_badge_print_job",{p_job_id:job.job_id,p_status:"failed",p_bridge_job_id:null,p_payload_hash:null,p_error_message:batchError instanceof Error?batchError.message:"No se pudo enviar al bridge."})}
+      }
+      setInfo(`Lote preparado: ${sent} credenciales enviadas a la cola local${failed?` y ${failed} con incidencias`:""}. Puedes seguir trabajando mientras se imprimen.`);
+    }catch(batchError){setError(batchError instanceof Error?batchError.message:"No se pudo preparar el lote de impresión.")}
+    finally{setBusy(false);await loadOperationalData()}
+  }
   async function cancelBadge() {
     if (!selected) return;
     const reason = window
@@ -779,6 +828,7 @@ export default function AcreditacionEvento() {
         )}
         <PrintStationPanel config={bridgeConfig} setConfig={setBridgeConfig} state={bridgeState} message={bridgeMessage} printers={bridgeDevices} connect={connectBridge} />
         <PrintQueuePanel jobs={printJobs} onAction={manageQueueJob} bridgeConnected={bridgeState==="connected"} />
+        {canPrint&&<BatchPrintPanel eventId={eventId} connected={bridgeState==="connected"} printer={bridgeConfig.printer} batches={printBatches} busy={busy} onStart={startBatchPrint}/>}
         {showDesigner && canConfigure && (
           <><div className="mt-5 flex flex-wrap items-end gap-2"><label className="grid min-w-56 flex-1 gap-1 text-xs font-semibold">Diseño por tipo<select className={input} value={templateDraft.participation_type} onChange={e=>selectTemplateType(e.target.value)}>{TYPES.map(type=><option key={type} value={type}>{TYPE_LABELS[type]}</option>)}</select></label><label className="grid min-w-44 gap-1 text-xs font-semibold">Copiar diseño a<select className={input} value={copyTemplateType===templateDraft.participation_type?(TYPES.find(type=>type!==templateDraft.participation_type)??''):copyTemplateType} onChange={e=>setCopyTemplateType(e.target.value)}>{TYPES.filter(type=>type!==templateDraft.participation_type).map(type=><option key={type} value={type}>{TYPE_LABELS[type]}</option>)}</select></label><button type="button" onClick={()=>{const target=copyTemplateType===templateDraft.participation_type?(TYPES.find(type=>type!==templateDraft.participation_type)??'vip'):copyTemplateType;setTemplateDraft({...templateDraft,id:undefined,participation_type:target,name:`${templateDraft.name} · ${TYPE_LABELS[target]??target}`,version:0});setInfo(`Diseño copiado a ${TYPE_LABELS[target]??target}. Revísalo y publícalo.`)}} className="rounded-lg border bg-white px-3 py-2 text-sm font-semibold">Copiar</button></div><BadgeStudio template={templateDraft} onChange={setTemplateDraft} onSave={status=>void saveTemplate(status)} busy={busy} previewData={previewData} onTestPrint={()=>void testPrint()} testBusy={testBusy} onUploadImage={uploadBadgeAsset} assets={badgeAssets} versions={templateVersions.filter(item=>item.snapshot.participation_type===templateDraft.participation_type)} onRestore={snapshot=>{setTemplateDraft(snapshot);setInfo("Versión cargada en el editor. Publícala para activarla.")}}/></>
         )}
