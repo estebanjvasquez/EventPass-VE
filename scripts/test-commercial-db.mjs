@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {PGlite} from '../infra/node_modules/@electric-sql/pglite/dist/index.js';
+import {testSupportPreparation} from './test-support-preparation-db.mjs';
 const db=new PGlite();
 process.on('uncaughtException',e=>{console.error(e.message,e.where??'');process.exit(1)});
 await db.exec(`
@@ -159,4 +160,5 @@ await q("insert into memberships(organization_id,user_id,role) values($1,$2,'own
 await db.exec("select set_config('qa.uid','"+stranger+"',false)");
 await assert.rejects(()=>q('select submit_subscription_quote($1,$2,$3,$4)',[downgrade.id,method,'foreign-requester',path]),/autorizado/);
 console.log('PASS commercial history survives actor deletion and an orphan quote cannot be submitted by another manager');
+await testSupportPreparation(db,org,event2,stranger);
 await db.close();

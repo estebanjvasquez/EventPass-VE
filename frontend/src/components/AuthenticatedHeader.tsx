@@ -11,6 +11,7 @@ type HeaderState = {
   organizationName: string
   branding: Brand
   isPlatformAdmin: boolean
+  isSupport: boolean
   impersonating: boolean
 }
 
@@ -29,16 +30,16 @@ export default function AuthenticatedHeader() {
   const navigate = useNavigate()
   const location = useLocation()
   const [open, setOpen] = useState(false)
-  const [state, setState] = useState<HeaderState>({ organizationName: 'Organización', branding: {}, isPlatformAdmin: false, impersonating: false })
+  const [state, setState] = useState<HeaderState>({ organizationName: 'Organización', branding: {}, isPlatformAdmin: false, isSupport: false, impersonating: false })
 
   useEffect(() => {
     let active = true
     async function load() {
-      const [organization, platform] = await Promise.all([resolveActiveOrg(), supabase.rpc('is_platform_admin')])
+      const [organization, platform, support] = await Promise.all([resolveActiveOrg(), supabase.rpc('is_platform_admin'), supabase.rpc('is_support_operator')])
       if (!active) return
       const isPlatformAdmin = platform.data === true
       if (!organization) {
-        setState({ organizationName: 'EventPass VE', branding: {}, isPlatformAdmin, impersonating: false })
+        setState({ organizationName: 'EventPass VE', branding: {}, isPlatformAdmin, isSupport: support.data === true, impersonating: false })
         return
       }
       const { data } = await supabase.from('organizations').select('name,branding').eq('id', organization.organization_id).maybeSingle()
@@ -47,6 +48,7 @@ export default function AuthenticatedHeader() {
         organizationName: (data as { name?: string } | null)?.name ?? organization.organizations?.name ?? 'Organización',
         branding: ((data as { branding?: Brand } | null)?.branding ?? {}),
         isPlatformAdmin,
+        isSupport: support.data === true,
         impersonating: organization.impersonating,
       })
     }
@@ -89,6 +91,8 @@ export default function AuthenticatedHeader() {
               {navigation.map(({ to, label, icon: Icon }) => <Link key={to} to={to} onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-emerald-50 hover:text-emerald-900"><Icon className="h-4 w-4 text-emerald-700" />{label}</Link>)}
               <Link to="/admin/suscripcion" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-emerald-50 hover:text-emerald-900"><ShieldCheck className="h-4 w-4 text-emerald-700" />Suscripción</Link>
               <a href="/manual/" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-emerald-50 hover:text-emerald-900"><BookOpen className="h-4 w-4 text-emerald-700" />Manual de usuario</a>
+              <Link to="/admin/soporte" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-zinc-700">Preparación y soporte</Link>
+              {state.isSupport && <Link to="/soporte" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl bg-sky-50 px-3 py-2.5 text-sm font-bold text-sky-900">Bandeja de soporte</Link>}
               {state.isPlatformAdmin && <Link to="/superadmin" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl bg-violet-50 px-3 py-2.5 text-sm font-bold text-violet-900 hover:bg-violet-100"><ShieldCheck className="h-4 w-4 text-violet-700" />Ir a Superadmin</Link>}
             </nav>
             <div className="border-t border-zinc-100 p-2"><button type="button" onClick={() => void leave()} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-red-700 hover:bg-red-50"><LogOut className="h-4 w-4" />Cerrar sesión</button></div>

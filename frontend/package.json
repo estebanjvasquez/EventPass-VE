@@ -11,7 +11,8 @@
     "lint": "oxlint",
     "test:badges": "node ../scripts/test-badges-ui.mjs && node ../scripts/test-badge-workflow.mjs",
     "preview": "vite preview",
-    "test:commercial": "node ../scripts/test-commercial-ui.mjs"
+    "test:commercial": "node ../scripts/test-commercial-ui.mjs",
+    "test:support": "node ../scripts/test-support-preparation-ui.mjs"
   },
   "dependencies": {
     "@dnd-kit/react": "^0.5.0",

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { LogIn, Ticket } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
+import { supabase } from '../../lib/supabase'
 
 export default function Login() {
   const { signIn } = useAuth()
@@ -21,7 +22,8 @@ export default function Login() {
       setError('Correo o contraseña incorrectos.')
       return
     }
-    navigate('/admin', { replace: true })
+    const [platform, support] = await Promise.all([supabase.rpc('is_platform_admin'), supabase.rpc('is_support_operator')])
+    navigate(platform.data === true ? '/superadmin' : support.data === true ? '/soporte' : '/admin', { replace: true })
   }
 
   return (

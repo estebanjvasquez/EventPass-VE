@@ -1,6 +1,6 @@
 # Cobertura de la revisión comercial
 
-Fecha: 14 de octubre de 2026. Cambios técnicos implementados en frontend, Worker y migraciones `20261014144953_commercial_readiness.sql` y `20261014161318_commercial_actor_history.sql`. Las pruebas físicas, contratos de clientes y validaciones jurídicas no se sustituyen con desarrollo.
+Fecha: 14 de octubre de 2026. Cambios técnicos implementados en frontend, Worker y migraciones `20261014144953_commercial_readiness.sql`, `20261014161318_commercial_actor_history.sql`, `20261014174913_support_preparation.sql` y `20261014181211_support_configuration_fingerprint.sql`. Las pruebas físicas, contratos de clientes y validaciones jurídicas no se sustituyen con desarrollo. La segunda etapa incorpora soporte independiente y asistente: [guía de uso](SOPORTE_Y_PREPARACION_2026-10-14.md).
 
 ## Matriz de cobertura
 
@@ -18,7 +18,7 @@ Fecha: 14 de octubre de 2026. Cambios técnicos implementados en frontend, Worke
 | C10 | Cuotas finitas nuevas, uso visible y alertas 80/95%, conservación de condiciones anteriores. | Medición y cuotas de correos, IA y almacenamiento; reservas comerciales de volumen y complementos de exceso. |
 | C11 | Avisos en panel y cola transaccional de correo con reclamación/reintentos; motivo de rechazo, pendientes >24 horas y auditoría. | Prueba real de entrega de correo y operación de revisión en días laborales; el objetivo no constituye SLA garantizado. |
 | C12 | Medio activo por ID, referencia requerida, comprobante válido, bloqueo sin medios, consulta comercial y errores recuperables. | Validar instrucciones y conciliación reales de cada medio de pago. |
-| C13 | Fallos de alta/dominio visibles, reintento sin otra organización, aceptación idempotente, disponibilidad sin respuestas antiguas y guía de preparación. | Asistente integral por escenario con progreso persistente y acta de aceptación; comprobar DNS de un tenant nuevo. |
+| C13 | Fallos de alta/dominio visibles, reintento sin otra organización, aceptación idempotente, disponibilidad sin respuestas antiguas; asistente por escenario con evidencias y progreso persistente, conflictos de revisión y acta exclusiva del organizador. Cambiar configuración cubierta invalida las pruebas. | Comprobar DNS de un tenant nuevo; ensayar preparación con el cliente real. La aceptación no sustituye pruebas físicas ni cubre automáticamente toda relación de configuración nueva. |
 | C14 | Marca pública EventosFácil, catálogo, demo con permiso/rate limit/pipeline separado, condiciones/privacidad y aceptación versionada con identidad histórica conservada. | Formalización de entidad legal, retención y textos jurídicos; asignación y seguimiento comercial real. |
 | C15 | MRR sólo mensual contratado, efectivo de suscripciones conciliado, valor por evento separado, vencimientos, pruebas, pipeline y tickets. | Margen con costos reales, churn por cohortes, devoluciones/descuentos contables e ingresos cobrados de proyectos. No confundir valor contratado por evento con cobro. |
 | C16 | Requisitos publicados, descarga del conector, guía de homologación y preparación, límites de vínculo/cancelación comunicados. | Impresión física con modelo y consumibles reales, medición de cola, recinto y contingencia firmados. |
@@ -32,6 +32,7 @@ Fecha: 14 de octubre de 2026. Cambios técnicos implementados en frontend, Worke
 - Preflight sobre el esquema real: ejecutar la migración dentro de BEGIN/ROLLBACK, contar contratos legacy/ofertas/guards y comprobar esquema privado. No crea clientes ni pagos reales.
 - Verificación transaccional en PostgreSQL real: prueba, cuota, cotización, aceptación, comprobante, conciliación, renovación, doble aprobación, vencimiento, contrato por evento, borrado de actor con historial y rechazo de cotización huérfana. Todo termina en ROLLBACK: no quedan usuarios, contratos ni pagos sintéticos, ni se envían correos.
 - Tras desplegar: comprobar historial de migración, privilegios/RLS, linter y rutas públicas/admin. Nunca utilizar un pago real para probar una aprobación ficticia.
+- Soporte/preparación: suite de permisos y RLS, sin escalación a finanzas, revocación/suspensión, evidencia, revisión y acta; navegador con servicios simulados para guardado, conflictos, descarga y vista móvil. Ensayo en PostgreSQL real con rollback de usuarios/tickets/actas de prueba.
 
 Las pruebas de DB locales comprueban compra inicial, importe manipulado, organización ajena, comprobante ajeno, período inválido, rechazo no aprobable, renovación, diferencia de ascenso, cuotas, módulos, expiración, ventana de evento, privacidad y cola de avisos. La delegación del escaneo conserva su función original; el listado/permiso se prueba con SQL real. Las pruebas adicionales mantienen la eliminación autorizada de usuarios sin perder aceptación, solicitante ni auditoría, y niegan reutilizar la cotización del usuario eliminado. No constituyen homologación física ni QA integral de todos los módulos del producto.
 
@@ -41,8 +42,9 @@ Las pruebas de DB locales comprueban compra inicial, importe manipulado, organiz
 2. **SuperAdmin → Pagos:** revisar comprobante, conciliar el monto en USD y aprobar o rechazar con motivo.
 3. **Organizador → Suscripción:** verificar organización, estado, cuotas y medios. Contratar o renovar desde una cotización.
 4. **Demo pública `/demo`:** las solicitudes aparecen en pipeline; asignar responsable, etapa y próxima acción.
-5. **Organizador → Soporte y preparación:** revisar impresión y registrar incidencias; respuesta desde la bandeja del superadmin. Soporte independiente de permisos financieros queda pendiente: actualmente atiende un superadmin.
-6. **Evento Acompañado:** registrar únicamente un contrato realmente acordado, con fechas, importe, referencia, responsables y horario. No simula conciliación ni factura.
-7. Antes de venta general: completar jurídico/fiscal, entrega real de avisos, homologación, ensayo de concurrencia, restauración y capacidad de soporte. Ejecutar 2–3 pilotos pagados y registrar costos, cola y satisfacción con autorización de sus clientes.
+5. **Superadmin → Comercial y soporte → Equipo de soporte:** habilitar cuentas existentes. **Bandeja `/soporte`:** asignar, responder y resolver tickets sin conceder finanzas ni acceso a participantes. El organizador responde desde su panel y un nuevo mensaje reabre un ticket resuelto.
+6. **Organizador → Preparación y soporte:** seleccionar evento, definir escenario e impresión, registrar evidencias y aceptar el acta cuando estén completas. Soporte ayuda a documentar; la aceptación corresponde al cliente.
+7. **Evento Acompañado:** registrar únicamente un contrato realmente acordado, con fechas, importe, referencia, responsables y horario. No simula conciliación ni factura.
+8. Antes de venta general: completar jurídico/fiscal, entrega real de avisos, homologación, ensayo de concurrencia, restauración y capacidad de soporte. Ejecutar 2–3 pilotos pagados y registrar costos, cola y satisfacción con autorización de sus clientes.
 
 Pasarela, CRM avanzado, integraciones y automatización adicional se priorizan después de pilotos medidos. La aplicación permite ejecutar y seguir parte de esa operación; no inventa costos, testimonios, acuerdos ni métricas comerciales que todavía no existen.

@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, Circle, Rocket } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { type EventReadiness } from "../../lib/eventPresentation";
 import { supabase } from "../../lib/supabase";
+import EventPreparation from "../../components/EventPreparation";
 
 const destinations: Record<string, string> = {
   basics: "administrar", dates: "administrar", deadline: "administrar", registration: "registros",
@@ -39,5 +40,6 @@ export default function EventLaunchChecklist() {
         <div className="mt-6 space-y-3">{checks.map((item) => <Link key={item.key} to={`/admin/eventos/${eventId}/${destinations[item.key] ?? "administrar"}`} className="flex items-start gap-3 rounded-xl border border-zinc-200 p-4 transition hover:border-emerald-300 hover:bg-emerald-50"><span className={`mt-0.5 ${item.ok ? "text-emerald-700" : item.blocking ? "text-amber-700" : "text-zinc-400"}`}>{item.ok ? <CheckCircle2 className="h-5 w-5" /> : item.blocking ? <AlertTriangle className="h-5 w-5" /> : <Circle className="h-5 w-5" />}</span><span><b className="block text-sm">{item.label}{!item.blocking && " · recomendado"}</b><span className="mt-1 block text-sm text-zinc-600">{item.detail}</span></span></Link>)}</div>
       </>}
     </section>
+    {eventId && <EventPreparation key={eventId} eventId={eventId} />}
   </main>;
 }
