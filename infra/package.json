@@ -4,7 +4,7 @@
   "description": "Supabase CLI y tooling de infraestructura para EventPass VE",
   "private": true,
   "scripts": {
-    "test": "node ../scripts/test-participant-db.mjs --campaigns",
+    "test": "node ../scripts/test-participant-db.mjs --campaigns && node ../scripts/test-badges-db.mjs",
     "supabase": "supabase",
     "db:start": "supabase start",
     "db:diff": "supabase db diff",

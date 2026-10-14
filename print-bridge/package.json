@@ -1,13 +1,14 @@
 {
   "name": "eventosfacil-print-bridge",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node ../scripts/audit-print-bridge.mjs && node ../scripts/test-badge-background-sync.mjs"
   },
   "dependencies": {
     "cors": "2.8.6",

@@ -15,8 +15,10 @@ if not exist node_modules (
   if errorlevel 1 goto error
 )
 
-call npm run build
-if errorlevel 1 goto error
+if not exist dist\index.js (
+  call npm run build
+  if errorlevel 1 goto error
+)
 
 echo.
 echo Mantenga esta ventana abierta durante la acreditacion.

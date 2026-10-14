@@ -4,9 +4,12 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "predev": "node ../scripts/package-print-bridge.mjs",
+    "prebuild": "node ../scripts/package-print-bridge.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "test:badges": "node ../scripts/test-badges-ui.mjs && node ../scripts/test-badge-workflow.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
