@@ -1,6 +1,6 @@
 # Cobertura de la revisión comercial
 
-Fecha: 14 de octubre de 2026. Cambios técnicos implementados en frontend, Worker y migración `20261014144953_commercial_readiness.sql`. Las pruebas físicas, contratos de clientes y validaciones jurídicas no se sustituyen con desarrollo.
+Fecha: 14 de octubre de 2026. Cambios técnicos implementados en frontend, Worker y migraciones `20261014144953_commercial_readiness.sql` y `20261014161318_commercial_actor_history.sql`. Las pruebas físicas, contratos de clientes y validaciones jurídicas no se sustituyen con desarrollo.
 
 ## Matriz de cobertura
 
@@ -19,7 +19,7 @@ Fecha: 14 de octubre de 2026. Cambios técnicos implementados en frontend, Worke
 | C11 | Avisos en panel y cola transaccional de correo con reclamación/reintentos; motivo de rechazo, pendientes >24 horas y auditoría. | Prueba real de entrega de correo y operación de revisión en días laborales; el objetivo no constituye SLA garantizado. |
 | C12 | Medio activo por ID, referencia requerida, comprobante válido, bloqueo sin medios, consulta comercial y errores recuperables. | Validar instrucciones y conciliación reales de cada medio de pago. |
 | C13 | Fallos de alta/dominio visibles, reintento sin otra organización, aceptación idempotente, disponibilidad sin respuestas antiguas y guía de preparación. | Asistente integral por escenario con progreso persistente y acta de aceptación; comprobar DNS de un tenant nuevo. |
-| C14 | Marca pública EventosFácil, catálogo, demo con permiso/rate limit/pipeline separado, condiciones/privacidad y aceptación versionada. | Formalización de entidad legal, retención y textos jurídicos; asignación y seguimiento comercial real. |
+| C14 | Marca pública EventosFácil, catálogo, demo con permiso/rate limit/pipeline separado, condiciones/privacidad y aceptación versionada con identidad histórica conservada. | Formalización de entidad legal, retención y textos jurídicos; asignación y seguimiento comercial real. |
 | C15 | MRR sólo mensual contratado, efectivo de suscripciones conciliado, valor por evento separado, vencimientos, pruebas, pipeline y tickets. | Margen con costos reales, churn por cohortes, devoluciones/descuentos contables e ingresos cobrados de proyectos. No confundir valor contratado por evento con cobro. |
 | C16 | Requisitos publicados, descarga del conector, guía de homologación y preparación, límites de vínculo/cancelación comunicados. | Impresión física con modelo y consumibles reales, medición de cola, recinto y contingencia firmados. |
 | C17 | Oferta vigente, catálogo versionado y contratos por evento; propuesta antigua marcada histórica; especificación y suites actualizadas. | Validar consistencia de materiales enviados y condiciones de cada contrato real; workflow adicional sigue local por permiso GitHub pendiente. |
@@ -30,9 +30,10 @@ Fecha: 14 de octubre de 2026. Cambios técnicos implementados en frontend, Worke
 - `frontend/npm run test:commercial`: ejecuta handlers reales de cobro y signup con dependencias controladas; monto del servidor, aceptación, medios, comprobantes, locks y errores de onboarding.
 - `frontend/npm run test:badges`, TypeScript, build y oxlint; backend TypeScript. La advertencia preexistente de hook en `PlanoComercialAdmin.tsx` permanece.
 - Preflight sobre el esquema real: ejecutar la migración dentro de BEGIN/ROLLBACK, contar contratos legacy/ofertas/guards y comprobar esquema privado. No crea clientes ni pagos reales.
+- Verificación transaccional en PostgreSQL real: prueba, cuota, cotización, aceptación, comprobante, conciliación, renovación, doble aprobación, vencimiento, contrato por evento, borrado de actor con historial y rechazo de cotización huérfana. Todo termina en ROLLBACK: no quedan usuarios, contratos ni pagos sintéticos, ni se envían correos.
 - Tras desplegar: comprobar historial de migración, privilegios/RLS, linter y rutas públicas/admin. Nunca utilizar un pago real para probar una aprobación ficticia.
 
-Las pruebas de DB locales comprueban compra inicial, importe manipulado, organización ajena, comprobante ajeno, período inválido, rechazo no aprobable, renovación, diferencia de ascenso, cuotas, módulos, expiración, ventana de evento, privacidad y cola de avisos. La delegación del escaneo conserva su función original; el listado/permiso se prueba con SQL real. No constituyen homologación física ni QA integral de todos los módulos del producto.
+Las pruebas de DB locales comprueban compra inicial, importe manipulado, organización ajena, comprobante ajeno, período inválido, rechazo no aprobable, renovación, diferencia de ascenso, cuotas, módulos, expiración, ventana de evento, privacidad y cola de avisos. La delegación del escaneo conserva su función original; el listado/permiso se prueba con SQL real. Las pruebas adicionales mantienen la eliminación autorizada de usuarios sin perder aceptación, solicitante ni auditoría, y niegan reutilizar la cotización del usuario eliminado. No constituyen homologación física ni QA integral de todos los módulos del producto.
 
 ## Uso y siguientes pasos
 

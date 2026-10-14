@@ -49,6 +49,8 @@ await db.exec(privacy.slice(privacy.indexOf('create or replace function public.g
 const migration=await readFile(new URL('../infra/supabase/migrations/20261014144953_commercial_readiness.sql',import.meta.url),'utf8');
 await db.exec(migration).catch(e=>{console.error(e.message,e.position,migration.slice(Number(e.position)-150,Number(e.position)+150));throw e});
 await db.exec(migration);
+const actorMigration=await readFile(new URL('../infra/supabase/migrations/20261014161318_commercial_actor_history.sql',import.meta.url),'utf8');
+await db.exec(actorMigration);await db.exec(actorMigration);
 await db.exec('create trigger trg_registration_limit before insert on registrations for each row execute function enforce_registration_limit()');
 const q=async(sql,args=[]) => (await db.query(sql,args)).rows;
 const one=async(sql,args=[]) => (await q(sql,args))[0];
@@ -148,4 +150,13 @@ assert.equal((await scalar("select quote_subscription($1,'arranque',1)",[org])).
 await assert.rejects(()=>q("update offer_versions set price_usd=1 where code='monthly-v1-arranque'"),/inmutable/);
 assert.equal(await scalar("select has_function_privilege('anon','public.worker_commercial_feature(uuid,uuid,text)','execute')"),false);
 console.log('PASS C06 C08 future downgrade, immutable old quotes, published new price and Worker authorization');
+
+await q('delete from memberships where user_id=$1',[user]);
+await q('delete from auth.users where id=$1',[user]);
+assert.equal((await one('select requested_by from subscription_quotes where id=$1',[downgrade.id])).requested_by,null);
+assert.ok(Number(await scalar("select count(*) from commercial_audit where actor_identity->>'user_id'=$1",[user]))>0);
+await q("insert into memberships(organization_id,user_id,role) values($1,$2,'owner')",[org,stranger]);
+await db.exec("select set_config('qa.uid','"+stranger+"',false)");
+await assert.rejects(()=>q('select submit_subscription_quote($1,$2,$3,$4)',[downgrade.id,method,'foreign-requester',path]),/autorizado/);
+console.log('PASS commercial history survives actor deletion and an orphan quote cannot be submitted by another manager');
 await db.close();

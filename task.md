@@ -339,3 +339,5 @@ dispositivos autorizados.
 ## Revisión comercial — 14 de octubre de 2026
 
 Se implementaron ofertas versionadas, contratos, prueba de 14 días, cotización/conciliación, vigencia, módulos/cuotas, consentimiento recuperado por correo, catálogo/demo, seguimiento, tickets y métricas básicas. La matriz `docs/COBERTURA_REVISION_COMERCIAL_2026-10-14.md` distingue cobertura y pendientes físicos, jurídicos y de operación comercial. Nuevas suites `scripts/test-commercial-db.mjs` y `scripts/test-commercial-ui.mjs`. No incluir workflows ni artifacts preexistentes en este commit.
+
+La migración adicional de identidad histórica conserva referencias de cotización/aceptación/auditoría sin impedir eliminar usuarios. Verificada con el flujo completo en PostgreSQL real y ROLLBACK. No se dejó ningún usuario, contrato, comprobante ni pago sintético.
