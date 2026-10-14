@@ -4,7 +4,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import { sendUploadLinkEmail, sendConfirmationEmail, sendPortalInviteEmail, sendProviderNoticeEmail, sendPlatformAccessEmail, sendMembershipNoticeEmail, type EmailSendBinding, type EventEmailContext } from './email'
 import { runScheduledJobs } from './jobs'
-import { participantApi } from './participant'
+import { participantApi, hashToken } from './participant'
 import { normalizeSlug, provisionDomain, getDomainStatus, type CfEnv } from './tenants'
 import { forumLayoutIntentJsonSchema, forumLayoutIntentSchema, generateForumPlan, inferForumLayoutIntent } from './forumFloorplan'
 import { arrayBufferToDataUrl, exhibitionDetectionJsonSchema, exhibitionDetectionSchema, normalizeExhibitionDetection } from './exhibitionImport'
@@ -59,6 +59,23 @@ app.use('*', cors({
   maxAge: 86400,
 }))
 app.route('/api/participant', participantApi)
+
+app.post('/api/commercial/demo',async c=>{
+  const parsed=z.object({name:z.string().trim().min(2).max(150),email:z.string().trim().email().max(200),organization_name:z.string().trim().min(2).max(150),event_type:z.enum(['simple','forum','exhibition','program']),expected_participants:z.number().int().min(1).max(100000),needs_printing:z.boolean(),consent:z.literal(true),website:z.string().max(200).optional()}).safeParse(await c.req.json().catch(()=>null))
+  if(!parsed.success)return c.json({error:'Completa los datos y autoriza el contacto para esta solicitud.'},400)
+  if(parsed.data.website)return c.json({received:true},202)
+  const db=createClient(c.env.SUPABASE_URL,c.env.SUPABASE_SERVICE_ROLE_KEY)
+  const ip=await hashToken(c.req.header('CF-Connecting-IP')??'unknown')
+  const limit=await db.rpc('participant_rate_limit',{p_key:`commercial:${ip}`,p_limit:5})
+  if(limit.error||!limit.data)return c.json({error:'Espera antes de volver a enviar una solicitud.'},429)
+  const {data:duplicate,error:lookupError}=await db.from('platform_commercial_leads').select('id').eq('email',parsed.data.email.toLowerCase()).gte('created_at',new Date(Date.now()-86400000).toISOString()).limit(1)
+  if(lookupError)return c.json({error:'No se pudo recibir la solicitud. Inténtalo de nuevo.'},503)
+  if(duplicate?.length)return c.json({received:true},202)
+  const {website:_website,consent:_consent,...lead}=parsed.data
+  const {error}=await db.from('platform_commercial_leads').insert({...lead,email:lead.email.toLowerCase(),source:'website',notice_version:'2026-10-14'})
+  if(error)return c.json({error:'No se pudo recibir la solicitud. Inténtalo de nuevo.'},503)
+  return c.json({received:true},202)
+})
 
 app.get('/health', (c) =>
   c.json({ status: 'ok', service: 'eventpass-backend', env: c.env.ENVIRONMENT }),
@@ -417,6 +434,8 @@ app.post('/api/floorplans/:mapId/blueprint', async (c) => {
     return c.json({ error: 'No tienes permisos para modificar el blueprint de este evento.' }, 403)
   }
 
+  const entitlement=await supabase.rpc('worker_commercial_feature',{p_org:map.organization_id,p_event:eventId,p_feature:'floorplan'})
+  if(entitlement.error||!entitlement.data)return c.json({error:'El contrato vigente no permite cargar este plano.'},403)
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_') || `blueprint.${extension}`
   const path = `${map.organization_id}/${eventId}/map-${map.id}/background-${Date.now()}-${safeName}`
   const uploaded = await supabase.storage.from('agenda-attachments').upload(path, file, { upsert: false, contentType: mimeType })
@@ -561,6 +580,8 @@ app.post('/api/ai/forum-floorplan/proposal', async (c) => {
   if (!platform && (!membership || !['owner', 'admin'].includes(membership.role))) return c.json({ error: 'No tienes permisos para crear o reemplazar el plano con IA.' }, 403)
   if ((seats ?? []).some(seat => seat.map_element_id)) return c.json({ error: 'Hay sillas reservadas o confirmadas. Libéralas antes de reemplazar el plano con IA.' }, 409)
 
+  const entitlement=await supabase.rpc('worker_commercial_feature',{p_org:event.organization_id,p_event:event.id,p_feature:'core'})
+  if(entitlement.error||!entitlement.data)return c.json({error:'Renueva el contrato para usar este módulo.'},403)
   const aiResult = await requestOpenAi(c.env.OPENAI_API_KEY, {
         model: c.env.OPENAI_FORUM_MODEL || c.env.OPENAI_MODEL || 'gpt-5.4-mini', store: false, max_output_tokens: 700,
         input: [
@@ -625,6 +646,8 @@ app.post('/api/ai/exhibition-import/analyze', async (c) => {
   ])
   if (!platform && (!membership || !['owner', 'admin'].includes(membership.role))) return c.json({ error: 'No tienes permisos para analizar este plano.' }, 403)
   if (!map || map.event_id !== importRow.event_id || map.organization_id !== importRow.organization_id) return c.json({ error: 'El plano no corresponde a la importación.' }, 409)
+  const entitlement=await supabase.rpc('worker_commercial_feature',{p_org:importRow.organization_id,p_event:importRow.event_id,p_feature:'exposure'})
+  if(entitlement.error||!entitlement.data)return c.json({error:'El contrato vigente no incluye análisis de exposición.'},403)
   if (map.published) return c.json({ error: 'Despublica el plano antes de analizar una importación.' }, 409)
   if ((elementCount ?? 0) > 0) return c.json({ error: 'El MVP de IA sólo funciona sobre un plano vacío.' }, 409)
   if (!['uploaded', 'failed'].includes(importRow.status)) return c.json({ error: 'Esta importación ya fue analizada o aplicada.' }, 409)
@@ -1160,6 +1183,8 @@ app.post('/api/exhibitor-portal/invite', async (c) => {
   const { data: portalMember } = await supabase.from('exhibitor_portal_members').select('role,status').eq('event_id', event.id).eq('company_id', company.id).eq('user_id', caller).maybeSingle()
   const allowed = Boolean(platformAdmin || (orgMember && ['owner', 'admin'].includes(orgMember.role)) || (portalMember && portalMember.status === 'active' && ['owner', 'manager'].includes(portalMember.role)))
   if (!allowed) return c.json({ error: 'No tienes permisos para invitar personal' }, 403)
+  const entitlement=await supabase.rpc('worker_commercial_feature',{p_org:event.organization_id,p_event:event.id,p_feature:company.kind==='sponsor'?'sponsorship':'exposure'})
+  if(entitlement.error||!entitlement.data)return c.json({error:'El contrato vigente no incluye este portal.'},403)
   const email = parsed.data.email.toLowerCase().trim()
   const base = c.env.APP_BASE_URL.replace(/\/$/, '')
   const { data: eventDetails } = await supabase.from('events').select('name').eq('id', event.id).maybeSingle()

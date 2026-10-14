@@ -64,7 +64,7 @@ export default function DefinirClave() {
             <Ticket className="h-5 w-5" strokeWidth={2.2} />
           </span>
           <span className="text-lg font-semibold tracking-tight text-zinc-900">
-            EventPass <span className="text-emerald-600">VE</span>
+            EventosFácil
           </span>
         </div>
 

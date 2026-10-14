@@ -314,7 +314,7 @@ export default function RegistroEvento() {
               name
             ) : (
               <>
-                EventPass <span className="text-emerald-600">VE</span>
+                EventosFácil
               </>
             )}
           </span>

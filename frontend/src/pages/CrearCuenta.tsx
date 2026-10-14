@@ -20,6 +20,7 @@ export default function CrearCuenta() {
   const [checking, setChecking] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [accepted,setAccepted]=useState(false)
   const [sent, setSent] = useState(false)
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -27,17 +28,21 @@ export default function CrearCuenta() {
   const effectiveSlug = slugEdited ? slug : slugify(orgName)
 
   useEffect(() => {
+    let active=true
     setAvailable(null)
+    setChecking(false)
     const s = effectiveSlug
     if (!s || s.length < 3) return
     setChecking(true)
     if (debounce.current) clearTimeout(debounce.current)
     debounce.current = setTimeout(async () => {
       const ok = await slugAvailable(s)
+      if(!active)return
       setAvailable(ok)
       setChecking(false)
     }, 400)
     return () => {
+      active=false
       if (debounce.current) clearTimeout(debounce.current)
     }
   }, [effectiveSlug])
@@ -45,18 +50,20 @@ export default function CrearCuenta() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+    if (!accepted) return setError('Acepta las condiciones y el aviso de privacidad.')
     if (!orgName.trim()) return setError('Escribe el nombre de tu organización.')
     if (effectiveSlug.length < 3) return setError('El subdominio debe tener al menos 3 caracteres.')
     if (available === false) return setError('Ese subdominio no está disponible.')
     if (password.length < 8) return setError('La contraseña debe tener al menos 8 caracteres.')
 
     setBusy(true)
+    try {
     const { data, error: signErr } = await supabase.auth.signUp({
       email: email.trim(),
       password,
       options: {
         emailRedirectTo: `${window.location.origin}/bienvenida`,
-        data: { org_name: orgName.trim(), org_slug: effectiveSlug, full_name: fullName.trim() || null },
+        data: { org_name: orgName.trim(), org_slug: effectiveSlug, full_name: fullName.trim() || null,commercial_terms_version:'2026-10-14' },
       },
     })
 
@@ -72,12 +79,16 @@ export default function CrearCuenta() {
 
     // Si el proyecto no exige confirmación, ya hay sesión: completamos aquí.
     if (data.session) {
-      await finishOnboarding()
+      try {
+        const result=await finishOnboarding()
+        if(result.error){setError(result.error);setBusy(false);return}
+      } catch {setError('No se pudo completar la activación. Reintenta desde el panel.');setBusy(false);return}
       navigate('/admin', { replace: true })
       return
     }
     setBusy(false)
     setSent(true)
+    } catch(e){setError(e instanceof Error?e.message:'No se pudo crear la cuenta. Inténtalo de nuevo.')} finally {setBusy(false)}
   }
 
   if (sent) {
@@ -90,7 +101,7 @@ export default function CrearCuenta() {
           <h1 className="mt-5 text-2xl font-bold tracking-tight text-zinc-900">Revisa tu correo</h1>
           <p className="mt-3 text-sm text-zinc-600">
             Enviamos un enlace de confirmación a <strong>{email}</strong>. Al abrirlo, tu organización{' '}
-            <strong>{orgName}</strong> quedará lista en{' '}
+            <strong>{orgName}</strong> se creará y comenzará la activación del subdominio{' '}
             <strong>
               {effectiveSlug}.{ROOT_DOMAIN}
             </strong>
@@ -112,12 +123,12 @@ export default function CrearCuenta() {
             <Ticket className="h-5 w-5" strokeWidth={2.2} />
           </span>
           <span className="text-lg font-semibold tracking-tight text-zinc-900">
-            EventPass <span className="text-emerald-600">VE</span>
+            EventosFácil
           </span>
         </div>
 
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Crea tu organización</h1>
-        <p className="mt-2 text-sm text-zinc-600">Empieza gratis. Tendrás tu propio subdominio en minutos.</p>
+        <p className="mt-2 text-sm text-zinc-600">Prueba durante 14 días: un evento y hasta 50 participantes. Contrata un plan para seguir operando al vencer.</p>
 
         <form onSubmit={onSubmit} className="mt-8 flex flex-col gap-5">
           <label className="flex flex-col gap-2">
@@ -161,6 +172,7 @@ export default function CrearCuenta() {
             <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} className={inputCls} placeholder="Mínimo 8 caracteres" />
           </label>
 
+<label className="flex gap-2 text-sm"><input type="checkbox" checked={accepted} onChange={e=>setAccepted(e.target.checked)} required/><span>Acepto las <Link to="/terminos" target="_blank" className="underline">condiciones</Link> y el <Link to="/privacidad" target="_blank" className="underline">aviso de privacidad</Link>, versión 2026-10-14.</span></label>
           {error && <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
           <button

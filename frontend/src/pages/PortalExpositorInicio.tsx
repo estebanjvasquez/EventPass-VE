@@ -39,7 +39,7 @@ export default function PortalExpositorInicio() {
     <main className="min-h-[100dvh] bg-zinc-50 text-zinc-950">
       <header className="border-b bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-4">
-          <div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-100 text-emerald-800"><Store className="h-5 w-5" /></div><div><p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">EventPass</p><h1 className="font-bold">Portal de empresas expositoras</h1></div></div>
+          <div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-100 text-emerald-800"><Store className="h-5 w-5" /></div><div><p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">EventosFácil</p><h1 className="font-bold">Portal de empresas expositoras</h1></div></div>
           <button type="button" onClick={() => void signOut()} className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold"><LogOut className="h-4 w-4" />Salir</button>
         </div>
       </header>

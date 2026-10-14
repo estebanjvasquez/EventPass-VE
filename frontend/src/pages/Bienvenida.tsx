@@ -30,7 +30,7 @@ export default function Bienvenida() {
       }
       setPhase('done')
       setTimeout(() => navigate('/admin', { replace: true }), 1400)
-    })
+    }).catch(()=>{setError('No se pudo completar la activación. Reintenta desde el panel.');setPhase('error')})
   }, [loading, session, navigate])
 
   return (
@@ -41,8 +41,8 @@ export default function Bienvenida() {
             <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-emerald-100 text-emerald-600">
               <PartyPopper className="h-6 w-6" />
             </span>
-            <h1 className="mt-5 text-2xl font-bold tracking-tight text-zinc-900">¡Todo listo!</h1>
-            <p className="mt-3 text-sm text-zinc-600">Tu organización está creada. Te llevamos al panel…</p>
+            <h1 className="mt-5 text-2xl font-bold tracking-tight text-zinc-900">Organización creada</h1>
+            <p className="mt-3 text-sm text-zinc-600">Te llevamos al panel. La validación del subdominio puede tardar unos minutos; consulta su estado en Subdominio.</p>
           </>
         ) : phase === 'error' ? (
           <>

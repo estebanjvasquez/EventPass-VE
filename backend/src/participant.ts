@@ -12,6 +12,15 @@ export async function hashToken(value: string) {
 }
 export function newAccessToken() { return Array.from(crypto.getRandomValues(new Uint8Array(32)),byte=>byte.toString(16).padStart(2,'0')).join(''); }
 const schema = z.object({email:z.string().trim().email().max(254),event_id:z.string().uuid().optional(),program_id:z.string().uuid().optional()}).refine(value=>!!value.event_id !== !!value.program_id);
+participantApi.post('/consent',async c=>{
+  const token=c.req.header('Authorization')?.replace(/^Bearer /,'')??'';
+  const parsed=z.object({credential_token:z.string().min(16).max(128),share:z.boolean().optional()}).safeParse(await c.req.json().catch(()=>null));
+  if(!/^[a-f0-9]{64}$/.test(token)||!parsed.success)return c.json({error:'Verifica tu correo desde Recuperar registro.'},401);
+  const db=createClient(c.env.SUPABASE_URL,c.env.SUPABASE_SERVICE_ROLE_KEY);
+  const {data,error}=await db.rpc('participant_consent',{p_session_hash:await hashToken(token),p_token:parsed.data.credential_token,p_share:parsed.data.share??null});
+  if(error)return c.json({error:'Verifica tu correo mediante Recuperar registro para gestionar este permiso.'},403);
+  return c.json(data);
+});
 participantApi.use('*',async(c,next)=>{c.header('Cache-Control','no-store');c.header('Referrer-Policy','no-referrer');await next();});
 participantApi.post('/recover',async c=>{
   const parsed=schema.safeParse(await c.req.json().catch(()=>null));

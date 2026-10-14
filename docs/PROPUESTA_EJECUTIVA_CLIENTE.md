@@ -1,3 +1,5 @@
+> DOCUMENTO HISTÓRICO — propuesta de desarrollo de junio de 2026. No usar como oferta comercial vigente. Las cifras de ahorro, pagos automáticos y operación offline no están certificadas. Consulta OFERTA_COMERCIAL_VIGENTE_2026-10-14.md.
+
 # Propuesta Ejecutiva: Sistema de Registro y Gestión de Eventos
 
 **Preparado para:** [Nombre del Cliente]

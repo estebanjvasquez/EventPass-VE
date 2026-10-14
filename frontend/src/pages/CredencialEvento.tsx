@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { CalendarDays, Clock3, MapPin, Printer, Ticket } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { credentialQrValue } from '../lib/credentialQr'
+import ExhibitorConsent from '../components/ExhibitorConsent'
 import ParticipantAccessLink from '../components/ParticipantAccessLink'
 
 type Credential = {
@@ -55,13 +56,14 @@ export default function CredencialEvento() {
             <Ticket className="h-5 w-5" strokeWidth={2.2} />
           </span>
           <span className="text-lg font-semibold tracking-tight text-zinc-900">
-            EventPass <span className="text-emerald-600">VE</span>
+            EventosFácil
           </span>
         </div>
       </header>
 
       <main className="mx-auto max-w-2xl px-5 py-12">
         <div className="print:hidden"><ParticipantAccessLink token={cred ? token : null}/></div>
+        {cred?.status==='confirmed' && token && <ExhibitorConsent token={token}/>}
         {loading && <Skeleton />}
 
         {!loading && loadError && (

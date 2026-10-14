@@ -42,16 +42,16 @@ export async function resolveTenant(): Promise<Tenant | null> {
   let query = supabase
     .from('organizations')
     .select('id, slug, name, custom_hostname, branding')
-    .eq('status', 'active')
+    .in('status', ['active','trial'])
   query = target.slug ? query.eq('slug', target.slug) : query.eq('custom_hostname', target.customHost!)
   const { data } = await query.maybeSingle()
   if (data) return data as Tenant
   // Program/event domains belong to the same organization as their public site.
-  let siteQuery = supabase.from('public_sites').select('organization_id').eq('status', 'active')
+  let siteQuery = supabase.from('public_sites').select('organization_id').eq('status','active')
   siteQuery = target.slug ? siteQuery.eq('slug', target.slug) : siteQuery.eq('custom_hostname', target.customHost!)
   const { data: site } = await siteQuery.maybeSingle()
   if (!site?.organization_id) throw new Error('Sitio no disponible')
-  const { data: organization } = await supabase.from('organizations').select('id, slug, name, custom_hostname, branding').eq('id', site.organization_id).eq('status', 'active').maybeSingle()
+  const { data: organization } = await supabase.from('organizations').select('id, slug, name, custom_hostname, branding').eq('id', site.organization_id).in('status', ['active','trial']).maybeSingle()
   if (!organization) throw new Error('Sitio no disponible')
   return organization as Tenant
 }
@@ -59,7 +59,7 @@ export async function resolveTenant(): Promise<Tenant | null> {
 export async function resolvePublicSite(): Promise<PublicSite | null> {
   const target = parseHost(window.location.hostname)
   if (!target.slug && !target.customHost) return null
-  let query = supabase.from('public_sites').select('id,scope,event_id,program_id,landing_config').eq('status', 'active')
+  let query = supabase.from('public_sites').select('id,scope,event_id,program_id,landing_config').eq('status','active')
   query = target.slug ? query.eq('slug', target.slug) : query.eq('custom_hostname', target.customHost!)
   const { data } = await query.maybeSingle()
   return (data as PublicSite | null) ?? null

@@ -63,7 +63,20 @@ export async function runScheduledJobs(
   await sendPaymentReminders(supabase, env, result)
   const { error: cleanupError } = await supabase.rpc('purge_participant_access')
   if (cleanupError) result.errors.push('participant access cleanup failed')
+  await sendCommercialNotifications(supabase,env,result)
   return result
+}
+
+async function sendCommercialNotifications(db:SupabaseClient,env:JobEnv,result:JobResult) {
+  const {data,error}=await db.rpc('claim_commercial_mail')
+  if(error){result.errors.push('commercial notification queue failed');return}
+  for(const mail of (data??[]) as {id:string;email:string;message:string}[]) {
+    let failure:string|null=null
+    try{await env.EMAIL.send({to:mail.email,from:env.EMAIL_FROM,subject:'Contrato y cobro — EventosFácil',text:`${mail.message}\n\nConsulta tu cuenta: ${env.APP_BASE_URL.replace(/\/$/,'')}/admin/suscripcion\nEl horario de soporte depende de tu contrato.`})}
+    catch{failure='No se pudo entregar; consulta disponible en el panel';result.errors.push('commercial email failed')}
+    const saved=await db.rpc('finish_commercial_mail',{p_id:mail.id,p_error:failure})
+    if(saved.error)result.errors.push('commercial email audit failed')
+  }
 }
 
 async function releaseExpiredSlots(

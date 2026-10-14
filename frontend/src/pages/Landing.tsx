@@ -14,6 +14,7 @@ import {
 import { supabase } from "../lib/supabase";
 import { useTenant } from "../lib/useTenant";
 import { brandColor, brandName, resolvePublicSite, type Tenant } from "../lib/tenantCore";
+import CommercialCatalog from '../components/CommercialCatalog';
 import EventPublicLanding, { type LandingEvent } from '../components/EventPublicLanding';
 
 const capabilities = [
@@ -24,7 +25,7 @@ const capabilities = [
   },
   {
     title: "Operación en el recinto",
-    body: "Check-in, impresión, equipo operativo y control de acceso desde cualquier dispositivo.",
+    body: "Check-in y control desde el navegador. Impresión con PC Windows, controlador y conector local homologado.",
     icon: ScanLine,
   },
   {
@@ -55,7 +56,7 @@ function Header() {
         <a href="#top" className="flex items-center gap-3 text-white">
           <BrandMark compact />
           <span className="text-sm font-semibold tracking-tight">
-            EventPass VE
+            EventosFácil
           </span>
         </a>
         <nav className="hidden items-center gap-7 text-sm font-medium text-white/72 md:flex">
@@ -175,7 +176,7 @@ function Platform() {
             Cada equipo ve exactamente lo que necesita.
           </h2>
           <p className="mt-5 text-lg leading-relaxed text-zinc-300">
-            Evita planillas paralelas y herramientas desconectadas. EventPass
+            Evita planillas paralelas y herramientas desconectadas. EventosFácil
             acompaña el recorrido completo del evento.
           </p>
         </div>
@@ -314,7 +315,7 @@ function CallToAction() {
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <a
-              href="mailto:estebanjvasquez@gmail.com?subject=Demo%20EventPass%20VE"
+              href="/demo"
               className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-emerald-900 transition-transform hover:bg-emerald-50 active:scale-[0.98]"
             >
               Solicitar demo <ArrowRight className="h-4 w-4" />
@@ -344,7 +345,7 @@ function CallToAction() {
             />
           </div>
           <a
-            href="mailto:estebanjvasquez@gmail.com?subject=Consulta%20EventPass%20VE"
+            href="/demo"
             className="mt-6 inline-flex text-sm font-semibold text-white underline underline-offset-4"
           >
             Escribir una consulta
@@ -360,11 +361,12 @@ function Footer() {
       <div className="mx-auto flex max-w-7xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3 text-white">
           <BrandMark compact />
-          <span className="text-sm font-semibold">EventPass VE</span>
+          <span className="text-sm font-semibold">EventosFácil</span>
         </div>
         <p className="text-sm">
-          © {new Date().getFullYear()} EventPass VE. Hecho en Venezuela.
+          © {new Date().getFullYear()} EventosFácil. Hecho en Venezuela.
         </p>
+        <nav className="flex gap-4 text-sm"><Link to="/terminos">Condiciones</Link><Link to="/privacidad">Privacidad</Link><Link to="/demo">Demo y cotización</Link></nav>
       </div>
     </footer>
   );
@@ -540,6 +542,7 @@ export default function Landing() {
         <Experience />
         <CallToAction />
       </main>
+      <CommercialCatalog />
       <Footer />
     </div>
   );

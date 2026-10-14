@@ -63,7 +63,7 @@ rol independiente de plataforma (`platform_admins`).
 6. **Operación en sitio.** El personal hace check-in con QR o búsqueda y puede
    imprimir gafetes.
 7. **Suscripción.** La organización solicita un plan y adjunta comprobante; el
-   superadmin lo aprueba o rechaza. La base de datos aplica los límites del plan.
+   superadmin lo aprueba o rechaza. La base de datos aplica contratos temporales, módulos y cuotas. La prueba dura 14 días; ofertas versionadas, renovación, cotización y conciliación operan en la organización seleccionada. Las condiciones anteriores se preservan mediante contratos legacy.
 
 ## 4. Arquitectura
 
@@ -134,8 +134,7 @@ Estados relevantes:
 
 ## 8. Operación y calidad
 
-- No hay suite de pruebas automatizada. Los gates actuales son TypeScript y
-  `oxlint` en frontend.
+- Hay suites de regresión para participantes, campañas, acreditación y contratos comerciales: `infra/npm test`, `frontend/npm run test:badges` y `frontend/npm run test:commercial`. TypeScript y `oxlint` completan los gates.
 - Las migraciones se versionan en `infra/supabase/migrations/`, deben ser
   idempotentes y se aplican manualmente en el SQL Editor de Supabase.
 - Todo trabajo que cambie comportamiento, arquitectura o decisiones debe
@@ -144,8 +143,7 @@ Estados relevantes:
 ## 9. Riesgos y decisiones pendientes
 
 1. Consolidar o retirar documentación heredada que contradiga el stack vigente.
-2. Incorporar pruebas automatizadas para los flujos críticos de registro,
-   comprobantes, RLS y billing.
+2. Ampliar los ensayos integrales con PostgreSQL completo, concurrencia y hardware real; las suites locales ya cubren flujos críticos de registro, RLS y billing.
 3. Documentar y validar explícitamente el alcance offline/PWA de check-in; no
    hay evidencia de un service worker dedicado en el repositorio actual.
 4. Formalizar el checklist de release del Worker y de migraciones manuales.
@@ -157,3 +155,7 @@ Estados relevantes:
 - Describe producto, usuarios, flujos, arquitectura y controles vigentes.
 - Permite ubicar cada flujo entre frontend, Worker y Supabase.
 - Es el punto de partida para cambios de alcance y para el backlog de Notion.
+
+## Comercialización vigente (14 de octubre de 2026)
+
+La fuente comercial es `OFERTA_COMERCIAL_VIGENTE_2026-10-14.md` y el catálogo activo de `offer_versions`. Los contratos por evento protegen su ventana operativa. Al vencer se conservan consulta/exportación, cobro y soporte. El consentimiento de expositores se gestiona mediante sesión de recuperación verificada por correo. El panel SuperAdmin incluye versiones de oferta, pipeline, contratos por evento, soporte y métricas básicas. Consulta `COBERTURA_REVISION_COMERCIAL_2026-10-14.md` para pendientes y límites de validación.

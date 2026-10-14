@@ -23,13 +23,13 @@ export async function slugAvailable(slug: string): Promise<boolean> {
 
 // Activa el subdominio del tenant (mejor esfuerzo; reintentar desde el admin).
 async function provisionSubdomain(orgId: string): Promise<void> {
-  if (!API_URL) return
+  if (!API_URL) throw new Error('Organización creada; falta configurar la activación del subdominio. Reintenta desde el panel.')
   try {
     const {
       data: { session },
     } = await supabase.auth.getSession()
-    if (!session) return
-    await fetch(`${API_URL}/api/tenants/provision-domain`, {
+    if (!session) throw new Error('Inicia sesión para activar el subdominio.')
+    const response = await fetch(`${API_URL}/api/tenants/provision-domain`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -37,8 +37,9 @@ async function provisionSubdomain(orgId: string): Promise<void> {
       },
       body: JSON.stringify({ organization_id: orgId }),
     })
+    if (!response.ok) throw new Error('Organización creada, pero no se pudo activar el subdominio. Reintenta desde Admin → Subdominio.')
   } catch {
-    /* la activación puede reintentarse desde Admin → Subdominio */
+    throw new Error('Organización creada; activación del subdominio pendiente. Reintenta desde el panel sin crear otra organización.')
   }
 }
 
@@ -66,11 +67,16 @@ export async function finishOnboarding(): Promise<{ orgId: string | null; error:
     .limit(1)
     .maybeSingle()
   if (existing?.organization_id) {
-    void provisionSubdomain(existing.organization_id as string)
+    if(user.user_metadata?.commercial_terms_version==='2026-10-14') {
+      const acceptance=await supabase.rpc('accept_commercial_terms',{p_org:existing.organization_id,p_version:'2026-10-14'})
+      if(acceptance.error)return {orgId:existing.organization_id as string,error:acceptance.error.message}
+    }
+    try { await provisionSubdomain(existing.organization_id as string) }
+    catch(e){return {orgId:existing.organization_id as string,error:e instanceof Error?e.message:'Activación pendiente.'}}
     return { orgId: existing.organization_id as string, error: null }
   }
 
-  const meta = user.user_metadata as { org_name?: string; org_slug?: string }
+  const meta = user.user_metadata as { org_name?: string; org_slug?: string; commercial_terms_version?: string }
   if (!meta.org_name || !meta.org_slug) {
     return { orgId: null, error: 'No encontramos los datos de tu organización.' }
   }
@@ -81,6 +87,10 @@ export async function finishOnboarding(): Promise<{ orgId: string | null; error:
   })
   if (error) return { orgId: null, error: mapCreateError(error.message) }
 
-  void provisionSubdomain(orgId as string)
+  if(meta.commercial_terms_version==='2026-10-14') {
+    const acceptance=await supabase.rpc('accept_commercial_terms',{p_org:orgId,p_version:meta.commercial_terms_version})
+    if(acceptance.error)return {orgId:orgId as string,error:acceptance.error.message}
+  }
+  try{await provisionSubdomain(orgId as string)}catch(e){return {orgId:orgId as string,error:e instanceof Error?e.message:'Activación pendiente.'}}
   return { orgId: orgId as string, error: null }
 }

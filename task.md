@@ -335,3 +335,7 @@ dispositivos autorizados.
   identificador del evento y ofrece retorno directo a **Admin del evento**.
 - El administrador del evento ofrece enlaces claros a **Todos los eventos** e
   **Inicio de la organización**.
+
+## Revisión comercial — 14 de octubre de 2026
+
+Se implementaron ofertas versionadas, contratos, prueba de 14 días, cotización/conciliación, vigencia, módulos/cuotas, consentimiento recuperado por correo, catálogo/demo, seguimiento, tickets y métricas básicas. La matriz `docs/COBERTURA_REVISION_COMERCIAL_2026-10-14.md` distingue cobertura y pendientes físicos, jurídicos y de operación comercial. Nuevas suites `scripts/test-commercial-db.mjs` y `scripts/test-commercial-ui.mjs`. No incluir workflows ni artifacts preexistentes en este commit.

@@ -20,7 +20,7 @@ Two independent npm packages: `frontend/` and `backend/`. `cd` into the relevant
 - `npm run deploy` — `wrangler deploy` (backend has **no CI**; deploy manually)
 - Secrets: `printf '%s' '<value>' | npx wrangler secret put <NAME>` (run from `backend/`)
 
-There is **no automated test suite**. The quality gates are `tsc` (both packages) and `oxlint` (frontend). Run `npx oxlint <files>` to lint specific files.
+Automated regression suites exist for participant access, campaigns, accreditation and commercial contracts (infra npm test; frontend npm run test:badges). The quality gates are `tsc` (both packages) and `oxlint` (frontend). Run `npx oxlint <files>` to lint specific files.
 
 ## Architecture
 

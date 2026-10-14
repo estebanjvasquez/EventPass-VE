@@ -1,3 +1,4 @@
+import { commercialStatusLabel } from '../../lib/commercial';
 import { useCallback, useEffect, useState } from "react";
 import {
   BarChart3,
@@ -46,12 +47,15 @@ const modules = [
   { title: "Proveedores", description: "Directorio de empresas y personal contratado para la operación.", to: "/admin/proveedores", icon: BriefcaseBusiness },
   { title: "Patrocinantes", description: "Gestiona acuerdos, entregables, pagos y activaciones.", to: "/admin/patrocinantes", icon: Handshake },
   { title: "Programas", description: "Organiza programas, invitados y registros vinculados.", to: "/admin/programas", icon: Ticket },
+  { title: "Soporte y preparación", description: "Reporta incidencias y revisa los requisitos para operar tu evento.", to: "/admin/soporte", icon: ShieldCheck },
   { title: "Suscripción", description: "Revisa el plan, límites y estado de la cuenta de la organización.", to: "/admin/suscripcion", icon: ShieldCheck },
 ];
 
 const eventTypeLabel: Record<string, string> = { exhibition: "Exposición", forum: "Foro", general: "Evento" };
 
 export default function OrganizadorDashboard() {
+  const [capabilities,setCapabilities]=useState<Record<string,boolean>|null>(null);
+  const [commercialState,setCommercialState]=useState("");
   const [orgName, setOrgName] = useState("Organización");
   const [role, setRole] = useState("");
   const [metrics, setMetrics] = useState<DashboardMetrics>({ events: 0, publishedEvents: 0, registrations: 0, companies: 0 });
@@ -68,6 +72,8 @@ export default function OrganizadorDashboard() {
       setLoading(false);
       return;
     }
+    const commercial=await supabase.rpc("commercial_account",{p_org:active.organization_id});
+    setCapabilities(commercial.data?.capabilities??null);setCommercialState(commercial.data?.state??"");
     setOrgName(active.organizations?.name ?? "Organización");
     setRole(active.role);
     const [eventsResult, registrationsResult, companiesResult] = await Promise.all([
@@ -93,6 +99,7 @@ export default function OrganizadorDashboard() {
         <div className="mx-auto max-w-7xl px-5 py-5 sm:px-8"><div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">Panel de la organización</p><h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">{orgName}</h1><p className="mt-1 text-sm text-zinc-600">Gestiona la operación completa de tus eventos desde un solo lugar.</p></div><span className="rounded-full bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-600">Rol: {role || "miembro"}</span></div></div>
       </header>
       <main className="mx-auto max-w-7xl px-5 py-8 sm:px-8">
+        <p className="my-3 text-sm">Estado comercial: {commercialStatusLabel(commercialState)}. <Link to="/admin/suscripcion" className="text-emerald-700 underline">Contrato, cuotas y renovación</Link></p>
         {error && <p role="alert" className="mb-5 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
         <section aria-label="Resumen" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[
@@ -106,7 +113,7 @@ export default function OrganizadorDashboard() {
         <section className="mt-9">
           <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Áreas de trabajo</p><h2 className="mt-1 text-xl font-bold">¿Qué necesitas gestionar?</h2></div>
           <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {modules.filter(module=>!module.adminOnly||role==="owner"||role==="admin").map((module) => { const Icon = module.icon; return <Link key={module.to} to={module.to} className={`group flex min-h-44 flex-col rounded-2xl border p-5 transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-sm active:scale-[0.99] ${module.featured ? "bg-white" : "bg-zinc-100/70"}`}><div className="flex items-start justify-between"><span className="grid h-11 w-11 place-items-center rounded-xl bg-emerald-100 text-emerald-800"><Icon className="h-5 w-5" /></span><ChevronRight className="h-5 w-5 text-zinc-300 transition group-hover:translate-x-0.5 group-hover:text-emerald-700" /></div><h3 className="mt-4 font-bold">{module.title}</h3><p className="mt-1 text-sm leading-5 text-zinc-600">{module.description}</p></Link> })}
+            {modules.filter(module=>(!module.adminOnly||role==="owner"||role==="admin") && (capabilities===null || !["Programas","Patrocinantes","Proveedores"].includes(module.title) || capabilities[module.title==="Programas"?"programs":"sponsorship"])).map((module) => { const Icon = module.icon; return <Link key={module.to} to={module.to} className={`group flex min-h-44 flex-col rounded-2xl border p-5 transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-sm active:scale-[0.99] ${module.featured ? "bg-white" : "bg-zinc-100/70"}`}><div className="flex items-start justify-between"><span className="grid h-11 w-11 place-items-center rounded-xl bg-emerald-100 text-emerald-800"><Icon className="h-5 w-5" /></span><ChevronRight className="h-5 w-5 text-zinc-300 transition group-hover:translate-x-0.5 group-hover:text-emerald-700" /></div><h3 className="mt-4 font-bold">{module.title}</h3><p className="mt-1 text-sm leading-5 text-zinc-600">{module.description}</p></Link> })}
           </div>
         </section>
 

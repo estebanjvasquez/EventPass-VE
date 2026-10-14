@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, BarChart3, Building2, CalendarRange, CircleDollarSign, ExternalLink, KeyRound, LogIn, Mail, Search, ShieldCheck, Trash2, UserCog, UserPlus, Users, X } from 'lucide-react'
+import CommercialOperations from './CommercialOperations'
 import { supabase } from '../../lib/supabase'
 import { setImpersonatedOrg } from '../../lib/activeOrg'
 import { slugAvailable, slugify } from '../../lib/onboarding'
@@ -33,7 +34,7 @@ const ORG_STATUS: Record<string, { text: string; cls: string }> = {
 }
 const ROOT_DOMAIN = 'eventosfacil.net'
 
-type Tab = 'resumen' | 'clientes' | 'usuarios' | 'planes' | 'catalogo' | 'pagos' | 'supers' | 'pagos_plataforma'
+type Tab = 'comercial' | 'resumen' | 'clientes' | 'usuarios' | 'planes' | 'catalogo' | 'pagos' | 'supers' | 'pagos_plataforma'
 
 export default function SuperAdmin() {
   const [allowed, setAllowed] = useState<boolean | null>(null)
@@ -62,10 +63,11 @@ export default function SuperAdmin() {
     )
 
   const tabs: { id: Tab; label: string }[] = [
+    {id:'comercial',label:'Comercial y soporte'},
     { id: 'resumen', label: 'Resumen' },
     { id: 'clientes', label: 'Organizaciones y soporte' },
     { id: 'usuarios', label: 'Usuarios' },
-    { id: 'planes', label: 'Planes de venta' },
+    { id: 'planes', label: 'Catálogo base' },
     { id: 'catalogo', label: 'Eventos públicos' },
     { id: 'pagos', label: 'Pagos' },
     { id: 'supers', label: 'Superadmins' },
@@ -103,6 +105,7 @@ export default function SuperAdmin() {
 
         {error && <p className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
+        {tab === 'comercial' && <CommercialOperations platform/>}
         {tab === 'resumen' && <OverviewTab onError={setError} />}
         {tab === 'clientes' && <ClientsTab onError={setError} />}
         {tab === 'usuarios' && <UsersTab onError={setError} />}
@@ -285,7 +288,7 @@ function PlansTab({onError}:{onError:(m:string)=>void}){
   useEffect(()=>{void load()},[load])
   function set(plan:string,key:keyof AdminPlan,value:unknown){setPlans(current=>current.map(item=>item.plan===plan?{...item,[key]:value}:item))}
   async function save(item:AdminPlan){setBusy(item.plan);const {error}=await supabase.rpc('admin_update_plan',{p_plan:item.plan,p_name:item.name,p_description:item.description??'',p_price:Number(item.price_usd),p_max_events:item.max_events,p_max_regs:item.max_regs_per_event,p_active:item.is_active});setBusy(null);if(error)onError(error.message);else await load()}
-  return <section><h1 className="text-2xl font-bold">Planes de venta</h1><p className="mt-1 text-sm text-zinc-600">Precios, límites y disponibilidad comercial.</p><div className="mt-5 grid gap-5 lg:grid-cols-3">{plans.map(plan=><article key={plan.plan} className="rounded-2xl border bg-white p-5"><div className="flex items-center justify-between"><span className="text-xs font-bold uppercase tracking-wide text-emerald-700">{plan.plan}</span><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={plan.is_active} onChange={event=>set(plan.plan,'is_active',event.target.checked)}/>En venta</label></div><label className="mt-4 block text-xs font-medium">Nombre<input className={`${inputCls} mt-1`} value={plan.name} onChange={event=>set(plan.plan,'name',event.target.value)}/></label><label className="mt-3 block text-xs font-medium">Descripción<textarea className={`${inputCls} mt-1`} rows={3} value={plan.description??''} onChange={event=>set(plan.plan,'description',event.target.value)}/></label><label className="mt-3 block text-xs font-medium">Precio mensual USD<input type="number" min="0" step="0.01" className={`${inputCls} mt-1`} value={plan.price_usd} onChange={event=>set(plan.plan,'price_usd',Number(event.target.value))}/></label><div className="mt-3 grid grid-cols-2 gap-3"><label className="block text-xs font-medium">Máx. eventos<input type="number" min="1" className={`${inputCls} mt-1`} value={plan.max_events??''} placeholder="Ilimitado" onChange={event=>set(plan.plan,'max_events',event.target.value?Number(event.target.value):null)}/></label><label className="block text-xs font-medium">Registros/evento<input type="number" min="1" className={`${inputCls} mt-1`} value={plan.max_regs_per_event??''} placeholder="Ilimitado" onChange={event=>set(plan.plan,'max_regs_per_event',event.target.value?Number(event.target.value):null)}/></label></div><button disabled={busy===plan.plan} onClick={()=>save(plan)} className="mt-5 w-full rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{busy===plan.plan?'Guardando…':'Guardar plan'}</button></article>)}</div></section>
+  return <section><h1 className="text-2xl font-bold">Planes de venta</h1><p className="mt-1 text-sm text-zinc-600">Catálogo heredado y disponibilidad por plan. Publica precios, cuotas y módulos para nuevas contrataciones desde Comercial y soporte. Los contratos y ofertas anteriores no se modifican aquí.</p><div className="mt-5 grid gap-5 lg:grid-cols-3">{plans.map(plan=><article key={plan.plan} className="rounded-2xl border bg-white p-5"><div className="flex items-center justify-between"><span className="text-xs font-bold uppercase tracking-wide text-emerald-700">{plan.plan}</span><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={plan.is_active} onChange={event=>set(plan.plan,'is_active',event.target.checked)}/>En venta</label></div><label className="mt-4 block text-xs font-medium">Nombre<input className={`${inputCls} mt-1`} value={plan.name} onChange={event=>set(plan.plan,'name',event.target.value)}/></label><label className="mt-3 block text-xs font-medium">Descripción<textarea className={`${inputCls} mt-1`} rows={3} value={plan.description??''} onChange={event=>set(plan.plan,'description',event.target.value)}/></label><label className="mt-3 block text-xs font-medium">Precio mensual USD<input type="number" min="0" step="0.01" className={`${inputCls} mt-1`} value={plan.price_usd} onChange={event=>set(plan.plan,'price_usd',Number(event.target.value))}/></label><div className="mt-3 grid grid-cols-2 gap-3"><label className="block text-xs font-medium">Máx. eventos<input type="number" min="1" className={`${inputCls} mt-1`} value={plan.max_events??''} placeholder="Ilimitado" onChange={event=>set(plan.plan,'max_events',event.target.value?Number(event.target.value):null)}/></label><label className="block text-xs font-medium">Registros/evento<input type="number" min="1" className={`${inputCls} mt-1`} value={plan.max_regs_per_event??''} placeholder="Ilimitado" onChange={event=>set(plan.plan,'max_regs_per_event',event.target.value?Number(event.target.value):null)}/></label></div><button disabled={busy===plan.plan} onClick={()=>save(plan)} className="mt-5 w-full rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{busy===plan.plan?'Guardando…':'Guardar plan'}</button></article>)}</div></section>
 }
 
 type CatalogAdminEvent={id:string;organization_id:string;organization_name:string;name:string;event_type:string;status:string;start_date:string|null;end_date:string|null;location:string|null;featured:boolean;feature_order:number;registration_count:number}
@@ -800,15 +803,20 @@ function PaymentsTab({ onError }: { onError: (m: string) => void }) {
   }
 
   async function approve(id: string) {
+    const expected=payments.find(p=>p.id===id)?.amount_usd
+    const received=window.prompt(`Monto recibido en USD (esperado: ${expected}). Confirma el abono y comprobante antes de aprobar:`)
+    if(received===null)return
+    if(!received.trim()||!Number.isFinite(Number(received)))return onError('Indica un importe válido.')
     setBusyId(id)
-    const { error } = await supabase.rpc('approve_subscription_payment', { p_payment_id: id })
+    const { error } = await supabase.rpc('reconcile_subscription_payment', { p_payment_id: id,p_received:Number(received) })
     setBusyId(null)
     if (error) onError(error.message)
     else await load()
   }
 
   async function reject(id: string) {
-    const note = window.prompt('Motivo del rechazo (opcional):') ?? ''
+    const note = window.prompt('Motivo del rechazo (obligatorio):')
+    if(note===null)return
     setBusyId(id)
     const { error } = await supabase.rpc('reject_subscription_payment', { p_payment_id: id, p_note: note })
     setBusyId(null)
@@ -836,7 +844,7 @@ function PaymentsTab({ onError }: { onError: (m: string) => void }) {
               <tr key={p.id} className="align-top">
                 <td className="px-5 py-3.5">
                   <p className="font-medium text-zinc-900">{orgLabel(p.organizations)}</p>
-                  <p className="text-xs text-zinc-500">{new Date(p.created_at).toLocaleDateString('es-VE')}</p>
+                  <p className="text-xs text-zinc-500">{new Date(p.created_at).toLocaleDateString('es-VE')}{Date.now()-new Date(p.created_at).getTime()>86400000?' · revisión >24 h':''}</p>
                 </td>
                 <td className="px-5 py-3.5 capitalize text-zinc-700">
                   {PLAN_LABEL[p.plan] ?? p.plan}

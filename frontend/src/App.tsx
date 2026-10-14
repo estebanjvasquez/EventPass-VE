@@ -8,6 +8,8 @@ import EventLandingAdmin from './pages/admin/EventLandingAdmin'
 // Carga diferida por ruta: cada página es su propio chunk. Así el visitante
 // público no descarga el panel admin ni el escáner QR (html5-qrcode), que solo
 // hacen falta en el check-in.
+const CommercialPublic = lazy(() => import('./pages/CommercialPublic'))
+const CommercialOperations = lazy(() => import('./pages/admin/CommercialOperations'))
 const Landing = lazy(() => import('./pages/Landing'))
 const EventosPublicos = lazy(() => import('./pages/EventosPublicos'))
 const PublicEventHome = lazy(() => import('./pages/PublicEventHome'))
@@ -79,7 +81,7 @@ function App() {
       <AuthErrorRedirect />
       <Routes>
         <Route path="*" element={<main className="grid min-h-[100dvh] place-items-center bg-zinc-50 p-6"><section className="max-w-lg text-center"><h1 className="text-3xl font-bold">Página no encontrada</h1><p className="my-5">El enlace no existe o ha cambiado. Puedes volver al inicio para continuar.</p><Link className="font-semibold text-emerald-700 underline" to="/">Volver al inicio</Link></section></main>} />
-        <Route path="/" element={<Landing />} />
+        <Route path="/" element={<Landing />} /><Route path="/demo" element={<CommercialPublic />} /><Route path="/terminos" element={<CommercialPublic />} /><Route path="/privacidad" element={<CommercialPublic />} /><Route path="/admin/soporte" element={<RequireAuth><CommercialOperations /></RequireAuth>} />
         <Route path="/eventos" element={<EventosPublicos />} />
         <Route path="/evento/:eventId" element={<PublicEventHome />} />
         <Route path="/registro" element={<RegistroEvento />} />

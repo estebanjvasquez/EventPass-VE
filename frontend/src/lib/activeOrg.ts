@@ -4,6 +4,8 @@ import { supabase } from './supabase'
 // usuario (su membresía); si un superadmin eligió "gestionar como cliente", se
 // guarda ese org_id en sessionStorage y las páginas operan sobre él.
 const KEY = 'impersonate_org'
+const ACTIVE_KEY = 'admin_active_org'
+export function setActiveOrg(orgId:string){sessionStorage.setItem(ACTIVE_KEY,orgId)}
 
 export function setImpersonatedOrg(orgId: string | null) {
   if (orgId) sessionStorage.setItem(KEY, orgId)
@@ -43,12 +45,22 @@ export async function resolveActiveOrg(): Promise<ActiveOrg | null> {
     setImpersonatedOrg(null) // no autorizado o no encontrado: descartar
   }
 
-  const { data: mem } = await supabase
+  const {data:{user}}=await supabase.auth.getUser()
+  if(!user)return null
+  const selected=sessionStorage.getItem(ACTIVE_KEY)
+  let query = supabase
     .from('memberships')
     .select('organization_id, role, organizations(name)')
+    .eq('user_id',user.id)
+  if(selected)query=query.eq('organization_id',selected)
+  const { data: mem } = await query
+    .order('created_at',{ascending:true})
     .limit(1)
     .maybeSingle()
-  if (!mem) return null
+  if (!mem) {
+    if(selected){sessionStorage.removeItem(ACTIVE_KEY);return resolveActiveOrg()}
+    return null
+  }
   const m = mem as {
     organization_id: string
     role: string
