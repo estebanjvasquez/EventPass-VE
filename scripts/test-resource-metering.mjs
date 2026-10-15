@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import vm from 'node:vm';
+import ts from '../frontend/node_modules/typescript/lib/typescript.js';
+const source=await readFile(new URL('../backend/src/resourceUsage.ts',import.meta.url),'utf8');
+const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const logs=[];const context={exports:{},crypto:globalThis.crypto,console:{error:(...x)=>logs.push(x)}};
+vm.runInNewContext(compiled,context);const {observeAiUsage}=context.exports;const calls=[];const db={rpc:async(name,args)=>{calls.push({name,args});return{error:null}}};
+await observeAiUsage(db,'org','event',{id:'response-1',model:'provider-model',usage:{input_tokens:1000,output_tokens:200,input_tokens_details:{cached_tokens:300}},output:[{text:'Sensitive prompt and output never stored'}]},'fallback');
+assert.equal(calls.length,3);assert.deepEqual(calls.map(c=>c.args.p_units),[700,300,200]);assert.ok(calls.every(c=>c.args.p_model==='provider-model'&&c.args.p_key==='response-1'));assert.ok(!JSON.stringify(calls).includes('Sensitive'));
+await observeAiUsage(db,'org','event',{id:'no-usage'},'fallback');assert.equal(calls.length,3);assert.equal(logs.length,1);
+await observeAiUsage({rpc:async()=>({error:{message:'QA unavailable'}})},'org','event',{id:'response-2',usage:{input_tokens:10,output_tokens:2}},'fallback');assert.equal(logs.length,4);
+console.log('PASS AI metering: input/cache/output separation, provider identity, no prompt storage, unknown counts and observation failure');
+await context.exports.observeAcceptedEmail(db,'org','event',false);assert.equal(calls.length,3);
+await context.exports.observeAcceptedEmail(db,'org','event',true);assert.equal(calls.length,4);assert.equal(calls[3].args.p_metric,'email_accepted');
+console.log('PASS extra tenant email observation: only successful provider acceptance is measured');

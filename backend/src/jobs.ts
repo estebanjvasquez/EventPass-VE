@@ -64,6 +64,8 @@ export async function runScheduledJobs(
   const { error: cleanupError } = await supabase.rpc('purge_participant_access')
   if (cleanupError) result.errors.push('participant access cleanup failed')
   await sendCommercialNotifications(supabase,env,result)
+  const snapshot = await supabase.rpc('worker_storage_snapshot')
+  if (snapshot.error) result.errors.push('commercial storage measurement failed')
   return result
 }
 

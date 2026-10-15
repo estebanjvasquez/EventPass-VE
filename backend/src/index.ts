@@ -8,6 +8,7 @@ import { participantApi, hashToken } from './participant'
 import { normalizeSlug, provisionDomain, getDomainStatus, type CfEnv } from './tenants'
 import { forumLayoutIntentJsonSchema, forumLayoutIntentSchema, generateForumPlan, inferForumLayoutIntent } from './forumFloorplan'
 import { arrayBufferToDataUrl, exhibitionDetectionJsonSchema, exhibitionDetectionSchema, normalizeExhibitionDetection } from './exhibitionImport'
+import { observeAiUsage, observeAcceptedEmail } from './resourceUsage'
 
 type Bindings = {
   SUPABASE_URL: string
@@ -81,11 +82,22 @@ app.get('/health', (c) =>
   c.json({ status: 'ok', service: 'eventpass-backend', env: c.env.ENVIRONMENT }),
 )
 
-// Ejemplo: cliente admin de Supabase (service role) por request.
-// El aislamiento multi-tenant se aplica vía organization_id + RLS.
+// Explicit scope is required: this Worker client bypasses RLS.
 app.get('/api/events', async (c) => {
   const supabase = createClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY)
-  const { data, error } = await supabase.from('events').select('*').limit(20)
+  const caller = await authUserId(supabase, c.req.header('Authorization'))
+  if (!caller) return c.json({ error: 'No autorizado' }, 401)
+  const org = z.string().uuid().safeParse(c.req.query('organization_id'))
+  if (!org.success) return c.json({ error: 'Selecciona una organización válida' }, 400)
+  const [member, platform, controls, organization] = await Promise.all([
+    supabase.from('memberships').select('role').eq('organization_id', org.data).eq('user_id', caller).maybeSingle(),
+    supabase.from('platform_admins').select('user_id').eq('user_id', caller).maybeSingle(),
+    supabase.from('platform_user_controls').select('suspended_at').eq('user_id', caller).maybeSingle(),
+    supabase.from('organizations').select('status').eq('id', org.data).maybeSingle(),
+  ])
+  if ([member, platform, controls, organization].some(result => result.error)) return c.json({ error: 'No se pudo comprobar el acceso' }, 503)
+  if (controls.data?.suspended_at || !organization.data || (!platform.data && (!member.data || organization.data.status === 'suspended'))) return c.json({ error: 'No autorizado para esta organización' }, 403)
+  const { data, error } = await supabase.from('events').select('id,organization_id,name,event_type,status,start_date,end_date').eq('organization_id', org.data).limit(100)
   if (error) return c.json({ error: error.message }, 500)
   return c.json({ events: data })
 })
@@ -528,7 +540,7 @@ function openAiUserMessage(status: number, code: string) {
   return 'OpenAI no pudo procesar la solicitud en este momento. Inténtalo de nuevo.'
 }
 
-async function requestOpenAi(apiKey: string, body: Record<string, unknown>, timeoutMs: number): Promise<OpenAiResult> {
+async function requestOpenAi(apiKey: string, body: Record<string, unknown>, timeoutMs: number, metering: { db: SupabaseClient; org: string; event: string }): Promise<OpenAiResult> {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
@@ -539,7 +551,10 @@ async function requestOpenAi(apiKey: string, body: Record<string, unknown>, time
         body: JSON.stringify(body),
       })
       const payload = await response.json().catch(() => null) as { error?: { code?: string; type?: string } } | null
-      if (response.ok) return { ok: true, payload }
+      if (response.ok) {
+        await observeAiUsage(metering.db, metering.org, metering.event, payload, String(body.model))
+        return { ok: true, payload }
+      }
       const code = String(payload?.error?.code ?? payload?.error?.type ?? `http_${response.status}`)
       console.error('[openai] request failed', { status: response.status, code, model: body.model, attempt: attempt + 1 })
       const retryable = [408, 409, 429].includes(response.status) || response.status >= 500
@@ -589,7 +604,7 @@ app.post('/api/ai/forum-floorplan/proposal', async (c) => {
           { role: 'user', content: JSON.stringify({ request: parsed.data.prompt, current_plan: parsed.data.current_plan ?? null, capacity_context: { configured_capacity: event.total_slots, institutional_reservations: categories ?? [], active_registrations: registrations ?? 0 } }) },
         ],
         text: { format: { type: 'json_schema', name: 'forum_layout_intent', strict: true, schema: forumLayoutIntentJsonSchema } },
-  }, 25_000)
+  }, 25_000, { db: supabase, org: event.organization_id, event: event.id })
   if (!aiResult.ok) return c.json({ error: aiResult.message, code: aiResult.code }, aiResult.status === 429 ? 429 : 502)
 
   const text = outputTextFromResponse(aiResult.payload)
@@ -672,7 +687,7 @@ app.post('/api/ai/exhibition-import/analyze', async (c) => {
           source,
         ] }],
         text: { format: { type: 'json_schema', name: 'exhibition_floorplan_detection', strict: true, schema: exhibitionDetectionJsonSchema } },
-  }, 45_000)
+  }, 45_000, { db: supabase, org: importRow.organization_id, event: importRow.event_id })
   if (!aiResult.ok) return fail(`${aiResult.message} (${aiResult.code})`, aiResult.status === 429 ? 429 : 502)
   const text = outputTextFromResponse(aiResult.payload)
   let candidate: unknown
@@ -880,6 +895,7 @@ app.post('/api/admin/clients', async (c) => {
       continue
     }
     const mail = await sendPlatformAccessEmail({ email: c.env.EMAIL, from: c.env.EMAIL_FROM, to: email, actionUrl: account.data.actionLink, kind: 'access_link', organizationName: parsed.data.name.trim(), role: 'owner', manualUrl: `${base}/manual/` })
+    await observeAcceptedEmail(supabase, org.id, null, mail.ok)
     admins.push(mail.ok ? { email, status: account.data.status } : { email, status: 'error', error: `La cuenta se creó, pero el correo falló: ${mail.errorDetail ?? 'error de entrega'}` })
   }
 
@@ -1122,6 +1138,7 @@ app.post('/api/admin/users/:userId/memberships', async (c) => {
     details: previous ? { previous_role: previous.role } : {},
   })
   const result = await sendMembershipNoticeEmail({ email: c.env.EMAIL, from: c.env.EMAIL_FROM, to: user.user.email, organizationName: organization.name, role: parsed.data.role, change, loginUrl: `${c.env.APP_BASE_URL.replace(/\/$/, '')}/admin` })
+  await observeAcceptedEmail(ctx.supabase, organization.id, null, result.ok)
   if (auditError) return c.json({ error: `El acceso se guardó, pero la auditoría falló: ${auditError.message}`, saved: true }, 500)
   if (!result.ok) return c.json({ error: `El acceso se guardó, pero la notificación falló: ${result.errorDetail ?? 'error de entrega'}`, saved: true }, 502)
   return c.json({ ok: true, message: change === 'added' ? 'Organización asignada y usuario notificado' : 'Perfil actualizado y usuario notificado' })
@@ -1157,6 +1174,7 @@ app.delete('/api/admin/users/:userId/memberships/:orgId', async (c) => {
     role,
   })
   const result = await sendMembershipNoticeEmail({ email: c.env.EMAIL, from: c.env.EMAIL_FROM, to: user.user.email, organizationName: organization.name, role, change: 'removed', loginUrl: `${c.env.APP_BASE_URL.replace(/\/$/, '')}/admin` })
+  await observeAcceptedEmail(ctx.supabase, organization.id, null, result.ok)
   if (auditError) return c.json({ error: `El acceso se retiró, pero la auditoría falló: ${auditError.message}`, saved: true }, 500)
   if (!result.ok) return c.json({ error: `El acceso se retiró, pero la notificación falló: ${result.errorDetail ?? 'error de entrega'}`, saved: true }, 502)
   return c.json({ ok: true, message: 'Acceso retirado y usuario notificado' })
@@ -1205,6 +1223,7 @@ app.post('/api/exhibitor-portal/invite', async (c) => {
   if (error) return c.json({ error: error.message }, 400)
   const portalUrl = `${base}/portal/expositor/${event.id}`
   const mailError = await sendPortalInviteEmail({ email: c.env.EMAIL, from: c.env.EMAIL_FROM, to: email, companyName: company.name, eventName: eventDetails?.name ?? 'tu evento', actionUrl: actionLink, portalUrl })
+  await observeAcceptedEmail(supabase, event.organization_id, event.id, !mailError)
   if (mailError) return c.json({ error: `La invitación fue creada, pero el correo no pudo enviarse: ${mailError}`, invitation_created: true }, 502)
   return c.json({ ok: true, email, status: 'invited', invitation_created: true })
 })
@@ -1240,6 +1259,7 @@ app.post('/api/operational-staff/invite', async (c) => {
   if (membershipError) return c.json({ error: membershipError.message }, 400)
   if (!actionLink) return c.json({ ok: true, email, status: 'linked', invitation_created: false })
   const mailError = await sendPortalInviteEmail({ email: c.env.EMAIL, from: c.env.EMAIL_FROM, to: email, companyName: 'Equipo operativo', eventName: event.name, actionUrl: actionLink, portalUrl: `${base}/admin/equipo-operativo` })
+  await observeAcceptedEmail(supabase, event.organization_id, event.id, !mailError)
   if (mailError) return c.json({ error: `La cuenta fue habilitada, pero el correo falló: ${mailError}`, linked: true }, 502)
   return c.json({ ok: true, email, status: 'invited', invitation_created: true })
 })
@@ -1271,6 +1291,7 @@ app.post('/api/providers/notify', async (c) => {
     message = `Tienes una notificación de pago relacionada con "${event.name}".${parsed.data.amount ? ` Monto: ${parsed.data.amount}.` : ''} ${parsed.data.notes ?? ''}`
   }
   const mailError = await sendProviderNoticeEmail({ email: c.env.EMAIL, from: c.env.EMAIL_FROM, to: recipient, providerName: provider.name, eventName: event.name, subject: parsed.data.type === 'quote' ? `Solicitud de cotización — ${event.name}` : `Notificación de pago — ${event.name}`, message })
+  await observeAcceptedEmail(supabase, event.organization_id, event.id, !mailError)
   if (mailError) return c.json({ error: `Registro guardado, pero el correo falló: ${mailError}`, saved: true }, 502)
   return c.json({ ok: true, recipient })
 })

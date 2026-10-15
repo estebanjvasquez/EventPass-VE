@@ -345,3 +345,7 @@ La migración adicional de identidad histórica conserva referencias de cotizaci
 ## Soporte independiente y asistente — 14 de octubre de 2026
 
 Rol independiente administrable por superadmin, bandeja `/soporte`, asignación y conversaciones de tickets, revocación/suspensión inmediata. Asistente por evento/escenario con evidencias persistentes, revisión optimista, invalidación de configuración, aceptación exclusiva del organizador y acta descargable. Migración `20261014174913_support_preparation.sql`, suites de DB y navegador. Guía y siguientes pendientes: `docs/SOPORTE_Y_PREPARACION_2026-10-14.md`. Mantener workflows/artifacts preexistentes fuera de los commits.
+
+## Control comercial y caja — 15 de octubre de 2026
+
+Consumo/tarifas históricas/presupuestos; seguimientos y renovaciones; siete ensayos concurrentes en PostgreSQL 17.11 efímero (incluidos 200 intentos en cuatro conexiones contra cuota 25); cobros parciales, gastos, devoluciones/anulación e indicadores de caja por contrato. Guía: `docs/GESTION_COMERCIAL_ETAPA3_2026-10-15.md`. Migración `20261015155712_commercial_management_stage3.sql`. Nuevas suites `test:management` y `test:concurrency`. Mantener workflows/artifacts preexistentes fuera del commit.

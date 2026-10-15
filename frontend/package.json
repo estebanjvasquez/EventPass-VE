@@ -8,11 +8,12 @@
     "prebuild": "node ../scripts/package-print-bridge.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "oxlint",
+    "lint": "oxlint src",
     "test:badges": "node ../scripts/test-badges-ui.mjs && node ../scripts/test-badge-workflow.mjs",
     "preview": "vite preview",
     "test:commercial": "node ../scripts/test-commercial-ui.mjs",
-    "test:support": "node ../scripts/test-support-preparation-ui.mjs"
+    "test:support": "node ../scripts/test-support-preparation-ui.mjs",
+    "test:management": "node ../scripts/test-commercial-management-ui.mjs && node ../scripts/test-resource-metering.mjs && node ../scripts/test-events-isolation.mjs"
   },
   "dependencies": {
     "@dnd-kit/react": "^0.5.0",
