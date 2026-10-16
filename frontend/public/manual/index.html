@@ -16,45 +16,1518 @@
     .lightbox{position:fixed;inset:0;z-index:200;display:none;align-items:center;justify-content:center;padding:22px;background:#030806ed}.lightbox.open{display:flex}.lightbox img{max-width:95vw;max-height:89dvh;border-radius:11px;box-shadow:0 30px 80px #000}.close{position:absolute;right:20px;top:17px;padding:9px 13px;border:1px solid #53645d;border-radius:10px;background:#111c17;color:#fff;cursor:pointer}.footer{padding:40px 24px;background:var(--dark);color:#dbe6e1}.footer-in{max-width:1300px;margin:auto;display:flex;justify-content:space-between;gap:30px;flex-wrap:wrap}.footer p{max-width:680px;color:#9eafa7}.footer a{color:#74ffca}.toast{position:fixed;right:18px;bottom:18px;z-index:220;padding:11px 15px;border-radius:11px;background:var(--dark);color:#fff;opacity:0;transform:translateY(100px);transition:.25s}.toast.show{opacity:1;transform:none}
     @media(max-width:1000px){.hero-in{grid-template-columns:1fr}.layout{grid-template-columns:1fr}.toc{display:none}.mobile-nav{display:block}.cards{grid-template-columns:1fr 1fr}}@media(max-width:680px){.top-in{padding:0 12px}.brand>span:last-child,.top-btn.print, .search kbd{display:none}.search{margin-left:0}.hero-in{padding:52px 19px}.hero h1{font-size:43px}.layout{padding:18px 12px 60px}.chapter{padding:21px 16px}.chapter-head{gap:11px}.num{flex-basis:38px;height:38px}.cards,.shots{grid-template-columns:1fr}.roles{grid-template-columns:1fr 1fr}.shot figcaption{flex-direction:column}}
     @media print{.top,.toc,.mobile-nav,.rolebox,.actions,.lightbox,.toast{display:none!important}.hero{background:#fff;color:#000}.hero:after{display:none}.hero-in{display:block;padding:25px}.hero p{color:#333}.layout{display:block;padding:0}.chapter{break-inside:avoid;box-shadow:none}.shot{box-shadow:none}}
+  @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
   </style>
 </head>
 <body>
   <a class="skip" href="#main">Saltar al contenido</a>
   <header class="top"><div class="top-in"><a class="brand" href="/"><span class="mark">EF</span><span><small>EventosFácil</small>Manual de usuario</span></a><label class="search"><input id="search" type="search" aria-label="Buscar en el manual" placeholder="Buscar: entradas, QR, campañas…"><kbd>/</kbd></label><button class="top-btn print" id="print">Imprimir</button><a class="top-btn" href="/admin">Abrir app</a></div></header>
-  <section class="hero" id="inicio"><div class="hero-in"><div><span class="eyebrow">Guía interactiva · actualización octubre 2026</span><h1>Domina toda la operación de tu evento.</h1><p>Desde la creación y publicación hasta ventas, talleres, acreditación, check-in, exposición y experiencia del asistente.</p><div class="actions"><a class="btn primary" href="#primeros-pasos">Comenzar recorrido</a><a class="btn secondary" href="#lanzamiento">Checklist de lanzamiento</a></div></div><aside class="rolebox"><h2>Elige tu recorrido</h2><div class="roles"><button class="role active" data-role="all"><b>Todo</b><small>Manual completo</small></button><button class="role" data-role="owner"><b>Organizador</b><small>Configuración</small></button><button class="role" data-role="staff"><b>Operación</b><small>Accesos</small></button><button class="role" data-role="exhibitor"><b>Expositor</b><small>Stand y leads</small></button><button class="role" data-role="attendee"><b>Asistente</b><small>Registro</small></button></div><div class="stats"><div><strong>31</strong><span>capturas reales</span></div><div><strong>4</strong><span>roles</span></div><div><strong>16</strong><span>capítulos</span></div></div></aside></div></section>
+  <section class="hero" id="inicio"><div class="hero-in"><div><span class="eyebrow">Guía interactiva · actualización 16 de octubre de 2026</span><h1>Domina toda la operación de tu evento.</h1><p>Configura eventos profesionales y sociales, distribuye invitaciones, coordina equipos y prepara acreditación e impresión.</p><div class="actions"><a class="btn primary" href="#primeros-pasos">Comenzar recorrido</a><a class="btn secondary" href="#lanzamiento">Checklist de lanzamiento</a></div></div><aside class="rolebox"><h2>Elige tu recorrido</h2><div class="roles"><button class="role active" data-role="all"><b>Todo</b><small>Manual completo</small></button><button class="role" data-role="owner"><b>Administrador</b><small>Configuración</small></button><button class="role" data-role="staff"><b>Operación</b><small>Accesos</small></button><button class="role" data-role="exhibitor"><b>Expositor</b><small>Stand y leads</small></button><button class="role" data-role="collaborator"><b>Colaborador</b><small>Códigos y tareas</small></button><button class="role" data-role="platform"><b>Superadmin</b><small>Plataforma</small></button><button class="role" data-role="attendee"><b>Asistente</b><small>Registro</small></button></div><div class="stats"><div><strong id="screenCount"></strong><span>capturas de la aplicación</span></div><div><strong id="roleCount"></strong><span>perfiles</span></div><div><strong id="chapterCount"></strong><span>capítulos</span></div></div></aside></div></section>
   <div class="mobile-nav"><select id="mobileNav" aria-label="Ir a capítulo"><option value="">Ir a un capítulo…</option></select></div>
-  <div class="layout"><aside class="toc"><div class="toc-head"><b>Tu progreso</b><small id="progressText">0 de 16 revisados</small><div class="bar"><i id="progressBar"></i></div></div><nav id="toc"></nav></aside><main class="content" id="main"><div class="notice"><span>ⓘ</span><div><b>Capturas orientativas</b><p>Los nombres, cantidades y estados son ejemplos del sistema. Tu organización mostrará sus propios datos y módulos según el tipo de evento y tus permisos.</p></div></div><div id="chapters"></div><div class="empty" id="empty"><h2>No encontramos ese tema</h2><p>Prueba “entrada”, “taller”, “sesión”, “QR”, “campaña”, “pago” o “credencial”.</p></div></main></div>
+  <div class="layout"><aside class="toc"><div class="toc-head"><b>Tu progreso</b><small id="progressText">Cargando progreso…</small><div class="bar"><i id="progressBar"></i></div></div><nav id="toc"></nav></aside><main class="content" id="main"><div class="notice"><span>ⓘ</span><div><b>Capturas orientativas</b><p>Las pantallas nuevas se capturaron en la aplicación con datos ficticios, sin operar organizaciones reales. Los módulos dependen del tipo de evento, la configuración, tus permisos y el alcance contratado.</p></div></div><div id="chapters"></div><div class="empty" id="empty"><h2>No encontramos ese tema</h2><p>Prueba “entrada”, “taller”, “sesión”, “QR”, “campaña”, “pago” o “credencial”.</p></div></main></div>
   <footer class="footer"><div class="footer-in"><div class="brand"><span class="mark">EF</span><span><small>EventosFácil</small>Operación de eventos</span></div><p>El manual se publica junto con la aplicación. Para operar, abre el panel con una cuenta autorizada.</p><div><a href="#inicio">Volver arriba</a><br><a href="/admin">Abrir panel</a></div></div></footer>
   <div class="lightbox" id="lightbox" role="dialog" aria-modal="true"><button class="close" id="close">Cerrar ×</button><img id="lightboxImg" alt=""></div><div class="toast" id="toast" role="status"></div>
   <script>
     const C=[
-      {id:'primeros-pasos',t:'Primeros pasos',r:'owner staff exhibitor attendee',lead:'Accede, confirma la organización activa y entiende qué puede hacer cada perfil.',cards:[['Panel interno','Organizadores y operadores entran por /admin/login.'],['Acceso público','Asistentes usan la portada, agenda, registro y plano sin cuenta administrativa.'],['Acceso asignado','Expositores y personal solo ven la empresa, evento o punto autorizado.']],steps:[['Comprueba la organización activa','La marca de la esquina superior identifica el espacio de trabajo actual.'],['Abre el menú de usuario','Encontrarás Inicio, Eventos, Registros, Acreditación, Check-in, Equipo, Patrocinantes, Suscripción y este manual.'],['Confirma el evento activo','Revísalo antes de editar, publicar, confirmar pagos o escanear.'],['Usa cuentas individuales','No compartas credenciales de administrador; asigna permisos mínimos por persona.']],faq:[['Roles y alcance','Owner/admin configura y publica; el equipo opera permisos concretos; el expositor gestiona su empresa; el asistente usa enlaces públicos y su token privado.']]},
-      {id:'panel',t:'Panel y navegación',r:'owner staff',lead:'El inicio resume actividad y ofrece accesos directos a cada área.',img:[['01-panel-principal.png','Panel principal de la organización']],cards:[['Indicadores','Eventos, publicados, registros y empresas son una lectura rápida.'],['Áreas de trabajo','Cada tarjeta abre un flujo operativo.'],['Eventos recientes','Entra directamente al resumen sin pasar por la lista.']],steps:[['Identifica tu organización','Aparece en el encabezado junto al menú de usuario.'],['Elige un área','Eventos configura; Registros revisa; Acreditación imprime; Check-in valida.'],['Usa el menú lateral del evento','Mantiene el contexto al cambiar entre módulos.'],['Vuelve a Todos los eventos','Úsalo antes de trabajar con otra convocatoria.']]},
-      {id:'eventos',t:'Crear y configurar eventos',r:'owner',lead:'Crea exposiciones, foros o eventos sociales y controla su ciclo de vida.',img:[['02-eventos.png','Lista, estados y acciones'],['03-resumen-evento.png','Centro de control del evento'],['17-configuracion-evento.png','Configuración general del evento']],steps:[['Ve a Eventos → Nuevo evento','Define nombre, tipo, fechas, zona horaria, cupo y descripción.'],['Elige la modalidad','Gratuito, pago o invitación. Un evento pago necesita precio y método de pago.'],['Abre Administrar','Los módulos visibles dependen del tipo: agenda para foros; plano y expositores para exposiciones.'],['Revisa el resumen','Controla registros, pagos, confirmados, asistentes, conversión y alertas.'],['Publica o cierra','Publicar abre la experiencia pública; cerrar conserva el histórico y detiene nuevas operaciones.']],note:['warn','Fechas coherentes','Las sesiones deben quedar dentro del evento. Las ventanas de venta usan su zona horaria.'],faq:[['Estados','Configuración/borrador: fuera de la vista pública. Publicado: visible. Cerrado: conserva datos y detiene captación. Archivado: fuera de la operación habitual.']]},
-      {id:'web-publica',t:'Web pública y marca',r:'owner attendee',lead:'Construye la portada compartida, aplica identidad y publica cambios con control.',img:[['16-landing-configuracion.png','Configuración de la web pública'],['16b-constructor-landing.png','Constructor de landing y subdominio'],['24-portada-publica.png','Resultado publicado']],steps:[['Abre Landing pública','Si el evento pertenece a un programa, edita la web desde el programa indicado.'],['Configura el subdominio','Evita cambiarlo después de distribuir enlaces.'],['Elige plantilla','Cumbre, Exposición o Minimal reorganizan los bloques sin borrar recursos.'],['Define identidad','Nombre, titular, textos, paleta, logo, hero, galería y botones.'],['Ordena secciones','Activa presentación, programa, galería y llamado a registro.'],['Guarda borrador y publica','Guardar no cambia la web pública; Publicar sí reemplaza la versión visible.']],note:['warn','Una sola fuente','Los eventos asociados comparten el constructor del programa para evitar configuraciones contradictorias.'],faq:[['Contenido mínimo','Titular claro, fechas, ubicación, propuesta de valor, llamada a registro, agenda, patrocinantes confirmados, plano si aplica y contacto.']]},
-      {id:'entradas',t:'Entradas, pagos y registros',r:'owner attendee',lead:'Controla productos, precios, cupos, periodos de venta y comprobantes.',img:[['05-categorias-entradas.png','Categorías e inventario'],['04-venta-registros.png','Revisión de inscripciones'],['18-registros-global.png','Consulta global de registros'],['25-registro-publico.png','Formulario y resumen público']],steps:[['Activa categorías si las necesitas','Cada participante elige una; su precio sustituye al del asiento.'],['Define producto','Nombre, precio, moneda, cupo, descripción, beneficios e inicio/fin de venta.'],['Configura métodos de pago','Las instrucciones aparecen al cargar el comprobante.'],['Revisa registros','Separa Por revisar, Confirmados y Rechazados.'],['Confirma con criterio','Verifica pago y categoría antes de aprobar.'],['Permite recuperación autónoma','El asistente recupera estado y credencial con su enlace personal.']],flow:['Selecciona entrada','Completa datos','Revisa resumen','Envía','Pago/aprobación','Credencial'],faq:[['Cuándo se bloquea el registro','Si el evento no está publicado, terminó, venció el plazo, requiere invitación o es pago sin precio/métodos preparados. El visitante ve la razón concreta.'],['Token personal','Funciona como enlace privado. No debe publicarse ni reenviarse a terceros.']]},
-      {id:'agenda',t:'Programas y agenda',r:'owner attendee',lead:'Agrupa eventos relacionados y ofrece una agenda pública filtrable.',img:[['23-programas.png','Programas y eventos asociados'],['26-agenda-publica.png','Agenda pública']],steps:[['Crea el programa','Úsalo para convocatorias con varios eventos, como foro y exposición.'],['Asocia eventos','La portada, registro conjunto y algunos catálogos trabajan con el alcance completo.'],['Crea sesiones','Título, horario, sala, descripción, ponentes y publicación.'],['Valida fechas','Cada sesión debe quedar dentro del inicio y fin del evento.'],['Publica la agenda','Elige actividad específica o programa general en la landing.']],note:['','Identidad compartida','El programa domina nombre, logo y marca en la portada y registro conjunto; cada evento conserva sus datos operativos.'],faq:[['Buenas prácticas','Incluye pausas, apertura y cierre; evita solapes de sala; publica solo sesiones confirmadas y revisa la zona horaria.']]},
-      {id:'talleres',t:'Talleres, sesiones y registro unificado',r:'owner attendee',lead:'Vende o reserva cada sesión con precio y cupo propios, tanto de forma independiente como dentro de un programa.',img:[['30-registro-workshop-sesiones.png','Selección pública de sesiones, cupos y total']],cards:[['Taller','Es el evento contenedor. Define fechas generales, modalidad y capacidad máxima compartida.'],['Sesión','Es la unidad que el asistente reserva: horario, tipo, sala, precio, moneda y cupo independiente.'],['Programa','Puede reunir foro, exposición y talleres en un único formulario o mantener registros separados.']],steps:[['Crea un evento de tipo Taller','En Eventos, completa fechas, ubicación, capacidad y estado. Los talleres nuevos pueden ser gratuitos; el cobro se define por sesión.'],['Abre Administrar → Sesiones del taller','Este módulo aparece en el centro de administración y en la navegación lateral del taller.'],['Crea los tipos de sesión','Clasifica actividades como workshop, práctica, certificación, demostración u otra categoría útil para filtros y operación.'],['Configura cada sesión','Define nombre, descripción, inicio, fin, sala o escenario, tipo, precio, moneda, cupo y si permite solapamiento.'],['Elige la política de registro','Incluida se reserva automáticamente; Opcional gratuita permite elegir sin sumar importe; Opcional pagada suma su precio al total.'],['Limita por categoría cuando corresponda','Asocia sesiones a determinadas entradas para crear niveles, pases o grupos con acceso distinto.'],['Publica y prueba el enlace del taller','El formulario exige al menos una sesión disponible, muestra plazas restantes y recalcula el resumen antes de reservar.'],['Configura el programa','En Programas → Accesos elige Separado, Unificado o Híbrido. En Unificado/Híbrido, marca el taller como requerido u opcional.'],['Prueba el registro conjunto','Al seleccionar un taller opcional se habilitan sus sesiones debajo. Cada selección conserva su precio y cupo; las sesiones requeridas ya aparecen incluidas.'],['Amplía cupos si hace falta','Edita la capacidad de la sesión. El sistema mantiene las reservas existentes y publica inmediatamente la nueva disponibilidad.']],flow:['Programa o taller','Selecciona acceso','Elige sesiones','Valida cupos y horarios','Revisa total','Reserva y paga'],note:['warn','Control de inventario','El cupo de cada sesión se controla por separado y también respeta la capacidad general del taller. Una sesión agotada queda deshabilitada. Si dos sesiones no permiten solapamiento, el formulario impide elegir horarios cruzados.'],faq:[['¿Puede todo ser gratuito?','Sí. Usa sesiones incluidas u opcionales gratuitas y modalidad gratuita. Se mantienen selección, cupos y credenciales sin generar cobro.'],['¿Cómo se cobra un paquete completo?','Puedes colocar el precio en el acceso del taller o en cada sesión. Evita duplicarlo: si cada sesión tiene precio, deja el acceso base en cero.'],['¿Qué ocurre en registro separado?','Cada evento usa su propio enlace. El taller sigue mostrando sus sesiones, precios y cupos antes de solicitar los datos del asistente.'],['¿Qué ocurre en registro unificado?','El visitante completa sus datos una sola vez y elige eventos y sesiones desde el mismo formulario. La orden agrupa el total y crea los accesos correspondientes.']]},
-      {id:'promocion',t:'Campañas, conversiones y leads',r:'owner',lead:'Crea enlaces para redes y mide desde la portada hasta el registro.',img:[['13-conversiones.png','Embudo y campañas'],['14-formularios-leads.png','Formularios de interés']],steps:[['Nombra la campaña','Ejemplo: Lanzamiento · Instagram · octubre.'],['Selecciona origen y medio','Distingue red social, publicación orgánica, anuncio, correo o referencia.'],['Elige la página de destino','Para medir el embudo debe llegar a la portada principal.'],['Crea y comparte el enlace','El presupuesto y publicación se manejan en la red social.'],['Analiza el embudo','Compara visitas, aperturas de formulario y registros completados.'],['Crea formularios de interés','Contacto, pre-registro, expositor, patrocinio o newsletter.']],faq:[['Cómo se cuentan','Una visita es una sesión de 30 minutos. Recargar no suma. Registro completado significa inscripción creada, aunque el pago siga pendiente. Los accesos directos al formulario se reportan aparte.'],['Privacidad de leads','Solo miembros autorizados de la organización pueden ver las respuestas.']]},
-      {id:'exposicion',t:'Plano, stands y expositores',r:'owner exhibitor attendee',lead:'Diseña el recinto, asigna empresas y publica un directorio navegable.',img:[['06-plano-exposicion.png','Canvas a escala'],['07-expositores.png','Empresas y asignaciones'],['08-paquetes-comerciales.png','Paquetes y extras'],['09-publicar-exposicion.png','Revisión previa a publicar'],['27-plano-publico.png','Plano público y directorio']],steps:[['Crea el plano','Define dimensiones reales o parte de una plantilla.'],['Carga un blueprint','PDF, PNG, JPG, SVG o DXF; calibra la escala antes de diseñar.'],['Añade objetos','Stands, pasillos, puertas, accesos, salidas, servicios y mobiliario.'],['Guarda versiones','El historial permite recuperar estados anteriores.'],['Crea o importa empresas','Usa la plantilla CSV; los nombres existentes se omiten.'],['Asigna stands y revisa perfiles','Solo los perfiles aprobados y asignados aparecen en público.'],['Publica la exposición','Revisa el directorio y abre la vista pública antes de compartir.']],note:['','Publicación segura','La vista pública muestra información aprobada; no expone datos internos de operación.'],faq:[['Orden recomendado','Diseño → escala → stands → empresas → asignaciones → perfiles aprobados → paquetes → revisión → publicación.']]},
-      {id:'comercial',t:'Patrocinantes, personal y operación',r:'owner staff',lead:'Coordina acuerdos, equipo humano y accesos físicos.',img:[['10-patrocinantes.png','Patrocinantes y activaciones'],['11-personal.png','Personal del evento'],['12-operacion.png','Puertas y verificadores'],['22-proveedores.png','Proveedores y servicios']],steps:[['Mantén el catálogo comercial','Registra empresas y paquetes reutilizables.'],['Asigna el acuerdo','Prospecto y Propuesto son internos; Confirmado, Activo y Cumplido pueden ser públicos.'],['Controla pagos y entregables','Vincula coffee break, lunch, bienvenida, cierre o sesión.'],['Registra personal','Nombre, correo, rol y procedencia: organizador, proveedor o patrocinante.'],['Configura la operación','Vincula puertas, accesos y garitas con puntos reales de check-in.']],faq:[['Roles operativos','Apoyo, check-in, seguridad, anfitrión, técnico y catering. El rol describe la función; los permisos del sistema se asignan aparte.']]},
-      {id:'acreditacion',t:'Acreditación e impresión',r:'owner staff',lead:'Busca participantes, valida su estado y entrega credenciales.',img:[['19-acreditacion.png','Módulo de acreditación']],steps:[['Selecciona el evento','Comprueba el nombre antes de buscar o imprimir.'],['Busca al participante','Por nombre, correo o código.'],['Verifica estado y datos','No imprimas si existe una incidencia pendiente.'],['Revisa la plantilla','El administrador define diseño y formato; el operador usa la versión activa.'],['Imprime una prueba','Valida tamaño, orientación, márgenes, datos y lectura del QR.'],['Registra la entrega','La acción queda asociada al participante y operador.']],note:['warn','Antes de abrir el mostrador','Prueba navegador, impresora, consumibles, lector y un registro real de QA. Mantén disponible la búsqueda manual.'],faq:[['No aparece Imprimir','Comprueba el permiso “Imprimir acreditaciones”, el evento seleccionado y la existencia de una plantilla activa.']]},
-      {id:'checkin',t:'Check-in y control de accesos',r:'owner staff',lead:'Valida credenciales por cámara, lector USB o código manual.',img:[['20-checkin.png','Escáner y validación'],['21-equipo-operativo.png','Equipo y permisos']],steps:[['Crea puntos de acceso','Entrada principal, sala, acceso VIP u otras zonas.'],['Habilita cuentas','Asigna check-in, impresión o gestión de participantes y limita por punto si aplica.'],['Selecciona evento y acceso','El operador debe confirmarlos antes de escanear.'],['Escanea el QR','La respuesta diferencia válido, duplicado, denegado o desconocido.'],['Usa el ingreso manual','Es el respaldo si falla la cámara o se usa lector USB.'],['Abre Control','Filtra ingresados/pendientes, exporta CSV y gestiona incidencias.']],note:['','Continuidad operativa','Si el navegador niega la cámara, el módulo sigue disponible con lector USB o entrada manual.'],faq:[['Duplicados','Comprueba hora y punto, identifica a la persona y abre una incidencia. No fuerces otro ingreso sin validar la causa.']]},
-      {id:'portal-expositor',t:'Portal del expositor',r:'owner exhibitor',lead:'Cada empresa gestiona su información sin acceder a datos de otras.',img:[['28-portal-expositor.png','Inicio y perfil de empresa'],['29-visitas-stand.png','Visitantes del stand']],steps:[['El organizador crea la empresa','La asocia al evento, asigna stand e invita personal.'],['El expositor completa su perfil','Logo, descripción, sector, contacto, web, redes y material.'],['Envía a revisión','El organizador aprueba o solicita cambios.'],['Consulta pagos y documentos','Incluye obligaciones y manual privado del expositor.'],['Gestiona personal','Registra quienes atenderán el stand.'],['Registra visitas','Escanea la credencial desde el stand o usa el campo manual.']],note:['warn','Privacidad','Los datos captados en el stand deben usarse para la finalidad informada y limitarse al personal autorizado.']},
-      {id:'asistente',t:'Experiencia del asistente',r:'owner attendee',lead:'De la convocatoria a la credencial y al acceso presencial.',cards:[['Antes','Consulta fechas, ubicación, agenda, expositores y entradas.'],['Después del registro','Revisa resumen, pago, estado y conserva el enlace personal.'],['Durante el evento','Presenta QR, consulta agenda/plano y guarda favoritos.']],flow:['Portada','Agenda/plano','Registro','Comprobante','Estado','Credencial QR'],steps:[['Abre el enlace oficial','Comprueba evento y dominio.'],['Selecciona la entrada','Revisa precio, moneda, beneficios y cupo.'],['Completa y confirma','Lee el resumen antes de crear la inscripción.'],['Carga el comprobante','Sigue las instrucciones del método de pago.'],['Consulta el estado','Pendiente, confirmado o rechazado indica el próximo paso.'],['Recupera la credencial','Usa la recuperación autónoma si perdiste el enlace.']],faq:[['Registro cerrado','Puede haber terminado, vencido el plazo, requerir invitación o estar pendiente de precio/pago.'],['Pago pendiente','Comprueba el comprobante y espera la revisión; la credencial puede quedar pendiente hasta la aprobación.']]},
-      {id:'lanzamiento',t:'Checklist de lanzamiento',r:'owner staff',lead:'Diez verificaciones automáticas reducen errores antes de abrir.',img:[['15-checklist.png','Preparación del evento']],steps:[['Datos básicos','Nombre y descripción completos.'],['Fechas y cierre','Inicio, fin y plazo de registro coherentes.'],['Modalidad','Registro gratuito, pago o invitación definido.'],['Precio y métodos','Importe conocido y método activo cuando se cobra.'],['Agenda','Todas las sesiones dentro del evento.'],['Elementos recomendados','Pases públicos, formulario de contacto y enlace público.'],['Prueba humana final','Portada móvil/escritorio, registro, correo, recuperación, impresión y check-in.']],note:['danger','No ignores un bloqueo','Cada verificación enlaza al módulo que debes corregir. Guarda y vuelve al checklist.'],faq:[['Bloqueante vs recomendado','Un requisito bloqueante impide publicar o registrar con seguridad. Una recomendación mejora la experiencia pero puede no ser obligatoria.']]},
-      {id:'soporte',t:'Soporte y buenas prácticas',r:'owner staff exhibitor attendee',lead:'Diagnóstico rápido y reglas para una operación segura.',cards:[['Protege accesos','Cuenta individual, permisos mínimos y cierre de sesión en equipos compartidos.'],['Prueba antes','Ensaya el recorrido completo con datos de QA.'],['Opera con respaldo','Búsqueda manual, exportación, consumibles y conexión alternativa.']],steps:[['Cámara','Revisa permiso y otras apps; recarga y usa lector/manual como respaldo.'],['Permisos','Confirma organización, evento, cuenta habilitada y alcance asignado.'],['Publicación','Consulta checklist, fechas, precio, pago y estado.'],['Impresión','Tamaño correcto, escala 100 %, márgenes, orientación y QR legible.'],['Correo','Verifica dirección y spam. Los enlaces de invitación y recuperación caducan y solo funcionan una vez; si aparece “enlace expirado”, solicita uno nuevo y abre únicamente el mensaje más reciente.'],['Datos sensibles','No compartas tokens, listados de participantes ni comprobantes fuera de los canales autorizados.']],faq:[['Glosario','Programa: grupo de eventos. Participación: acceso a un evento. Categoría: producto de entrada. Punto de acceso: puerta/zona. Campaña: enlace atribuible. Lead: respuesta de interés. Blueprint: plano de referencia. Token: código privado.'],['¿Por qué el enlace de acceso dice que expiró?','Puede haber vencido, haberse usado antes o haber sido invalidado al solicitar otro. Pulsa “Solicitar un enlace nuevo”, revisa spam y utiliza el correo más reciente.']]}
-    ];
-    const roleNames={owner:'Organizador',staff:'Equipo operativo',exhibitor:'Expositor',attendee:'Asistente'};
+  {
+    "id": "primeros-pasos",
+    "t": "Primeros pasos",
+    "r": "owner staff exhibitor attendee",
+    "lead": "Accede, confirma la organización activa y entiende qué puede hacer cada perfil.",
+    "cards": [
+      [
+        "Panel interno",
+        "Organizadores y operadores entran por /admin/login."
+      ],
+      [
+        "Acceso público",
+        "Asistentes usan la portada, agenda, registro y plano sin cuenta administrativa."
+      ],
+      [
+        "Acceso asignado",
+        "Expositores y personal solo ven la empresa, evento o punto autorizado."
+      ]
+    ],
+    "steps": [
+      [
+        "Ingresa con tu cuenta",
+        "El equipo entra por /admin/login. Los distribuidores usan el portal de invitaciones del evento."
+      ],
+      [
+        "Comprueba la organización y tu rol",
+        "Owner y admin configuran; el personal opera únicamente con los permisos asignados."
+      ],
+      [
+        "Abre el menú de usuario",
+        "Los administradores disponen de Configuración de la organización. El personal no tiene acceso a las pantallas de configuración."
+      ],
+      [
+        "Confirma el evento activo",
+        "Revísalo antes de trabajar con invitados, pagos, impresión o accesos."
+      ],
+      [
+        "Usa cuentas individuales",
+        "No compartas cuentas administrativas ni enlaces privados de participantes."
+      ]
+    ],
+    "faq": [
+      [
+        "Roles y alcance",
+        "Owner/admin configura y publica; el equipo opera permisos concretos; el expositor gestiona su empresa; el asistente usa enlaces públicos y su token privado."
+      ],
+      [
+        "Permisos insuficientes",
+        "Solicita al administrador que revise tu rol y permisos operativos. Pertenecer a una organización no concede permiso para configurar eventos o vincular programas."
+      ]
+    ]
+  },
+  {
+    "id": "panel",
+    "t": "Panel y navegación",
+    "r": "owner staff",
+    "lead": "El inicio resume actividad y ofrece accesos directos a cada área.",
+    "img": [
+      [
+        "01-panel-principal.png",
+        "Panel principal de la organización"
+      ]
+    ],
+    "cards": [
+      [
+        "Indicadores",
+        "Eventos, publicados, registros y empresas son una lectura rápida."
+      ],
+      [
+        "Áreas de trabajo",
+        "Cada tarjeta abre un flujo operativo."
+      ],
+      [
+        "Eventos recientes",
+        "Entra directamente al resumen sin pasar por la lista."
+      ]
+    ],
+    "steps": [
+      [
+        "Identifica tu organización",
+        "Aparece en el encabezado junto al menú de usuario."
+      ],
+      [
+        "Elige un área",
+        "Eventos configura; Registros revisa; Acreditación imprime; Check-in valida."
+      ],
+      [
+        "Usa el menú lateral del evento",
+        "Mantiene el contexto al cambiar entre módulos."
+      ],
+      [
+        "Vuelve a Todos los eventos",
+        "Úsalo antes de trabajar con otra convocatoria."
+      ],
+      [
+        "Distingue los tres espacios",
+        "Organización: ajustes generales. Evento: invitados y operación propios. Programa: asociación explícita de eventos realizada por un administrador."
+      ]
+    ]
+  },
+  {
+    "id": "organizacion",
+    "t": "Configuración de la organización y permisos",
+    "r": "owner staff",
+    "lead": "Los ajustes generales están separados de los datos de cada evento.",
+    "img": [
+      [
+        "32-configuracion-organizacion.png",
+        "Ajustes generales de la organización"
+      ]
+    ],
+    "cards": [
+      [
+        "Organización",
+        "Identidad de respaldo, subdominio y medios de pago generales."
+      ],
+      [
+        "Evento",
+        "Fechas, modalidad, tipo, invitados, tareas y presupuesto propios."
+      ],
+      [
+        "Personal",
+        "Opera registros, acreditación y accesos con permisos asignados; no modifica configuración."
+      ]
+    ],
+    "steps": [
+      [
+        "Entra como propietario o administrador",
+        "Abre el menú de usuario → Configuración de la organización o la tarjeta del panel."
+      ],
+      [
+        "Revisa medios de pago",
+        "Añade instrucciones verificadas. Los eventos pagos deben contar con un método activo y precio definido."
+      ],
+      [
+        "Configura la identidad de respaldo",
+        "Se utiliza cuando el evento todavía no tiene identidad publicada. La marca específica se edita desde la web pública del evento o programa."
+      ],
+      [
+        "Administra el subdominio",
+        "Guarda el identificador, solicita activación y comprueba su estado antes de distribuir enlaces."
+      ],
+      [
+        "Asigna funciones al equipo",
+        "El administrador gestiona cuentas y permisos. El personal utiliza los módulos de operación autorizados."
+      ]
+    ],
+    "note": [
+      "warn",
+      "Acceso administrativo",
+      "La configuración requiere owner/admin tanto en la interfaz como en el servidor. Introducir una URL manualmente no concede permisos."
+    ]
+  },
+  {
+    "id": "superadmin",
+    "t": "Cambiar entre plataforma y organización",
+    "r": "platform",
+    "lead": "Recorrido reservado a cuentas con permiso de superadmin.",
+    "steps": [
+      [
+        "Actúa como superadmin",
+        "Selecciona Actuar como superadmin en el encabezado o menú de usuario."
+      ],
+      [
+        "Comprueba el contexto",
+        "El encabezado indica Plataforma global. Sus enlaces conservan los dashboards de superadmin aunque tengas una organización asignada."
+      ],
+      [
+        "Gestiona una organización",
+        "Usa la acción de gestionar como cliente cuando necesites trabajar en su contexto."
+      ],
+      [
+        "Regresa a la plataforma",
+        "Selecciona Volver a superadmin o Actuar como superadmin. Para la organización propia utiliza Mi organización."
+      ]
+    ],
+    "note": [
+      "",
+      "Permisos independientes",
+      "Ser administrador de una organización no convierte la cuenta en superadmin."
+    ]
+  },
+  {
+    "id": "eventos",
+    "t": "Crear y configurar eventos",
+    "r": "owner",
+    "lead": "Cada organización puede crear eventos profesionales y sociales con configuración independiente.",
+    "img": [
+      [
+        "02-eventos.png",
+        "Lista de eventos y estados"
+      ],
+      [
+        "31-nuevo-evento-social.png",
+        "Nuevo evento social: subtipo, finalidad y módulos"
+      ]
+    ],
+    "steps": [
+      [
+        "Abre Eventos → Nuevo evento",
+        "Disponible para propietarios y administradores. Indica nombre, descripción, fechas y cupo."
+      ],
+      [
+        "Selecciona el formato",
+        "Foro / encuentro profesional, exposición, taller o social. La organización puede utilizar cualquiera de ellos."
+      ],
+      [
+        "Elige el subtipo",
+        "En Social: encuentro social, boda, fiesta/aniversario, graduación o gala/recepción. En Foro: foro, congreso/conferencia, presentación de producto o encuentro corporativo."
+      ],
+      [
+        "Define la finalidad",
+        "Comercial/profesional, celebración privada, benéfico/recaudación o institucional/académico. Una gala benéfica sigue siendo social; un lanzamiento puede tener finalidad benéfica."
+      ],
+      [
+        "Decide si necesitas grupos y mesas",
+        "Los sociales lo activan inicialmente. Puedes habilitarlo expresamente en un profesional, por ejemplo para una cena corporativa."
+      ],
+      [
+        "Configura el registro",
+        "Gratuito, pago o invitación. Al seleccionar Social se propone invitación; comprueba la modalidad antes de guardar."
+      ],
+      [
+        "Administra el evento",
+        "Los módulos dependen del formato. El profesional no muestra Grupos y mesas salvo que se active para ese evento."
+      ],
+      [
+        "Revisa y publica",
+        "Completa los requisitos de lanzamiento y prueba el recorrido antes de compartir enlaces."
+      ]
+    ],
+    "note": [
+      "warn",
+      "Fechas coherentes",
+      "Las sesiones deben quedar dentro del evento. Las ventanas de venta usan su zona horaria."
+    ],
+    "faq": [
+      [
+        "Estados",
+        "Configuración/borrador: fuera de la vista pública. Publicado: visible. Cerrado: conserva datos y detiene captación. Archivado: fuera de la operación habitual."
+      ],
+      [
+        "Cambiar formato con participantes",
+        "El sistema impide cambiar el formato si ya existen registros o invitaciones. El subtipo debe corresponder al formato."
+      ],
+      [
+        "Desactivar grupos",
+        "Si existen hogares, conserva el módulo para seguir administrando sus datos. No se borran invitados al cambiar la presentación."
+      ]
+    ]
+  },
+  {
+    "id": "web-publica",
+    "t": "Web pública y marca",
+    "r": "owner attendee",
+    "lead": "Construye la portada compartida, aplica identidad y publica cambios con control.",
+    "img": [
+      [
+        "16-landing-configuracion.png",
+        "Configuración de la web pública"
+      ],
+      [
+        "24-portada-publica.png",
+        "Resultado publicado"
+      ]
+    ],
+    "steps": [
+      [
+        "Abre Landing pública",
+        "Si el evento pertenece a un programa, edita la web desde el programa indicado."
+      ],
+      [
+        "Configura el subdominio de la organización",
+        "Abre Configuración de la organización desde el menú de usuario; evita modificarlo después de distribuir enlaces."
+      ],
+      [
+        "Elige plantilla",
+        "Cumbre, Exposición o Minimal reorganizan los bloques sin borrar recursos."
+      ],
+      [
+        "Define identidad",
+        "Nombre, titular, textos, paleta, logo, hero, galería y botones."
+      ],
+      [
+        "Ordena secciones",
+        "Activa presentación, programa, galería y llamado a registro."
+      ],
+      [
+        "Guarda borrador y publica",
+        "Guardar no cambia la web pública; Publicar sí reemplaza la versión visible."
+      ]
+    ],
+    "note": [
+      "warn",
+      "Una sola fuente",
+      "Los eventos asociados comparten el constructor del programa para evitar configuraciones contradictorias."
+    ],
+    "faq": [
+      [
+        "Contenido mínimo",
+        "Titular claro, fechas, ubicación, propuesta de valor, llamada a registro, agenda, patrocinantes confirmados, plano si aplica y contacto."
+      ]
+    ]
+  },
+  {
+    "id": "entradas",
+    "t": "Entradas, pagos y registros",
+    "r": "owner attendee",
+    "lead": "Controla productos, precios, cupos, periodos de venta y comprobantes.",
+    "img": [
+      [
+        "05-categorias-entradas.png",
+        "Categorías e inventario"
+      ],
+      [
+        "04-venta-registros.png",
+        "Revisión de inscripciones"
+      ],
+      [
+        "18-registros-global.png",
+        "Consulta global de registros"
+      ],
+      [
+        "25-registro-publico.png",
+        "Formulario y resumen público"
+      ]
+    ],
+    "steps": [
+      [
+        "Activa categorías si las necesitas",
+        "Cada participante elige una; su precio sustituye al del asiento."
+      ],
+      [
+        "Define producto",
+        "Nombre, precio, moneda, cupo, descripción, beneficios e inicio/fin de venta."
+      ],
+      [
+        "Configura métodos de pago",
+        "El administrador los gestiona en Configuración de la organización. Comprueba cuáles se aplican al evento antes de abrir cobros."
+      ],
+      [
+        "Revisa registros",
+        "Separa Por revisar, Confirmados y Rechazados."
+      ],
+      [
+        "Confirma con criterio",
+        "Verifica pago y categoría antes de aprobar."
+      ],
+      [
+        "Permite recuperación autónoma",
+        "El asistente recupera estado y credencial con su enlace personal."
+      ]
+    ],
+    "flow": [
+      "Selecciona entrada",
+      "Completa datos",
+      "Revisa resumen",
+      "Envía",
+      "Pago/aprobación",
+      "Credencial"
+    ],
+    "faq": [
+      [
+        "Cuándo se bloquea el registro",
+        "Si el evento no está publicado, terminó, venció el plazo, requiere invitación o es pago sin precio/métodos preparados. El visitante ve la razón concreta."
+      ],
+      [
+        "Token personal",
+        "Funciona como enlace privado. No debe publicarse ni reenviarse a terceros."
+      ]
+    ]
+  },
+  {
+    "id": "agenda",
+    "t": "Programas y agenda",
+    "r": "owner attendee",
+    "lead": "Agrupa eventos relacionados y ofrece una agenda pública filtrable.",
+    "img": [
+      [
+        "23-programas.png",
+        "Programas y eventos asociados"
+      ],
+      [
+        "26-agenda-publica.png",
+        "Agenda pública"
+      ]
+    ],
+    "steps": [
+      [
+        "Crea el programa",
+        "Úsalo para convocatorias con varios eventos, como foro y exposición."
+      ],
+      [
+        "Vincula expresamente los eventos",
+        "Solo un administrador puede asociarlos. Compartir organización no los une automáticamente. Configura qué componentes forman parte del registro o del acceso combinado."
+      ],
+      [
+        "Crea sesiones",
+        "Título, horario, sala, descripción, ponentes y publicación."
+      ],
+      [
+        "Valida fechas",
+        "Cada sesión debe quedar dentro del inicio y fin del evento."
+      ],
+      [
+        "Publica la agenda",
+        "Elige actividad específica o programa general en la landing."
+      ]
+    ],
+    "note": [
+      "warn",
+      "Información separada",
+      "Un programa permite los flujos conjuntos expresamente configurados; no fusiona hogares, tareas ni presupuestos. Las identidades del mismo correo se mantienen separadas entre programas distintos."
+    ],
+    "faq": [
+      [
+        "Buenas prácticas",
+        "Incluye pausas, apertura y cierre; evita solapes de sala; publica solo sesiones confirmadas y revisa la zona horaria."
+      ],
+      [
+        "Desvincular un componente",
+        "La credencial combinada deja de autorizar el evento desvinculado. Las asignaciones con componentes retirados necesitan revisión: revoca códigos disponibles y crea una asignación válida."
+      ],
+      [
+        "Eventos privados dentro de un programa",
+        "Los componentes privados no se hacen públicos por pertenecer a un programa con componentes visibles. No se elude la invitación individual."
+      ]
+    ]
+  },
+  {
+    "id": "talleres",
+    "t": "Talleres, sesiones y registro unificado",
+    "r": "owner attendee",
+    "lead": "Vende o reserva cada sesión con precio y cupo propios, tanto de forma independiente como dentro de un programa.",
+    "img": [
+      [
+        "30-registro-workshop-sesiones.png",
+        "Selección pública de sesiones, cupos y total"
+      ]
+    ],
+    "cards": [
+      [
+        "Taller",
+        "Es el evento contenedor. Define fechas generales, modalidad y capacidad máxima compartida."
+      ],
+      [
+        "Sesión",
+        "Es la unidad que el asistente reserva: horario, tipo, sala, precio, moneda y cupo independiente."
+      ],
+      [
+        "Programa",
+        "Puede reunir foro, exposición y talleres en un único formulario o mantener registros separados."
+      ]
+    ],
+    "steps": [
+      [
+        "Crea un evento de tipo Taller",
+        "En Eventos, completa fechas, ubicación, capacidad y estado. Los talleres nuevos pueden ser gratuitos; el cobro se define por sesión."
+      ],
+      [
+        "Abre Administrar → Sesiones del taller",
+        "Este módulo aparece en el centro de administración y en la navegación lateral del taller."
+      ],
+      [
+        "Crea los tipos de sesión",
+        "Clasifica actividades como workshop, práctica, certificación, demostración u otra categoría útil para filtros y operación."
+      ],
+      [
+        "Configura cada sesión",
+        "Define nombre, descripción, inicio, fin, sala o escenario, tipo, precio, moneda, cupo y si permite solapamiento."
+      ],
+      [
+        "Elige la política de registro",
+        "Incluida se reserva automáticamente; Opcional gratuita permite elegir sin sumar importe; Opcional pagada suma su precio al total."
+      ],
+      [
+        "Limita por categoría cuando corresponda",
+        "Asocia sesiones a determinadas entradas para crear niveles, pases o grupos con acceso distinto."
+      ],
+      [
+        "Publica y prueba el enlace del taller",
+        "El formulario exige al menos una sesión disponible, muestra plazas restantes y recalcula el resumen antes de reservar."
+      ],
+      [
+        "Configura el programa",
+        "En Programas → Accesos elige Separado, Unificado o Híbrido. En Unificado/Híbrido, marca el taller como requerido u opcional."
+      ],
+      [
+        "Prueba el registro conjunto",
+        "Al seleccionar un taller opcional se habilitan sus sesiones debajo. Cada selección conserva su precio y cupo; las sesiones requeridas ya aparecen incluidas."
+      ],
+      [
+        "Amplía cupos si hace falta",
+        "Edita la capacidad de la sesión. El sistema mantiene las reservas existentes y publica inmediatamente la nueva disponibilidad."
+      ]
+    ],
+    "flow": [
+      "Programa o taller",
+      "Selecciona acceso",
+      "Elige sesiones",
+      "Valida cupos y horarios",
+      "Revisa total",
+      "Reserva y paga"
+    ],
+    "note": [
+      "warn",
+      "Control de inventario",
+      "El cupo de cada sesión se controla por separado y también respeta la capacidad general del taller. Una sesión agotada queda deshabilitada. Si dos sesiones no permiten solapamiento, el formulario impide elegir horarios cruzados."
+    ],
+    "faq": [
+      [
+        "¿Puede todo ser gratuito?",
+        "Sí. Usa sesiones incluidas u opcionales gratuitas y modalidad gratuita. Se mantienen selección, cupos y credenciales sin generar cobro."
+      ],
+      [
+        "¿Cómo se cobra un paquete completo?",
+        "Puedes colocar el precio en el acceso del taller o en cada sesión. Evita duplicarlo: si cada sesión tiene precio, deja el acceso base en cero."
+      ],
+      [
+        "¿Qué ocurre en registro separado?",
+        "Cada evento usa su propio enlace. El taller sigue mostrando sus sesiones, precios y cupos antes de solicitar los datos del asistente."
+      ],
+      [
+        "¿Qué ocurre en registro unificado?",
+        "El visitante completa sus datos una sola vez y elige eventos y sesiones desde el mismo formulario. La orden agrupa el total y crea los accesos correspondientes."
+      ]
+    ]
+  },
+  {
+    "id": "invitaciones",
+    "t": "Invitaciones privadas y códigos de un solo uso",
+    "r": "owner collaborator",
+    "lead": "Distribuye cupos de expositores, patrocinantes, ponentes y organizadores con control de acceso.",
+    "img": [
+      [
+        "33-invitaciones-profesionales.png",
+        "Invitaciones y operación en un evento profesional"
+      ]
+    ],
+    "steps": [
+      [
+        "Configura registro por invitación",
+        "En el evento, elige la modalidad Invitación. Después abre Administrar → Invitaciones y operación."
+      ],
+      [
+        "Aprueba las reglas",
+        "Decide si el aforo se reserva al emitir cada código o al registrarse. Define privacidad, plazo de respuesta y si el invitador puede ver nombres de sus propios registrados."
+      ],
+      [
+        "Crea beneficios y asignaciones",
+        "Define cantidad aprobada, responsable, origen del acuerdo y accesos. Los beneficios guardan una revisión; cambiarlos no modifica asignaciones ya aprobadas."
+      ],
+      [
+        "Asigna una cuenta distribuidora",
+        "El correo debe corresponder a una cuenta existente. Entrega la URL del portal del evento al colaborador."
+      ],
+      [
+        "Selecciona accesos explícitos",
+        "Exposición, foro, social y VIP se ofrecen según el evento y sus componentes vinculados. VIP no sustituye a los demás derechos. Las sesiones requieren selección y reserva específicas."
+      ],
+      [
+        "Emite y descarga los códigos",
+        "Los enlaces privados solo se muestran al emitirlos. Descárgalos y entrégalos de forma individual. El código queda bloqueado y asociado a la persona al completar el registro."
+      ],
+      [
+        "Controla entregas y canjes",
+        "Marcar Entregado es una declaración del distribuidor; el registro y la asistencia son estados distintos."
+      ],
+      [
+        "Transfiere únicamente códigos disponibles",
+        "Solo el administrador decide la transferencia. El enlace anterior se invalida y se emite uno nuevo. Un código canjeado no se reutiliza."
+      ]
+    ],
+    "note": [
+      "warn",
+      "Privacidad y aforo",
+      "La política de reserva queda fijada al emitir invitaciones. No publiques códigos, enlaces de grupos ni credenciales en redes o listas abiertas."
+    ],
+    "faq": [
+      [
+        "Vincular otro evento",
+        "Debe pertenecer a un programa compartido creado por un administrador. Estar en la misma organización no es suficiente."
+      ],
+      [
+        "Cancelar o reactivar",
+        "La baja anula la credencial. Reactivar comprueba el aforo y genera una credencial nueva; no libera el código para otra persona."
+      ]
+    ]
+  },
+  {
+    "id": "portal-colaborador",
+    "t": "Portal de colaboradores y distribuidores",
+    "r": "owner collaborator",
+    "lead": "Cada colaborador accede solo a sus invitaciones o a las tareas que le asignaron.",
+    "steps": [
+      [
+        "Recibe la URL del organizador",
+        "El portal utiliza /portal/invitaciones/ seguido del identificador del evento."
+      ],
+      [
+        "Ingresa con el correo asignado",
+        "Puedes crear una cuenta de colaborador y confirmar el correo. No necesitas crear una organización para utilizar este portal."
+      ],
+      [
+        "Comprueba tus asignaciones",
+        "Si no hay acceso, pide al organizador que asigne tu cuenta al evento."
+      ],
+      [
+        "Distribuye tus códigos",
+        "Emite dentro del cupo aprobado y marca los entregados. Solo verás nombres si el organizador lo autorizó; no se muestran contactos."
+      ],
+      [
+        "Actualiza tus tareas",
+        "El proveedor asignado utiliza Mis tareas y actualiza el estado. No recibe acceso al presupuesto ni a la configuración."
+      ]
+    ],
+    "note": [
+      "",
+      "Cuenta y enlace no son lo mismo",
+      "Crear una cuenta no concede asignaciones automáticamente. Los enlaces personales de registro no sustituyen al acceso del colaborador."
+    ]
+  },
+  {
+    "id": "sociales",
+    "t": "Bodas, grupos, RSVP y mesas",
+    "r": "owner attendee",
+    "lead": "Gestiona invitados y acompañantes sin convertir todos los eventos de la organización en sociales.",
+    "img": [
+      [
+        "36-grupos-rsvp-mesas.png",
+        "Hogares, grupos e importación de integrantes"
+      ],
+      [
+        "37-asignacion-mesas.png",
+        "Respuestas y asignación de mesas"
+      ],
+      [
+        "38-respuesta-invitado.png",
+        "Respuesta del invitado mediante enlace privado"
+      ]
+    ],
+    "steps": [
+      [
+        "Crea el evento social",
+        "Selecciona el subtipo y la finalidad. Comprueba que Grupos, acompañantes, RSVP y mesas esté habilitado."
+      ],
+      [
+        "Aprueba reglas de invitación",
+        "Define aforo, privacidad y plazo de respuesta antes de emitir enlaces."
+      ],
+      [
+        "Abre Invitaciones y operación → Grupos y mesas",
+        "Crea un hogar o grupo, su representante y el máximo de plazas, incluidos acompañantes."
+      ],
+      [
+        "Añade integrantes",
+        "Cada plaza mantiene nombre y respuesta propios. El correo individual es opcional; no repitas el correo del representante para todos."
+      ],
+      [
+        "Importa con vista previa",
+        "Pega nombre, apellido y correo opcional separados por tabulaciones. Revisa los datos y posibles duplicados antes de confirmar."
+      ],
+      [
+        "Entrega el enlace del grupo",
+        "Su representante puede confirmar o declinar cada integrante. El enlace es privado; renovarlo invalida el anterior."
+      ],
+      [
+        "Crea y asigna mesas",
+        "Define capacidad y asigna invitados confirmados. El sistema comprueba plazas disponibles."
+      ],
+      [
+        "Revisa cambios de asistencia",
+        "Una declinación cancela la credencial. Para volver a confirmar, el organizador revisa el aforo y reactiva la participación."
+      ],
+      [
+        "Descarga el listado operativo",
+        "Exporta invitados, respuestas y mesas para el protocolo. Conserva sus datos dentro del evento."
+      ]
+    ],
+    "note": [
+      "warn",
+      "Finalidad benéfica",
+      "Una gala puede marcarse como Benéfico / recaudación y utilizar patrocinantes y presupuesto. Esta finalidad no añade por sí sola una pasarela de donaciones ni comprobantes fiscales."
+    ],
+    "faq": [
+      [
+        "¿Un laboratorio puede organizar una cena?",
+        "Sí. Puede activar grupos y mesas para ese evento profesional sin mostrar subtipos de boda ni modificar sus otros eventos."
+      ],
+      [
+        "¿Incluye plano visual de mesas?",
+        "La pantalla actual administra mesas, capacidades y asignaciones mediante formularios; no es un diseñador de mesas por arrastrar y soltar."
+      ]
+    ]
+  },
+  {
+    "id": "produccion",
+    "t": "Producción, proveedores y tareas",
+    "r": "owner collaborator",
+    "lead": "Coordina el trabajo del evento con responsables, fechas y dependencias.",
+    "img": [
+      [
+        "34-produccion-proveedores.png",
+        "Tareas y responsables de producción"
+      ]
+    ],
+    "steps": [
+      [
+        "Abre Invitaciones y operación → Producción",
+        "Selecciona el evento correcto antes de crear una tarea."
+      ],
+      [
+        "Define tarea y responsable",
+        "Indica proveedor o área, responsable y fecha si corresponde."
+      ],
+      [
+        "Asigna la cuenta del proveedor",
+        "Usa su correo para que pueda consultar y actualizar únicamente sus tareas en el portal."
+      ],
+      [
+        "Ordena dependencias",
+        "Relaciona una tarea con la que debe completarse antes."
+      ],
+      [
+        "Sigue el estado",
+        "Pendiente, En curso o Completada. Revisa las advertencias de atraso."
+      ],
+      [
+        "Revisa antes de editar",
+        "Si otro administrador modificó la tarea, recarga para evitar sobrescribir cambios."
+      ]
+    ],
+    "note": [
+      "",
+      "Ámbito del evento",
+      "Las tareas y sus dependencias no se copian automáticamente a otras convocatorias."
+    ]
+  },
+  {
+    "id": "presupuesto",
+    "t": "Presupuesto del organizador",
+    "r": "owner",
+    "lead": "Registra importes USD/VES y conserva la tasa histórica de cada partida.",
+    "img": [
+      [
+        "35-presupuesto-organizador.png",
+        "Presupuesto, etapas y flujo pagado"
+      ]
+    ],
+    "steps": [
+      [
+        "Abre Invitaciones y operación → Presupuesto",
+        "Disponible al administrador del evento; el proveedor no ve esta información."
+      ],
+      [
+        "Identifica el concepto",
+        "Añade proveedor o contraparte, ingreso/gasto y etapa."
+      ],
+      [
+        "Registra la moneda original",
+        "Selecciona USD o VES e indica el importe completo de la partida."
+      ],
+      [
+        "Guarda la referencia de tasa",
+        "Para VES introduce Bs por USD, fuente y fecha. Para USD introduce 1. La tasa es manual y no se actualiza automáticamente."
+      ],
+      [
+        "Distingue las etapas",
+        "Previsto, Comprometido, Devengado o Pagado. Cada partida está en una etapa; las etapas no se suman entre sí."
+      ],
+      [
+        "Controla el flujo de caja",
+        "El resumen pagado compara ingresos y gastos pagados, no constituye utilidad contable."
+      ],
+      [
+        "Corrige con trazabilidad",
+        "Cambia de etapa o anula con motivo. Los importes y referencias históricos no se sobrescriben."
+      ],
+      [
+        "Exporta el presupuesto",
+        "Descarga el reporte del evento y limita su circulación a personas autorizadas."
+      ]
+    ],
+    "note": [
+      "",
+      "Alcance",
+      "Es un control operativo del organizador. No sustituye contabilidad, conciliación bancaria automática ni facturación fiscal."
+    ]
+  },
+  {
+    "id": "promocion",
+    "t": "Campañas, conversiones y leads",
+    "r": "owner",
+    "lead": "Crea enlaces para redes y mide desde la portada hasta el registro.",
+    "img": [
+      [
+        "13-conversiones.png",
+        "Embudo y campañas"
+      ],
+      [
+        "14-formularios-leads.png",
+        "Formularios de interés"
+      ]
+    ],
+    "steps": [
+      [
+        "Nombra la campaña",
+        "Ejemplo: Lanzamiento · Instagram · octubre."
+      ],
+      [
+        "Selecciona origen y medio",
+        "Distingue red social, publicación orgánica, anuncio, correo o referencia."
+      ],
+      [
+        "Elige la página de destino",
+        "Para medir el embudo debe llegar a la portada principal."
+      ],
+      [
+        "Crea y comparte el enlace",
+        "El presupuesto y publicación se manejan en la red social."
+      ],
+      [
+        "Analiza el embudo",
+        "Compara visitas, aperturas de formulario y registros completados."
+      ],
+      [
+        "Crea formularios de interés",
+        "Contacto, pre-registro, expositor, patrocinio o newsletter."
+      ]
+    ],
+    "faq": [
+      [
+        "Cómo se cuentan",
+        "Una visita es una sesión de 30 minutos. Recargar no suma. Registro completado significa inscripción creada, aunque el pago siga pendiente. Los accesos directos al formulario se reportan aparte."
+      ],
+      [
+        "Privacidad de leads",
+        "Solo miembros autorizados de la organización pueden ver las respuestas."
+      ]
+    ]
+  },
+  {
+    "id": "exposicion",
+    "t": "Plano, stands y expositores",
+    "r": "owner exhibitor attendee",
+    "lead": "Diseña el recinto, asigna empresas y publica un directorio navegable.",
+    "img": [
+      [
+        "06-plano-exposicion.png",
+        "Canvas a escala"
+      ],
+      [
+        "07-expositores.png",
+        "Empresas y asignaciones"
+      ],
+      [
+        "08-paquetes-comerciales.png",
+        "Paquetes y extras"
+      ],
+      [
+        "09-publicar-exposicion.png",
+        "Revisión previa a publicar"
+      ],
+      [
+        "27-plano-publico.png",
+        "Plano público y directorio"
+      ]
+    ],
+    "steps": [
+      [
+        "Crea el plano",
+        "Define dimensiones reales o parte de una plantilla."
+      ],
+      [
+        "Carga un blueprint",
+        "PDF, PNG, JPG, SVG o DXF; calibra la escala antes de diseñar."
+      ],
+      [
+        "Añade objetos",
+        "Stands, pasillos, puertas, accesos, salidas, servicios y mobiliario."
+      ],
+      [
+        "Guarda versiones",
+        "El historial permite recuperar estados anteriores."
+      ],
+      [
+        "Crea o importa empresas",
+        "Usa la plantilla CSV; los nombres existentes se omiten."
+      ],
+      [
+        "Asigna stands y revisa perfiles",
+        "Solo los perfiles aprobados y asignados aparecen en público."
+      ],
+      [
+        "Publica la exposición",
+        "Revisa el directorio y abre la vista pública antes de compartir."
+      ]
+    ],
+    "note": [
+      "",
+      "Publicación segura",
+      "La vista pública muestra información aprobada; no expone datos internos de operación."
+    ],
+    "faq": [
+      [
+        "Orden recomendado",
+        "Diseño → escala → stands → empresas → asignaciones → perfiles aprobados → paquetes → revisión → publicación."
+      ]
+    ]
+  },
+  {
+    "id": "comercial",
+    "t": "Patrocinantes, personal y operación",
+    "r": "owner staff",
+    "lead": "Coordina acuerdos, equipo humano y accesos físicos.",
+    "img": [
+      [
+        "10-patrocinantes.png",
+        "Patrocinantes y activaciones"
+      ],
+      [
+        "11-personal.png",
+        "Personal del evento"
+      ],
+      [
+        "12-operacion.png",
+        "Puertas y verificadores"
+      ],
+      [
+        "22-proveedores.png",
+        "Proveedores y servicios"
+      ]
+    ],
+    "steps": [
+      [
+        "Mantén el catálogo comercial",
+        "Registra empresas y paquetes reutilizables."
+      ],
+      [
+        "Asigna el acuerdo",
+        "Prospecto y Propuesto son internos; Confirmado, Activo y Cumplido pueden ser públicos."
+      ],
+      [
+        "Controla pagos y entregables",
+        "Vincula coffee break, lunch, bienvenida, cierre o sesión."
+      ],
+      [
+        "Registra personal",
+        "Nombre, correo, rol y procedencia: organizador, proveedor o patrocinante."
+      ],
+      [
+        "Configura la operación",
+        "Vincula puertas, accesos y garitas con puntos reales de check-in."
+      ],
+      [
+        "Separa configuración y ejecución",
+        "Los administradores crean acuerdos, personal y puntos de acceso. El personal ejecuta solo las acciones operativas que tiene asignadas."
+      ]
+    ],
+    "faq": [
+      [
+        "Roles operativos",
+        "Apoyo, check-in, seguridad, anfitrión, técnico y catering. El rol describe la función; los permisos del sistema se asignan aparte."
+      ]
+    ]
+  },
+  {
+    "id": "acreditacion",
+    "t": "Mostrador de acreditación",
+    "r": "owner staff",
+    "lead": "El operador busca, acredita, imprime y entrega; el administrador configura diseños y estaciones por separado.",
+    "img": [
+      [
+        "19-acreditacion.png",
+        "Módulo de acreditación"
+      ]
+    ],
+    "steps": [
+      [
+        "Selecciona el evento",
+        "Comprueba el nombre antes de buscar o imprimir."
+      ],
+      [
+        "Busca al participante",
+        "Por nombre, correo o código."
+      ],
+      [
+        "Verifica estado y datos",
+        "No imprimas si existe una incidencia pendiente."
+      ],
+      [
+        "Usa la plantilla activa",
+        "El administrador diseña y publica en Badge Designer. El operador del mostrador imprime con la versión activa."
+      ],
+      [
+        "Imprime una prueba",
+        "Valida tamaño, orientación, márgenes, datos y lectura del QR."
+      ],
+      [
+        "Registra la entrega",
+        "La acción queda asociada al participante y operador."
+      ]
+    ],
+    "note": [
+      "warn",
+      "Antes de abrir el mostrador",
+      "Prueba navegador, impresora, consumibles, lector y un registro real de QA. Mantén disponible la búsqueda manual."
+    ],
+    "faq": [
+      [
+        "No aparece Imprimir",
+        "Comprueba el permiso “Imprimir acreditaciones”, el evento seleccionado y la existencia de una plantilla activa."
+      ],
+      [
+        "Impresión no equivale a ingreso",
+        "En registros por invitación, imprimir no autoriza ni registra acceso. El QR se valida en el punto real según sus derechos, fechas y sesiones."
+      ],
+      [
+        "Estados de impresión",
+        "Enviada o en cola no significa entregada. Revisa fallos y confirma la entrega únicamente cuando corresponda."
+      ]
+    ]
+  },
+  {
+    "id": "centro-impresion",
+    "t": "Centro de impresión y conector Windows",
+    "r": "owner staff",
+    "lead": "El administrador prepara estaciones e impresoras; el equipo usa los permisos de acreditación asignados.",
+    "img": [
+      [
+        "39-centro-impresion-conector.png",
+        "Descarga e instalación del conector local"
+      ]
+    ],
+    "steps": [
+      [
+        "Abre Centro de impresión",
+        "El propietario o administrador lo abre desde el panel. Selecciona el evento que vas a preparar."
+      ],
+      [
+        "Descarga el conector para Windows",
+        "En Estación de impresión → Instala el conector local, pulsa Descargar conector para Windows."
+      ],
+      [
+        "Instala impresora y controlador",
+        "Comprueba primero que Windows imprime una página de prueba. El conector detecta impresoras instaladas; no instala sus controladores."
+      ],
+      [
+        "Prepara el entorno",
+        "Instala Node.js LTS. Descarga y extrae todo el ZIP en una carpeta permanente. La instalación necesita Internet."
+      ],
+      [
+        "Ejecuta instalar-windows.ps1",
+        "Usa Ejecutar con PowerShell. El instalador configura el inicio con la sesión de Windows y muestra el código de vinculación."
+      ],
+      [
+        "Vincula la estación",
+        "Introduce dirección local y código, pulsa Probar conexión y selecciona la impresora. No compartas el código de vinculación."
+      ],
+      [
+        "Calibra e imprime una prueba",
+        "Comprueba soporte, orientación, escala, desplazamientos y lectura del QR antes de imprimir un lote."
+      ],
+      [
+        "Supervisa cola y lotes",
+        "Revisa pendientes y fallos; no repitas un trabajo enviado sin comprobar el estado en la estación y en Windows."
+      ]
+    ],
+    "note": [
+      "warn",
+      "Compatibilidad",
+      "La impresión local requiere PC Windows, controlador, conector compatible y prueba del modelo de impresora. El navegador y un lector USB no garantizan operación totalmente offline."
+    ],
+    "faq": [
+      [
+        "Bridge sin conexión",
+        "Revisa que el servicio esté iniciado, dirección y código sean correctos, y la impresora esté disponible en Windows. El README del ZIP incluye diagnóstico."
+      ],
+      [
+        "Respaldo por diálogo del sistema",
+        "Puede utilizarse cuando corresponda, comprobando tamaño y escala. Una impresión pendiente no debe marcarse como entregada."
+      ]
+    ]
+  },
+  {
+    "id": "badge-designer",
+    "t": "Badge Designer y versiones de credenciales",
+    "r": "owner",
+    "lead": "Diseña y publica una credencial para cada tipo de participante.",
+    "img": [
+      [
+        "40-badge-designer.png",
+        "Editor de credenciales y vista previa"
+      ]
+    ],
+    "steps": [
+      [
+        "Abre Badge Designer",
+        "Acceso de propietarios y administradores. Selecciona el evento y el tipo de participante."
+      ],
+      [
+        "Configura el soporte",
+        "Define dimensiones, orientación, caras y elementos del diseño."
+      ],
+      [
+        "Añade contenido",
+        "Usa textos, imágenes, campos de participante y QR. Comprueba que el código sea legible."
+      ],
+      [
+        "Revisa la vista previa",
+        "Los datos de ejemplo sirven para validar el diseño; no crean un registro real."
+      ],
+      [
+        "Guarda y publica",
+        "Guardar un borrador conserva el trabajo. Publicar activa la versión para la operación."
+      ],
+      [
+        "Prueba antes de imprimir",
+        "Configura la estación desde el Centro de impresión y realiza una prueba sobre el soporte real."
+      ],
+      [
+        "Reutiliza con control",
+        "Puedes copiar un diseño a otro tipo y recuperar versiones; revisa y publica la versión que debe utilizar el mostrador."
+      ]
+    ],
+    "note": [
+      "",
+      "Separación de funciones",
+      "El personal de acreditación utiliza las versiones activas; no necesita acceso al editor."
+    ]
+  },
+  {
+    "id": "checkin",
+    "t": "Check-in y control de accesos",
+    "r": "owner staff",
+    "lead": "Valida credenciales por cámara, lector USB o código manual.",
+    "img": [
+      [
+        "20-checkin.png",
+        "Escáner y validación"
+      ],
+      [
+        "21-equipo-operativo.png",
+        "Equipo y permisos"
+      ]
+    ],
+    "steps": [
+      [
+        "Crea puntos de acceso",
+        "Entrada principal, sala, acceso VIP u otras zonas."
+      ],
+      [
+        "Habilita cuentas",
+        "Asigna check-in, impresión o gestión de participantes y limita por punto si aplica."
+      ],
+      [
+        "Selecciona evento y acceso",
+        "El operador debe confirmarlos antes de escanear."
+      ],
+      [
+        "Escanea el QR",
+        "La respuesta diferencia válido, duplicado, denegado o desconocido."
+      ],
+      [
+        "Usa el ingreso manual",
+        "Es el respaldo si falla la cámara o se usa lector USB."
+      ],
+      [
+        "Abre Control",
+        "Filtra ingresados/pendientes, exporta CSV y gestiona incidencias."
+      ],
+      [
+        "Valida derechos de invitación",
+        "El código no habilita automáticamente exposición, foro, VIP, sesiones o días adicionales. Comprueba los permisos explícitos del punto."
+      ]
+    ],
+    "note": [
+      "warn",
+      "Conectividad y respaldo",
+      "Lector USB o entrada manual sustituyen a la cámara, no a Internet. No se garantiza operación completamente offline. Prepara conexión alternativa e instrucciones de contingencia."
+    ],
+    "faq": [
+      [
+        "Duplicados",
+        "Comprueba hora y punto, identifica a la persona y abre una incidencia. No fuerces otro ingreso sin validar la causa."
+      ]
+    ]
+  },
+  {
+    "id": "portal-expositor",
+    "t": "Portal del expositor",
+    "r": "owner exhibitor",
+    "lead": "Cada empresa gestiona su información sin acceder a datos de otras.",
+    "img": [
+      [
+        "28-portal-expositor.png",
+        "Inicio y perfil de empresa"
+      ],
+      [
+        "29-visitas-stand.png",
+        "Visitantes del stand"
+      ]
+    ],
+    "steps": [
+      [
+        "El organizador crea la empresa",
+        "La asocia al evento, asigna stand e invita personal."
+      ],
+      [
+        "El expositor completa su perfil",
+        "Logo, descripción, sector, contacto, web, redes y material."
+      ],
+      [
+        "Envía a revisión",
+        "El organizador aprueba o solicita cambios."
+      ],
+      [
+        "Consulta pagos y documentos",
+        "Incluye obligaciones y manual privado del expositor."
+      ],
+      [
+        "Gestiona personal",
+        "Registra quienes atenderán el stand."
+      ],
+      [
+        "Registra visitas",
+        "Escanea la credencial desde el stand o usa el campo manual."
+      ]
+    ],
+    "note": [
+      "warn",
+      "Privacidad",
+      "Los datos captados en el stand deben usarse para la finalidad informada y limitarse al personal autorizado."
+    ]
+  },
+  {
+    "id": "asistente",
+    "t": "Experiencia del asistente",
+    "r": "owner attendee",
+    "lead": "De la convocatoria a la credencial y al acceso presencial.",
+    "cards": [
+      [
+        "Antes",
+        "Consulta fechas, ubicación, agenda, expositores y entradas."
+      ],
+      [
+        "Después del registro",
+        "Revisa resumen, pago, estado y conserva el enlace personal."
+      ],
+      [
+        "Durante el evento",
+        "Presenta QR, consulta agenda/plano y guarda favoritos."
+      ]
+    ],
+    "flow": [
+      "Portada",
+      "Agenda/plano",
+      "Registro",
+      "Comprobante",
+      "Estado",
+      "Credencial QR"
+    ],
+    "steps": [
+      [
+        "Abre el enlace oficial",
+        "Comprueba evento y dominio."
+      ],
+      [
+        "Selecciona la entrada",
+        "Revisa precio, moneda, beneficios y cupo."
+      ],
+      [
+        "Completa y confirma",
+        "Lee el resumen antes de crear la inscripción."
+      ],
+      [
+        "Carga el comprobante",
+        "Sigue las instrucciones del método de pago."
+      ],
+      [
+        "Consulta el estado",
+        "Pendiente, confirmado o rechazado indica el próximo paso."
+      ],
+      [
+        "Recupera la credencial",
+        "Usa la recuperación autónoma si perdiste el enlace."
+      ]
+    ],
+    "faq": [
+      [
+        "Registro cerrado",
+        "Puede haber terminado, vencido el plazo, requerir invitación o estar pendiente de precio/pago."
+      ],
+      [
+        "Pago pendiente",
+        "Comprueba el comprobante y espera la revisión; la credencial puede quedar pendiente hasta la aprobación."
+      ],
+      [
+        "Invitación privada",
+        "Utiliza el enlace individual recibido. Un código admite un solo registro. Para grupos, responde por integrante desde el enlace privado del hogar."
+      ]
+    ]
+  },
+  {
+    "id": "lanzamiento",
+    "t": "Checklist de lanzamiento",
+    "r": "owner",
+    "lead": "Diez verificaciones automáticas reducen errores antes de abrir.",
+    "img": [
+      [
+        "15-checklist.png",
+        "Preparación del evento"
+      ]
+    ],
+    "steps": [
+      [
+        "Datos básicos",
+        "Nombre y descripción completos."
+      ],
+      [
+        "Fechas y cierre",
+        "Inicio, fin y plazo de registro coherentes."
+      ],
+      [
+        "Modalidad",
+        "Registro gratuito, pago o invitación definido."
+      ],
+      [
+        "Precio y métodos",
+        "Importe conocido y método activo cuando se cobra."
+      ],
+      [
+        "Agenda",
+        "Todas las sesiones dentro del evento."
+      ],
+      [
+        "Elementos recomendados",
+        "Pases públicos, formulario de contacto y enlace público."
+      ],
+      [
+        "Prueba humana final",
+        "Portada móvil/escritorio, registro, correo, recuperación, impresión y check-in."
+      ]
+    ],
+    "note": [
+      "danger",
+      "No ignores un bloqueo",
+      "Cada verificación enlaza al módulo que debes corregir. Guarda y vuelve al checklist."
+    ],
+    "faq": [
+      [
+        "Bloqueante vs recomendado",
+        "Un requisito bloqueante impide publicar o registrar con seguridad. Una recomendación mejora la experiencia pero puede no ser obligatoria."
+      ]
+    ]
+  },
+  {
+    "id": "preparacion",
+    "t": "Preparación, aceptación y soporte",
+    "r": "owner staff",
+    "lead": "Registra evidencias de ensayo y acuerda los responsables antes de operar.",
+    "img": [
+      [
+        "42-preparacion-evento.png",
+        "Asistente de preparación y aceptación"
+      ]
+    ],
+    "steps": [
+      [
+        "Abre Soporte y preparación",
+        "Selecciona el evento y el recorrido que vas a ensayar."
+      ],
+      [
+        "Completa las pruebas requeridas",
+        "Comprueba registro, privacidad, responsables y contingencia, además de agenda, exposición o impresión cuando correspondan."
+      ],
+      [
+        "Guarda evidencia por paso",
+        "Escribe el resultado real de la prueba; una casilla pendiente no equivale a una validación."
+      ],
+      [
+        "Registra la aceptación administrativa",
+        "El organizador autorizado revisa evidencias y acepta de forma expresa. Descarga el acta para el equipo."
+      ],
+      [
+        "Repite tras cambios relevantes",
+        "Si cambió la configuración, revisa las pruebas afectadas y genera una nueva aceptación."
+      ],
+      [
+        "Reporta incidencias con contexto",
+        "Incluye evento, módulo, resultado esperado, mensaje y hora. No incluyas contraseñas, códigos privados ni datos de participantes innecesarios."
+      ]
+    ],
+    "note": [
+      "",
+      "Soporte acordado",
+      "La preparación y el canal de incidencias no implican soporte 24/7 ni presencia en el recinto. El alcance y horario se acuerdan para la operación."
+    ]
+  },
+  {
+    "id": "soporte",
+    "t": "Soporte y buenas prácticas",
+    "r": "owner staff exhibitor attendee",
+    "lead": "Diagnóstico rápido y reglas para una operación segura.",
+    "cards": [
+      [
+        "Protege accesos",
+        "Cuenta individual, permisos mínimos y cierre de sesión en equipos compartidos."
+      ],
+      [
+        "Prueba antes",
+        "Ensaya el recorrido completo con datos de QA."
+      ],
+      [
+        "Opera con respaldo",
+        "Búsqueda manual, exportación, consumibles y conexión alternativa."
+      ]
+    ],
+    "steps": [
+      [
+        "Cámara",
+        "Revisa permiso y otras apps; recarga y usa lector/manual como respaldo."
+      ],
+      [
+        "Permisos",
+        "Confirma organización, evento, cuenta habilitada y alcance asignado."
+      ],
+      [
+        "Publicación",
+        "Consulta checklist, fechas, precio, pago y estado."
+      ],
+      [
+        "Impresión",
+        "Tamaño correcto, escala 100 %, márgenes, orientación y QR legible."
+      ],
+      [
+        "Correo",
+        "Verifica dirección y spam. Los enlaces de invitación y recuperación caducan y solo funcionan una vez; si aparece “enlace expirado”, solicita uno nuevo y abre únicamente el mensaje más reciente."
+      ],
+      [
+        "Datos sensibles",
+        "No compartas tokens, listados de participantes ni comprobantes fuera de los canales autorizados."
+      ]
+    ],
+    "faq": [
+      [
+        "Glosario",
+        "Programa: grupo de eventos. Participación: acceso a un evento. Categoría: producto de entrada. Punto de acceso: puerta/zona. Campaña: enlace atribuible. Lead: respuesta de interés. Blueprint: plano de referencia. Token: código privado."
+      ],
+      [
+        "¿Por qué el enlace de acceso dice que expiró?",
+        "Puede haber vencido, haberse usado antes o haber sido invalidado al solicitar otro. Pulsa “Solicitar un enlace nuevo”, revisa spam y utiliza el correo más reciente."
+      ]
+    ]
+  },
+  {
+    "id": "demo-alcance",
+    "t": "Opciones de servicio y solicitud de demo",
+    "r": "owner",
+    "lead": "Las opciones públicas son orientativas y no muestran precios ni cuotas.",
+    "img": [
+      [
+        "41-opciones-genericas.png",
+        "Opciones genéricas sin precios publicados"
+      ]
+    ],
+    "steps": [
+      [
+        "Revisa las opciones del landing",
+        "Esencial, Integral y A medida describen necesidades generales, sin publicar tarifas ni límites de contratación."
+      ],
+      [
+        "Solicita una conversación",
+        "Pulsa Conversar sobre mi evento para indicar tipo de evento, alcance y acompañamiento que necesitas."
+      ],
+      [
+        "Revisa la propuesta de tu organización",
+        "Un administrador consulta Suscripción para comprobar contrato, módulos, vigencia y cuotas acordados."
+      ],
+      [
+        "Confirma antes de operar",
+        "Una opción orientativa no activa automáticamente módulos ni modifica un contrato. La impresión y el soporte requieren preparación y alcance acordado."
+      ]
+    ]
+  }
+];
+    const roleNames={owner:'Administrador',staff:'Equipo operativo',exhibitor:'Expositor',attendee:'Asistente',collaborator:'Colaborador',platform:'Superadmin'};
+    document.getElementById('screenCount').textContent=new Set(C.flatMap(c=>(c.img||[]).map(x=>x[0]))).size;document.getElementById('chapterCount').textContent=C.length;document.getElementById('roleCount').textContent=Object.keys(roleNames).length;
     const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    const render=()=>{const root=document.getElementById('chapters'),toc=document.getElementById('toc'),mobile=document.getElementById('mobileNav');root.innerHTML=C.map((c,i)=>`<section class="chapter" id="${c.id}" data-roles="${c.r}" data-search="${esc(c.t+' '+c.lead+' '+JSON.stringify(c))}"><div class="chapter-head"><span class="num">${i+1}</span><div><h2>${c.t}</h2><p class="lead">${c.lead}</p><div class="tags">${c.r.split(' ').map(r=>`<span class="tag ${r}">${roleNames[r]}</span>`).join('')}</div></div></div>${c.cards?`<div class="cards">${c.cards.map(x=>`<div class="card"><b>${x[0]}</b><p>${x[1]}</p></div>`).join('')}</div>`:''}${c.img?`<div class="shots">${c.img.map(x=>`<figure class="shot"><button data-img="images/${x[0]}" aria-label="Ampliar ${esc(x[1])}"><img src="images/${x[0]}" alt="${esc(x[1])}" loading="lazy"></button><figcaption><span>${x[1]}</span><span>Ampliar</span></figcaption></figure>`).join('')}</div>`:''}${c.flow?`<div class="flow">${c.flow.map((x,n)=>`<span>${x}</span>${n<c.flow.length-1?'<i>→</i>':''}`).join('')}</div>`:''}<ol class="steps">${c.steps.map(x=>`<li><b>${x[0]}</b><p>${x[1]}</p></li>`).join('')}</ol>${c.note?`<div class="callout ${c.note[0]}"><b>${c.note[1]}</b><p>${c.note[2]}</p></div>`:''}${c.faq?`<div class="faq">${c.faq.map(x=>`<details><summary>${x[0]}</summary><div class="answer">${x[1]}</div></details>`).join('')}</div>`:''}<label class="done"><input type="checkbox" data-progress id="done-${i+1}"><span><b>Capítulo revisado</b><small>El progreso se guarda en este navegador.</small></span></label></section>`).join('');toc.innerHTML=C.map((c,i)=>`<a href="#${c.id}">${i+1}. ${c.t}</a>`).join('');C.forEach(c=>mobile.insertAdjacentHTML('beforeend',`<option value="#${c.id}">${c.t}</option>`))};render();
+    const imageSizes={"01-panel-principal.png":[1665,941],"02-eventos.png":[1665,941],"03-resumen-evento.png":[1665,941],"04-venta-registros.png":[1665,941],"05-categorias-entradas.png":[1665,941],"06-plano-exposicion.png":[1665,941],"07-expositores.png":[1665,941],"08-paquetes-comerciales.png":[1665,941],"09-publicar-exposicion.png":[1665,941],"10-patrocinantes.png":[1665,941],"11-personal.png":[1665,941],"12-operacion.png":[1665,941],"13-conversiones.png":[1665,941],"14-formularios-leads.png":[1665,941],"15-checklist.png":[1665,941],"16-landing-configuracion.png":[1665,941],"16b-constructor-landing.png":[1665,941],"17-configuracion-evento.png":[1665,941],"18-registros-global.png":[1665,941],"19-acreditacion.png":[1665,941],"20-checkin.png":[1665,941],"21-equipo-operativo.png":[1665,941],"22-proveedores.png":[1665,941],"23-programas.png":[1665,941],"24-portada-publica.png":[1665,941],"25-registro-publico.png":[1665,941],"26-agenda-publica.png":[1680,949],"27-plano-publico.png":[1665,941],"28-portal-expositor.png":[1665,941],"29-visitas-stand.png":[1665,941],"30-registro-workshop-sesiones.png":[1440,1147],"31-nuevo-evento-social.png":[1440,1100],"32-configuracion-organizacion.png":[1440,1170],"33-invitaciones-profesionales.png":[1440,1100],"34-produccion-proveedores.png":[1440,1100],"35-presupuesto-organizador.png":[1440,1100],"36-grupos-rsvp-mesas.png":[1440,1100],"37-asignacion-mesas.png":[1440,1100],"38-respuesta-invitado.png":[1440,1100],"39-centro-impresion-conector.png":[1440,1100],"40-badge-designer.png":[1440,1100],"41-opciones-genericas.png":[1440,1100],"42-preparacion-evento.png":[1280,1637]};
+    const scrollBehavior=matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth';
+    const render=()=>{const root=document.getElementById('chapters'),toc=document.getElementById('toc'),mobile=document.getElementById('mobileNav');root.innerHTML=C.map((c,i)=>`<section class="chapter" id="${c.id}" data-roles="${c.r}" data-search="${esc(c.t+' '+c.lead+' '+JSON.stringify(c))}"><div class="chapter-head"><span class="num">${i+1}</span><div><h2>${c.t}</h2><p class="lead">${c.lead}</p><div class="tags">${c.r.split(' ').map(r=>`<span class="tag ${r}">${roleNames[r]}</span>`).join('')}</div></div></div>${c.cards?`<div class="cards">${c.cards.map(x=>`<div class="card"><b>${x[0]}</b><p>${x[1]}</p></div>`).join('')}</div>`:''}${c.img?`<div class="shots">${c.img.map(x=>`<figure class="shot"><button data-img="images/${x[0]}" aria-label="Ampliar ${esc(x[1])}"><img src="images/${x[0]}" alt="${esc(x[1])}" width="${imageSizes[x[0]][0]}" height="${imageSizes[x[0]][1]}" loading="lazy"></button><figcaption><span>${x[1]}</span><span>Ampliar</span></figcaption></figure>`).join('')}</div>`:''}${c.flow?`<div class="flow">${c.flow.map((x,n)=>`<span>${x}</span>${n<c.flow.length-1?'<i>→</i>':''}`).join('')}</div>`:''}<ol class="steps">${c.steps.map(x=>`<li><b>${x[0]}</b><p>${x[1]}</p></li>`).join('')}</ol>${c.note?`<div class="callout ${c.note[0]}"><b>${c.note[1]}</b><p>${c.note[2]}</p></div>`:''}${c.faq?`<div class="faq">${c.faq.map(x=>`<details><summary>${x[0]}</summary><div class="answer">${x[1]}</div></details>`).join('')}</div>`:''}<label class="done"><input type="checkbox" data-progress id="done-${c.id}"><span><b>Capítulo revisado</b><small>El progreso se guarda en este navegador.</small></span></label></section>`).join('');toc.innerHTML=C.map((c,i)=>`<a href="#${c.id}">${i+1}. ${c.t}</a>`).join('');C.forEach(c=>mobile.insertAdjacentHTML('beforeend',`<option value="#${c.id}">${c.t}</option>`))};render();
     const chapters=[...document.querySelectorAll('.chapter')],links=[...document.querySelectorAll('#toc a')],search=document.getElementById('search');let role='all';const norm=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-    function filter(){const q=norm(search.value.trim());let visible=0;chapters.forEach(c=>{const okRole=role==='all'||c.dataset.roles.split(' ').includes(role),okText=!q||norm(c.dataset.search).includes(q),show=okRole&&okText;c.classList.toggle('filtered',!show);if(show)visible++});links.forEach(a=>a.classList.toggle('hide',document.querySelector(a.hash).classList.contains('filtered')));document.getElementById('empty').classList.toggle('show',!visible)}
-    document.querySelectorAll('[data-role]').forEach(b=>b.onclick=()=>{role=b.dataset.role;document.querySelectorAll('[data-role]').forEach(x=>x.classList.toggle('active',x===b));filter();chapters.find(x=>!x.classList.contains('filtered'))?.scrollIntoView({behavior:'smooth'});toast('Recorrido filtrado por rol')});search.oninput=filter;
+    function filter(){const q=norm(search.value.trim());let visible=0;chapters.forEach(c=>{const okRole=role==='all'||c.dataset.roles.split(' ').includes(role),okText=!q||norm(c.dataset.search).includes(q),show=okRole&&okText;c.classList.toggle('filtered',!show);if(show)visible++});links.forEach(a=>a.classList.toggle('hide',document.querySelector(a.hash).classList.contains('filtered')));document.querySelectorAll('#mobileNav option[value]').forEach(option=>{if(!option.value)return;const hidden=document.querySelector(option.value).classList.contains('filtered');option.hidden=hidden;option.disabled=hidden});document.getElementById('empty').classList.toggle('show',!visible)}
+    document.querySelectorAll('[data-role]').forEach(b=>b.onclick=()=>{role=b.dataset.role;document.querySelectorAll('[data-role]').forEach(x=>x.classList.toggle('active',x===b));filter();chapters.find(x=>!x.classList.contains('filtered'))?.scrollIntoView({behavior:scrollBehavior});toast('Recorrido filtrado por rol')});search.oninput=filter;
     const box=document.getElementById('lightbox'),boxImg=document.getElementById('lightboxImg');document.querySelectorAll('[data-img]').forEach(b=>b.onclick=()=>{boxImg.src=b.dataset.img;boxImg.alt=b.querySelector('img').alt;box.classList.add('open');document.getElementById('close').focus()});document.getElementById('close').onclick=()=>box.classList.remove('open');box.onclick=e=>{if(e.target===box)box.classList.remove('open')};
-    document.getElementById('print').onclick=()=>print();document.getElementById('mobileNav').onchange=e=>document.querySelector(e.target.value)?.scrollIntoView({behavior:'smooth'});document.addEventListener('keydown',e=>{if(e.key==='/'&&document.activeElement!==search){e.preventDefault();search.focus()}if(e.key==='Escape')box.classList.remove('open')});
+    document.getElementById('print').onclick=()=>print();document.getElementById('mobileNav').onchange=e=>document.querySelector(e.target.value)?.scrollIntoView({behavior:scrollBehavior});document.addEventListener('keydown',e=>{if(e.key==='/'&&document.activeElement!==search){e.preventDefault();search.focus()}if(e.key==='Escape')box.classList.remove('open')});
     const observer=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){links.forEach(a=>a.classList.toggle('active',a.hash==='#'+e.target.id));document.getElementById('mobileNav').value='#'+e.target.id}}),{rootMargin:'-25% 0px -65%'});chapters.forEach(c=>observer.observe(c));
-    const checks=[...document.querySelectorAll('[data-progress]')];try{const saved=JSON.parse(localStorage.getItem('ef-manual-progress')||'[]');checks.forEach(x=>x.checked=saved.includes(x.id))}catch{}function progress(){const done=checks.filter(x=>x.checked).length;document.getElementById('progressText').textContent=`${done} de ${checks.length} revisados`;document.getElementById('progressBar').style.width=`${done/checks.length*100}%`;localStorage.setItem('ef-manual-progress',JSON.stringify(checks.filter(x=>x.checked).map(x=>x.id)))}checks.forEach(x=>x.onchange=progress);progress();
+    const checks=[...document.querySelectorAll('[data-progress]')];try{const legacyChapterIds=["primeros-pasos","panel","eventos","web-publica","entradas","agenda","talleres","promocion","exposicion","comercial","acreditacion","checkin","portal-expositor","asistente","lanzamiento","soporte"];const saved=JSON.parse(localStorage.getItem('ef-manual-progress')||'[]').map(id=>/^done-\d+$/.test(id)?'done-'+legacyChapterIds[Number(id.slice(5))-1]:id);checks.forEach(x=>x.checked=saved.includes(x.id))}catch{}function progress(){const done=checks.filter(x=>x.checked).length;document.getElementById('progressText').textContent=`${done} de ${checks.length} revisados`;document.getElementById('progressBar').style.width=`${done/checks.length*100}%`;try{localStorage.setItem('ef-manual-progress',JSON.stringify(checks.filter(x=>x.checked).map(x=>x.id)))}catch{}}checks.forEach(x=>x.onchange=progress);progress();
     function toast(text){const t=document.getElementById('toast');t.textContent=text;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1600)}
   </script>
 </body>

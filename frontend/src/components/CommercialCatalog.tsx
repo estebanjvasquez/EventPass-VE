@@ -1,9 +1,20 @@
-import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
-type Offer={name:string;price_usd:number;limits:Record<string,number>;capabilities:Record<string,boolean>}
-export default function CommercialCatalog(){
- const [offers,setOffers]=useState<Offer[]>([])
- useEffect(()=>{let active=true;void supabase.rpc('public_commercial_catalog').then(({data})=>{if(active)setOffers(data??[])});return()=>{active=false}},[])
- return <section className="mx-auto max-w-7xl bg-white px-5 py-14 text-zinc-950" id="planes"><h2 className="text-3xl font-bold">Planes con alcance definido</h2><p className="mt-3 text-zinc-600">Prueba de 14 días: 1 evento y 50 participantes. Cobro por comprobante con verificación manual. Precios del catálogo vigente en USD.</p><div className="mt-6 grid gap-4 md:grid-cols-3">{offers.map(o=><article className="rounded-2xl border p-6" key={o.name}><h3 className="text-xl font-bold">{o.name}</h3><p className="my-3 text-3xl font-bold">${Number(o.price_usd).toFixed(2)}<span className="text-sm font-normal">/mes</span></p><p>{o.limits.events} eventos operativos · {o.limits.participants_event} participantes/evento</p><p className="mt-2 text-sm">{o.limits.users} usuarios · {o.limits.stations} estaciones · {o.limits.participants_month} participantes nuevos/mes</p><p className="mt-3 text-sm">Registro, QR y acreditación{o.capabilities.programs?' · Programas':''}{o.capabilities.exposure?' · Exposición y portal':''}{o.capabilities.sponsorship?' · Patrocinio':''}{o.capabilities.campaigns?' · Campañas':''}{o.capabilities.print_batches?' · Lotes de impresión':''}</p><Link to="/crear-cuenta" className="mt-5 inline-block font-semibold text-emerald-700">Iniciar prueba</Link></article>)}</div><div className="mt-5 rounded-2xl bg-emerald-50 p-6"><h3 className="text-xl font-bold">Evento Acompañado</h3><p className="mt-2">Cotización por edición con preparación, capacitación y horario de soporte acordado. Equipos, consumibles y operación presencial por separado. Impresión sujeta a Windows, controlador y prueba del modelo contratado.</p><Link to="/demo" className="mt-3 inline-block font-semibold text-emerald-800 underline">Solicitar cotización por evento o ampliación</Link></div></section>
+
+const plans = [
+  { name: 'Esencial', description: 'Para organizar el registro y la recepción de tus invitados.', features: ['Registro e invitaciones', 'Credenciales QR y acreditación', 'Control de asistencia'] },
+  { name: 'Integral', description: 'Para coordinar distintas áreas de un evento desde un mismo lugar.', features: ['Herramientas según el tipo de evento', 'Agenda, exposición o gestión de invitados', 'Producción, tareas y presupuesto'] },
+  { name: 'A medida', description: 'Para preparar una operación con necesidades y acompañamiento específicos.', features: ['Definición del alcance y los módulos', 'Preparación y capacitación del equipo', 'Coordinación de impresión y soporte'] },
+]
+
+export default function CommercialCatalog() {
+  return <section className="mx-auto max-w-7xl bg-white px-5 py-14 text-zinc-950" id="planes" aria-labelledby="plans-title">
+    <h2 id="plans-title" className="text-3xl font-bold">Una opción para cada evento</h2>
+    <p className="mt-3 max-w-3xl text-zinc-600">Estas opciones son orientativas. Conversemos sobre tu evento para definir los módulos, el acompañamiento y el alcance que necesitas.</p>
+    <div className="mt-6 grid gap-4 md:grid-cols-3">{plans.map(plan => <article className="flex flex-col rounded-2xl border p-6" key={plan.name}>
+      <h3 className="text-xl font-bold">{plan.name}</h3>
+      <p className="mt-3 text-zinc-600">{plan.description}</p>
+      <ul className="my-5 flex-1 space-y-2 text-sm">{plan.features.map(feature => <li key={feature}>✓ {feature}</li>)}</ul>
+      <Link to="/demo" className="font-semibold text-emerald-700 underline">Conversar sobre mi evento</Link>
+    </article>)}</div>
+  </section>
 }
