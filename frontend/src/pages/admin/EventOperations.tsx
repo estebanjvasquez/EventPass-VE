@@ -46,7 +46,7 @@ export default function EventOperations() {
   const load = useCallback(async () => {
     const { data: result, error: failure } = await supabase.rpc('get_event_operations', { p_event: eventId })
     if (activeEvent.current !== eventId) return
-    if (failure) setError(failure.message); else { const workspace = result as Workspace; setData(workspace); setError(''); if (!workspace.manager && workspace.production_member && workspace.allocations.length === 0) setTab('production') }
+    if (failure) setError(failure.code === '42501' || failure.message.includes('No autorizado') ? 'Inicia sesión o solicita al organizador que asigne tu cuenta a este evento.' : 'No se pudo cargar el evento. Reintenta la consulta.'); else { const workspace = result as Workspace; setData(workspace); setError(''); if (!workspace.manager && workspace.production_member && workspace.allocations.length === 0) setTab('production') }
   }, [eventId])
   useEffect(() => { setSecrets([]); setNotice(''); setTab('invitations'); const key = `ops-budget:${eventId}`; const request = sessionStorage.getItem(key) ?? crypto.randomUUID(); sessionStorage.setItem(key, request); setBudgetRequest(request); void load() }, [load, eventId])
   const command: Command = async (action, payload) => {
