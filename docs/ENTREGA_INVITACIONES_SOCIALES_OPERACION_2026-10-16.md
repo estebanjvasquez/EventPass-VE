@@ -79,7 +79,7 @@ Casos cubiertos: migración repetible; canje concurrente e idempotencia; rollbac
 
 Además: compilación frontend, TypeScript backend, lint, regresiones de registro/campañas/credenciales/comercial y navegación de superadmin. La migración se comprobó contra el esquema remoto dentro de una transacción terminada en `ROLLBACK` antes de aplicarla.
 
-Migración: `infra/supabase/migrations/20261016100223_private_invitations_social_operations.sql`. Publicar base de datos antes del Worker y frontend. La reversión de una versión de UI no debe eliminar tablas, canjes ni auditoría; ante un defecto, suspender nuevas emisiones y corregir hacia adelante conservando registros.
+Migraciones: `infra/supabase/migrations/20261016100223_private_invitations_social_operations.sql` y `20261016104831_invitation_mixed_program_visibility.sql`. La segunda conserva los componentes públicos de programas mixtos y filtra sus componentes privados, sin ocultar todo el programa. Publicar base de datos antes del Worker y frontend. La reversión de una versión de UI no debe eliminar tablas, canjes ni auditoría; ante un defecto, suspender nuevas emisiones y corregir hacia adelante conservando registros.
 
 ## Lo que sigue fuera de esta entrega
 

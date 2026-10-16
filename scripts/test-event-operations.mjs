@@ -30,6 +30,8 @@ try {
  create function has_event_staff_scope(uuid,uuid,text) returns boolean language sql as $$select exists(select 1 from public.events e join public.memberships m on m.organization_id=e.organization_id where e.id=$1 and m.user_id=auth.uid())$$;
  create table platform_user_controls(user_id uuid,suspended_at timestamptz);
  create table event_participations(id uuid primary key,event_id uuid);create table program_events(program_id uuid,event_id uuid);
+ create table event_programs(id uuid primary key,organization_id uuid,name text);
+ create table program_registration_items(id uuid primary key,program_id uuid,source_event_id uuid,parent_item_id uuid,name text,active boolean default true,is_public boolean default true);
  create table program_registration_order_items(item_id uuid);create table participation_passes(pass_id uuid);create table program_registration_entitlements(item_id uuid,event_id uuid,session_id uuid,zone_id uuid);create table pass_entitlements(pass_id uuid,event_id uuid,session_id uuid,zone_id uuid);
  create table event_sessions(id uuid primary key,event_id uuid,organization_id uuid,name text,status text default 'scheduled',capacity int);create table event_ticket_categories(id uuid,event_id uuid,organization_id uuid,published boolean,sales_start timestamptz,sales_end timestamptz,capacity int,price numeric,currency text,name text,benefits text[]);
  create table session_reservations(id uuid primary key default gen_random_uuid(),organization_id uuid,event_id uuid,session_id uuid,registration_id uuid,participation_id uuid,status text,checked_in_at timestamptz);
@@ -39,6 +41,8 @@ try {
  alter table registrations add column ticket_category_id uuid,add column seat_id uuid,add column payment_deadline timestamptz;
  create function get_public_forum_agenda(p_event_id uuid) returns jsonb language sql stable security definer as $$select jsonb_build_object('event_id',p_event_id)$$;
  create function get_public_event_session_catalog(p_event_id uuid) returns table(id uuid) language sql stable security definer as $$select p_event_id$$;
+ create function get_public_program_registration_catalog(p_program_id uuid) returns jsonb language sql stable security definer set search_path='' as $$select jsonb_build_object('events',(select coalesce(jsonb_agg(jsonb_build_object('id',e.id,'name',e.name)),'[]') from public.program_events pe join public.events e on e.id=pe.event_id where pe.program_id=p_program_id and e.status='published'),'items',(select coalesce(jsonb_agg(jsonb_build_object('id',i.id,'name',i.name)),'[]') from public.program_registration_items i where i.program_id=p_program_id and i.active and i.is_public))$$;
+ create function get_public_program_agenda(p_program_id uuid default null,p_event_id uuid default null,p_event_only boolean default false) returns jsonb language plpgsql stable security definer set search_path='' as $$declare p public.event_programs;begin select * into p from public.event_programs where id=p_program_id;return jsonb_build_object('events',(select coalesce(jsonb_agg(jsonb_build_object('id',ev.id,'name',ev.name)),'[]') from public.program_events pe join public.events ev on ev.id=pe.event_id where pe.program_id=p.id and ev.organization_id=p.organization_id and ev.status='published'));end$$;
  grant usage on schema auth to authenticated,anon;grant execute on function auth.uid() to authenticated,anon;
  insert into organizations(id) values('${ids.org}'),('${ids.foreignOrg}');insert into auth.users values('${ids.owner}','owner@example.invalid'),('${ids.other}','other@example.invalid'),('${ids.inviter}','inviter@example.invalid');
  insert into memberships values('${ids.org}','${ids.owner}','owner'),('${ids.foreignOrg}','${ids.other}','owner');insert into commercial_contracts(organization_id) values('${ids.org}');
@@ -54,6 +58,7 @@ try {
  await sql(checkout.slice(checkout.indexOf('create or replace function public.sync_registration_session_reservations()'), checkout.indexOf('create or replace function public.register_event_session_purchase(')))
  const migration = await readFile(new URL('../infra/supabase/migrations/20261016100223_private_invitations_social_operations.sql', import.meta.url), 'utf8')
  await sql(migration);await sql(migration)
+ const mixed=await readFile(new URL('../infra/supabase/migrations/20261016104831_invitation_mixed_program_visibility.sql',import.meta.url),'utf8');await sql(mixed);await sql(mixed)
  await cmd('settings', { capacity_policy: 'redeem', inviter_identity: false })
  let allocation, code, second, household, member, table
  await test('explicit rules, allocations and controlled issue', async () => {
@@ -116,6 +121,11 @@ try {
   assert.equal(await sql(`select set_config('request.jwt.claim.sub','',false);select get_public_forum_agenda('${ids.social}');`), null)
   assert.equal(await sql(`select set_config('request.jwt.claim.sub','',false);select to_jsonb(count(*)) from get_public_event_session_catalog('${ids.social}');`), 0)
   assert.equal((await sql(`${auth()}select get_public_forum_agenda('${ids.social}');`)).event_id, ids.social)
+ })
+ await test('mixed programs retain public events and omit private components',async()=>{
+  const p=randomUUID(),pub=randomUUID(),priv=randomUUID();await sql(`insert into event_programs values('${p}','${ids.org}','Programa mixto');insert into program_events values('${p}','${ids.event}'),('${p}','${ids.social}');insert into program_registration_items(id,program_id,source_event_id,name) values('${pub}','${p}','${ids.event}','Componente público'),('${priv}','${p}','${ids.social}','Componente privado');`)
+  const catalog=await sql(`${auth('')}select get_public_program_registration_catalog('${p}');`);assert.equal(catalog.events.length,1);assert.equal(catalog.events[0].id,ids.event);assert.equal(catalog.items.length,1);assert.equal(catalog.items[0].id,pub)
+  const agenda=await sql(`${auth('')}select get_public_program_agenda('${p}');`);assert.equal(agenda.events.length,1);assert.equal(agenda.events[0].id,ids.event)
  })
  await test('benefit revisions do not rewrite approved allocations', async () => {
   const rule = await cmd('benefit', { name: 'Patrocinio Oro', kind: 'sponsor', quantity: 5, rights: ['vip'] })
