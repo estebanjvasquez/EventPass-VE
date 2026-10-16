@@ -174,6 +174,14 @@ export default function EventoAdministracion() {
     if (!event) return [];
     const common: Tile[] = [
       {
+        label: "Invitaciones y operación",
+        description: "Códigos, hogares, mesas, producción y presupuesto.",
+        to: `/admin/eventos/${event.id}/operaciones`,
+        icon: Users,
+        tone: "bg-emerald-50 text-emerald-800",
+        show: true,
+      },
+      {
         label: "Plano",
         description: "Diseña espacios, pasillos, objetos y flujo.",
         to: `/admin/stands/${event.id}`,

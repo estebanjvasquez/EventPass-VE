@@ -2,6 +2,8 @@
 
 Fecha: 16 de octubre de 2026. Análisis solicitado por el usuario al especialista de negocios y marketing. Es una propuesta para decidir y validar; no cambia precios, contratos ni funciones de la aplicación.
 
+**Actualización por antecedentes del usuario:** la sección final «Revisión por nueva evidencia» recalibra la prioridad inicial. La experiencia propia en foros/exposiciones privados y el acceso real a una empresa de bodas justifican dos pilotos conectados por un núcleo común de invitaciones. La recomendación inicial de posponer sociales deja de ser la prioridad vigente; se conserva abajo como antecedente del análisis.
+
 ## Recomendación ejecutiva
 
 Concentrar el lanzamiento en **agencias que producen eventos corporativos recurrentes, congresos y exposiciones B2B**, con una oferta de registro, acreditación y operación acompañada. Mantener la venta directa a organizadores como segundo canal. Presentar las tiqueteras como posibles complementos, integradores o socios, reconociendo que también existe solapamiento competitivo.
@@ -120,3 +122,96 @@ Criterio propuesto para ampliar inversión: dos pilotos aceptados, al menos un c
 ## Decisión sugerida para el siguiente ciclo
 
 Preparar pilotos corporativos con la base actual y desarrollar **CRM de invitados/RSVP**, después producción/proveedores y presupuesto USD/VES. Si entrevistas y compromisos muestran que el presupuesto es condición de compra dominante, intercambiar los puntos 3 y 4 sin mezclar la caja comercial del superadmin con el presupuesto de cada organizador. Mantener ticketing como opción sujeta a validación independiente.
+
+## Revisión por nueva evidencia: invitaciones privadas y canal de bodas
+
+### Antecedentes aportados y cambio de decisión
+
+El usuario aporta dos antecedentes que cambian el orden anterior:
+
+1. Experiencia comercial propia con otro sistema, utilizado por un organizador de foros y exposiciones **privados**. El registro online exigía código. Expositores, patrocinantes, organizadores y ponentes recibían cantidades de códigos para repartir; la cantidad dependía del stand o paquete de patrocinio. Es evidencia de un flujo vendido y utilizado por el usuario, no un resultado medido del producto actual ni una estadística del mercado.
+2. Acceso real a una empresa que organiza eventos sociales de alto nivel, especialmente bodas y eventos de alta sociedad. Es un canal concreto para descubrir, probar y vender; todavía no acredita una compra, presupuesto, fecha de evento o requisitos aprobados.
+
+Por tanto, **no conviene relegar bodas por principio**. La prioridad revisada es diseñar un núcleo de invitaciones con dos recorridos explícitos, y escoger la primera implementación vertical según cuál cliente confirme antes evento, responsable y piloto. No intentar terminar ambos productos completos simultáneamente.
+
+La invitación con código es una **autorización para registrarse**; RSVP es la respuesta del invitado; la credencial QR es el medio de acceso posterior. Son objetos y estados distintos. Tampoco equivalen a una venta, un cupón de descuento ni a las cuotas de participantes del plan SaaS. Un evento puede requerir invitación y no cobrar al invitado, sin convertirse por ello en registro público libre.
+
+### Qué existe parcialmente y qué falta en el código revisado
+
+| Área | Base encontrada | Brecha confirmada o no acreditada |
+|---|---|---|
+| Evento privado | `registration_mode = invitation` en configuración; `RegistroEvento.tsx` muestra que no admite registro público; los RPC públicos rechazan esa modalidad. | No se encontró un flujo de canje público de código que cree el registro autorizado. Marcar «invitación» hoy cierra el acceso general; no completa por sí solo la distribución de invitaciones. |
+| Invitaciones técnicas | Invitaciones de cuentas, portal de expositores y personal operativo. | Son accesos de colaboradores al sistema, no inventario de invitaciones para asistentes. No reutilizar el enlace de alta de usuario como código de registro del público invitado. |
+| Patrocinio y exposición | `sponsorship_packages` con inventario y beneficios, relación del patrocinante con paquete; gestión de stands/expositores. | Beneficios en texto e inventario de paquetes no prueban cupos exigibles de invitaciones. No se encontró asignación transaccional por invitador ni derivación de códigos por tamaño de stand/paquete. |
+| Cupos y asientos institucionales | Reservas de capacidad por categoría y asientos nominativos con controles de aforo. | Es una base para proteger capacidad, pero no un ledger de emisión/canje por expositor, patrocinante o ponente. Se debe decidir cómo se relaciona con las asignaciones nuevas para evitar contar dos veces. |
+| Programas vinculados | Programa, componentes, participaciones y políticas como `invite_only`. | Una política cerrada no demuestra invitación canjeable con derechos por componente. Hay que definir alcance y cómo compartir una identidad sin ampliar permisos automáticamente. |
+| Bodas | Mapas/asientos y reserva por nombre; registro, QR y correo. | No se acreditaron hogares/grupos, cupos de acompañantes, respuesta por integrante, mesas con capacidad y protocolo, vistas de pareja/planner ni permisos específicos para datos privados. |
+
+Referencias de contraste adicionales: `frontend/src/pages/RegistroEvento.tsx`, `frontend/src/pages/admin/EventosAdmin.tsx`, `frontend/src/pages/admin/PatrocinantesGestionAdmin.tsx`, `backend/src/index.ts` y migraciones `20260827151617_p0_registration_and_seating_modes.sql`, `20260901130000_d2_institutional_seat_reservations.sql`, `20261002123000_event_readiness_and_public_registration.sql`, `20261005115631_program_composable_registration.sql` y `20261005210000_hierarchical_workshop_registration.sql`. La búsqueda no encontró motor de códigos de asistentes; una futura implementación debe revisar todos los caminos de alta y acceso para asegurar que no se pueda eludir.
+
+### Núcleo común propuesto
+
+Separar conceptualmente evento/alcance, invitador, asignación de cupos, invitación, destinatario o grupo, canje/registro, RSVP y credencial/asistencia. No es una propuesta de tablas definitivas ni una migración autorizada.
+
+- **Asignaciones auditables:** cantidad, unidad —personas o invitaciones—, origen contractual, derechos y vencimiento; autorizaciones para aumentar/reducir y motivo. Nunca inferir automáticamente que todos los paquetes activos otorgan el mismo beneficio.
+- **Token de invitación:** secreto de suficiente entropía, canje validado en servidor, intentos limitados y almacenamiento seguro del secreto; entregar enlace y alternativa de código. No exponer nombres o datos del evento a través de códigos predecibles.
+- **Destinatario y respuesta:** distinguir sin asignar, asignado, enviado, entrega acreditada cuando exista, abierto si se mide con permiso, aceptado/declinado y registro final. No convertir un email aceptado por proveedor en entrega confirmada.
+- **Conteos independientes:** cupo asignado, códigos generados/vigentes, entregados, canjeados, personas registradas, RSVP afirmativos, cancelados y asistentes. Un código de grupo puede representar varias personas: reportar ambas unidades y conservar denominadores.
+- **Operaciones seguras:** canje atómico, reintento idempotente, prevención de doble uso concurrente, identidad recuperable y revocación/reemplazo con historia. Definir cuándo una cancelación libera cupo; no hacerlo de forma implícita.
+- **Derechos y privacidad:** invitador autorizado ve solo lo necesario de sus invitados; el organizador controla el conjunto y la auditoría; operador de puerta solo consulta datos operativos. Que un patrocinante invite no concede consentimiento de marketing ni acceso a toda la base de asistentes.
+- **Capacidad:** cupos de distribución, capacidad física, capacidad por sesión y límites SaaS son restricciones distintas. Validarlas de manera coherente en emisión y canje según la política elegida. Evitar vender cupos que el contrato SaaS o el recinto no permitirán operar.
+
+### Flujo B2B: beneficio contractual → invitación → asistencia
+
+1. El organizador define para una edición qué regla otorga cupos: tipo/tamaño de stand, paquete de patrocinio, acuerdo específico, ponente u organización. Copiar una instantánea del beneficio al aprobar la asignación: cambiar luego el catálogo no debe alterar invitaciones ya concedidas silenciosamente.
+2. Asigna un responsable invitador y una cantidad con alcance: exposición, foro o combinación autorizada, días y sesiones. Separar pases del personal del expositor de invitaciones a visitantes si esa es la operación real del cliente; no asumir que comparten bolsa.
+3. Genera o permite generar hasta ese cupo, con límite y permiso. El invitador puede repartir códigos sin destinatario o asignarlos a personas solo si el cliente elige esa política; ambas opciones tienen riesgos de reenvío distintos.
+4. El invitado abre enlace o introduce código y registra los datos requeridos. El servidor valida vigencia, edición, uso, aforo y componentes autorizados, y consume la unidad según la política acordada. El registro obtiene trazabilidad hacia asignación/invitador sin mezclar esa atribución con consentimiento publicitario.
+5. El sistema emite credencial con derechos concretos. El check-in registra asistencia por punto/sesión; registrar para la exposición no abre automáticamente foro, taller o zona VIP.
+6. Organizador e invitador consultan sus contadores y excepciones. Reasignar un código no usado puede ser posible con historial. Si ya fue canjeado, usar un proceso de cancelación/reemplazo que invalide la credencial anterior y proteja aforo; no borrar el registro para aparentar disponibilidad.
+
+Preguntas de política que no deben resolverse por suposición: ¿un código por persona o bolsa reutilizable con N canjes? ¿Cuándo se consume cupo: emisión, envío, canje o aceptación? ¿Reserva aforo desde la asignación? ¿Caduca un cupo no distribuido y vuelve a una bolsa central? ¿Pueden sumarse beneficios de stand y patrocinio? ¿Qué ocurre con canjes existentes al reducir un paquete? ¿Se permite transferir una invitación nominativa? ¿Acceso al programa completo o componentes específicos? La experiencia previa sugiere códigos individuales, pero el detalle debe confirmarse.
+
+### Flujo bodas: grupo invitado → confirmación individual → protocolo
+
+Usar el mismo motor de invitación, recuperación, auditoría y canje, con un recorrido propio para planner y familia. No mostrar lenguaje de «patrocinante» ni «paquete SaaS» al invitado.
+
+El planner crea grupos/hogares e integrantes conocidos, define cupo máximo y si admite acompañantes pendientes de identificar, y envía un enlace privado al contacto. La respuesta puede ser por integrante; un hogar con cuatro plazas y tres aceptaciones debe contar tres asistentes, no cuatro por defecto ni un solo invitado. Una persona sin correo propio debe poder integrarse sin inventar emails o colisionar con la deduplicación por correo existente.
+
+El cliente debe decidir quién puede modificar respuestas —contacto principal, cada adulto, planner— y hasta cuándo. El piloto debe incluir cambios, bajas y acompañantes; una confirmación no puede crear plazas adicionales sin autorización. Datos de menores, alergias, accesibilidad o protocolo son opcionales solo si necesarios y con acceso restringido; no introducir una libreta sensible de invitados como campo libre compartido con proveedores.
+
+Mesa y asiento deben ser asignaciones separadas de RSVP, con capacidad por mesa, posibles asientos concretos y cambios auditados. No basta renombrar sillas del foro: hay grupos, anfitriones, precedencias y distribución que el planner debe validar. En puerta mostrar únicamente identidad y asignación vigente al personal autorizado; no divulgar lista completa, números de contacto o razones privadas de protocolo. El piloto puede empezar con listado de mesas/capacidad y asignación asistida; el editor visual avanzado llega después si el cliente lo requiere para comprar.
+
+### Prioridades revisadas y dos pilotos concretos
+
+**Primero, especificación breve con ambos clientes; después, núcleo de invitación privada y dos recorridos mínimos.** Preparar y validar simultáneamente los casos de uso no exige desarrollar dos verticales completos a la vez. Dar precedencia a quien confirme antes el evento, responsable y compromiso de piloto. El acceso real a bodas tiene más peso que una preferencia abstracta por B2B.
+
+| Piloto | Alcance mínimo propuesto | Evidencia de aceptación | Fuera del MVP |
+|---|---|---|---|
+| Foro/exposición privada | Una edición; asignaciones manuales desde stand/paquete/acuerdo; responsables de cuatro tipos cuando existan; códigos individuales; registro con canje; revocar no usados; registro de reemplazo; QR y reporte por invitador. Añadir un foro vinculado solo si es parte del caso real. | Una invitación de cada tipo recorre generación→distribución→canje→acceso; doble canje concurrente se rechaza; revocada no entra; aforo y cuotas no se exceden; invitador no ve datos ajenos; cifras concilian. | Venta de entradas, cobros al invitado, marketplace, automatización de todos los paquetes, integración fiscal y acceso offline no validado. |
+| Boda con empresa accesible | Una celebración con planner responsable; hogares e invitados; plazas de acompañantes; invitación privada; aceptación/declinación por persona; fecha límite; asignación a mesa con capacidad; listado operativo y check-in opcional según protocolo real. | Planner reproduce grupos reales anonimizados, cambios y cancelaciones; ningún hogar excede cupo; no hay mesa sobreocupada; permisos protegen datos; invitación y vista móvil son aprobadas; se acuerda un evento y precio de piloto. | ERP de boda, cobros de padrinos, portal general de proveedores, diseño visual complejo y automatización de WhatsApp sin canal contratado. |
+
+Secuencia de desarrollo recomendada una vez autorizada: (1) invitaciones/cupos/canje y trazabilidad; (2) destinatarios/grupos y RSVP, priorizando el recorrido del primer piloto; (3) mesas y protocolo mínimo o automatización de beneficios B2B según el cliente que siga; (4) producción/proveedores y presupuesto multimoneda según compromisos de compra. El núcleo debe permitir ambos recorridos sin imponer hogares al B2B ni inventario de patrocinio a bodas.
+
+Antes de un evento real: pruebas sintéticas con datos anonimizados, auditoría de todos los caminos de registro, permisos de invitador/planner/puerta, reenvíos, recuperaciones, concurrencia, revocación, aforo y contingencia. Reconfirmar privacidad, contacto, entidad facturadora y soporte. No usar un evento de alta exposición como primer ensayo técnico sin preparación y aceptación.
+
+Medir en ambos pilotos tiempo de preparación, distribución, porcentaje de respuestas, canjes y asistencia con denominadores separados, errores, cambios manuales y horas de soporte. Para B2B añadir utilización por invitador y paquete; para bodas, exactitud de personas/acompañantes y mesas. Medir repetición o propuesta aceptada por la empresa organizadora, sin publicar nombres de invitados o clientes sin permiso.
+
+### Preguntas críticas al usuario para concretar el siguiente trabajo
+
+1. En el sistema anterior, ¿cada código permitía un solo registro y ya reservaba aforo, o un mismo código habilitaba varios canjes hasta completar una bolsa? ¿Qué liberaba cupo y podían transferirlo?
+2. ¿Quién distribuía los códigos y veía los datos de quienes se registraban: solo organizador o también expositor/patrocinante/ponente? ¿Los derechos cubrían exposición, foro, talleres y días por separado?
+3. Para la empresa de bodas, ¿hay un próximo evento y un planner dispuesto a probar? ¿Lo urgente es confirmar hogares/acompañantes, distribuir mesas, protocolo de ingreso o coordinar proveedores?
+4. ¿Cuál de los dos clientes puede comprometer primero fecha, responsable, datos anonimizados y presupuesto de piloto? ¿Puede la empresa de bodas participar en una sesión de validación del flujo?
+
+Esta revisión actualiza la recomendación comercial; **no autoriza ni afirma implementación**. No se modificaron aplicación, precios, contratos o datos de clientes.
+
+### Respuestas confirmadas y plan de desarrollo — 16 de octubre de 2026
+
+Las preguntas anteriores quedan respondidas parcialmente por el usuario: cada código permite un único registro y queda bloqueado y asociado al participante; el organizador decide transferencias de códigos disponibles. Expositores, patrocinantes y ponentes distribuyen sus códigos, con accesos diferenciados de exposición, foro y VIP. No está confirmada la visibilidad de datos personales del invitado para esos distribuidores ni cuándo se reserva aforo.
+
+Ninguna de las dos oportunidades tiene fecha de evento o presupuesto de piloto comprometidos. Ambas pueden revisar el sistema y recomendar mejoras para evaluar una adquisición. Por tanto, la siguiente entrega se orienta a demostraciones guiadas con datos sintéticos; las propuestas anteriores de pilotos reales y compromisos comerciales no son hechos ni requisitos previos para avanzar.
+
+El [plan de desarrollo de invitaciones privadas y eventos sociales](PLAN_DESARROLLO_INVITACIONES_Y_SOCIALES_2026-10-16.md) concreta el backlog, dependencias y criterios de aceptación y prevalece sobre las alternativas de códigos multicanje y la secuencia condicionada a conseguir primero una fecha. Propone núcleo común, recorrido B2B acotado, hogares/RSVP y mesas mínimas, con diseño social desde el inicio. Mantiene explícitas las decisiones pendientes de aforo, cancelaciones, permisos y combinación de beneficios.
+
+La posterior [entrega de las fases 0–6](ENTREGA_INVITACIONES_SOCIALES_OPERACION_2026-10-16.md) incorpora las opciones operativas para que cada organizador seleccione esas políticas y documenta el alcance desarrollado. La revisión por las dos empresas sigue pendiente; no se afirma una compra, piloto ni aceptación comercial.

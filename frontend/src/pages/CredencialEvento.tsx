@@ -21,6 +21,7 @@ type Credential = {
 export default function CredencialEvento() {
   const { token } = useParams()
   const [cred, setCred] = useState<Credential | null>(null)
+  const [invitation, setInvitation] = useState<{ rights: string[]; dates: string[]; components: string[]; sessions: string[]; table_name: string | null } | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -34,10 +35,11 @@ export default function CredencialEvento() {
         setLoading(false)
         return
       }
-      const credentialResult = await supabase.rpc('get_credential_by_token', { p_token: token })
+      const [credentialResult, details] = await Promise.all([supabase.rpc('get_credential_by_token', { p_token: token }), supabase.rpc('get_invitation_credential_details', { p_token: token })])
       if (!active) return
       if (credentialResult.error) setLoadError(credentialResult.error.message)
       else setCred((credentialResult.data as Credential[] | null)?.[0] ?? null)
+      setInvitation(details.error ? null : details.data)
       setLoading(false)
     }
     load()
@@ -133,6 +135,7 @@ export default function CredencialEvento() {
                       </div>
                     )}
                   </dl>
+                  {invitation && <section className="mt-4 space-y-1 text-sm text-zinc-700"><h2 className="font-semibold">Accesos de la invitación</h2><p>{invitation.rights.map(r => ({ exhibition: 'Exposición', forum: 'Foro', vip: 'Zona VIP', social: 'Social' } as Record<string, string>)[r] ?? r).join(' · ')}</p><p>{invitation.components.join(' · ')}</p>{invitation.sessions.length > 0 && <p>Sesiones: {invitation.sessions.join(' · ')}</p>}{invitation.dates.length > 0 && <p>Días: {invitation.dates.join(', ')}</p>}{invitation.table_name && <p className="font-semibold">Mesa: {invitation.table_name}</p>}</section>}
 
                   <span className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">
                     Confirmado

@@ -80,6 +80,16 @@ export default function CheckinEvento() {
       // el escáner puede no estar corriendo (ingreso manual)
     }
 
+    const invitation = await supabase.rpc('validate_invitation_checkin', { p_token: token, p_point: accessPointId || null, p_session: sessionId || null })
+    if (invitation.error) {
+      setOutcome({ kind: 'error', title: 'No se pudo comprobar la invitación', subtitle: invitation.error.message }); return
+    }
+    if (invitation.data) {
+      const validation = invitation.data as { result: string; participant_name?: string; reason: string }
+      if (validation.result === 'allowed') setCount(current => current + 1)
+      setOutcome({ kind: validation.result === 'allowed' ? 'success' : 'warning', title: validation.result === 'allowed' ? `¡Bienvenido, ${validation.participant_name}!` : 'Acceso no autorizado', subtitle: validation.reason }); return
+    }
+
     if (accessPointId && sessionId) {
       const { data, error } = await supabase.rpc('validate_session_checkin', { p_credential_token: token, p_access_point_id: accessPointId, p_session_id: sessionId, p_device_label: navigator.userAgent.slice(0, 120) })
       const validation = Array.isArray(data) ? data[0] : null

@@ -676,6 +676,7 @@ export default function PortalExpositor() {
           </p>
         )}
         <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Link to={`/portal/invitaciones/${eventId}`} className="rounded-xl border bg-white p-4"><b className="block">Mis invitaciones</b><span className="text-xs text-emerald-700">Emitir códigos y consultar canjes de mis asignaciones</span></Link>
           <a href="#tareas" className="rounded-xl border bg-white p-4 active:scale-[0.99]"><span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Pendientes</span><b className="mt-1 block text-2xl">{pendingTasks}</b><span className="text-xs text-emerald-700">Revisar tareas</span></a>
           <a href="#personal" className="rounded-xl border bg-white p-4 active:scale-[0.99]"><span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Personal activo</span><b className="mt-1 block text-2xl">{activePersonnel}</b><span className="text-xs text-emerald-700">Gestionar acreditados</span></a>
           <a href="#perfil-publico" className="rounded-xl border bg-white p-4 active:scale-[0.99]"><span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Perfil público</span><b className="mt-1 flex items-center gap-2 text-base"><CheckCircle2 className="h-5 w-5" />{profileStatus === "approved" ? "Publicado" : profileStatus === "pending" ? "En revisión" : profileStatus === "rejected" ? "Cambios solicitados" : "Por completar"}</b><span className="text-xs text-emerald-700">Abrir configuración</span></a>

@@ -339,6 +339,7 @@ export default function RegistroEvento() {
         {!loading && event && !done && registrationState?.available === false && (
           <Notice title="Registro no disponible" body={registrationState.reason ?? "El organizador todavía está preparando este registro."} />
         )}
+        {!loading && event && !done && event.config?.registration_mode === 'invitation' && <Link to={`/invitacion/${event.id}/registro`} className="my-4 inline-block rounded-lg bg-emerald-700 px-4 py-2 font-semibold text-white">Tengo un código de invitación</Link>}
 
         {!loading &&
           event &&

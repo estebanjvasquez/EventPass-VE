@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { sendUploadLinkEmail, sendConfirmationEmail, sendPortalInviteEmail, sendProviderNoticeEmail, sendPlatformAccessEmail, sendMembershipNoticeEmail, type EmailSendBinding, type EventEmailContext } from './email'
 import { runScheduledJobs } from './jobs'
 import { participantApi, hashToken } from './participant'
+import { invitationsApi } from './invitations'
 import { normalizeSlug, provisionDomain, getDomainStatus, type CfEnv } from './tenants'
 import { forumLayoutIntentJsonSchema, forumLayoutIntentSchema, generateForumPlan, inferForumLayoutIntent } from './forumFloorplan'
 import { arrayBufferToDataUrl, exhibitionDetectionJsonSchema, exhibitionDetectionSchema, normalizeExhibitionDetection } from './exhibitionImport'
@@ -60,6 +61,7 @@ app.use('*', cors({
   maxAge: 86400,
 }))
 app.route('/api/participant', participantApi)
+app.route('/api/invitations', invitationsApi)
 
 app.post('/api/commercial/demo',async c=>{
   const parsed=z.object({name:z.string().trim().min(2).max(150),email:z.string().trim().email().max(200),organization_name:z.string().trim().min(2).max(150),event_type:z.enum(['simple','forum','exhibition','program']),expected_participants:z.number().int().min(1).max(100000),needs_printing:z.boolean(),consent:z.literal(true),website:z.string().max(200).optional()}).safeParse(await c.req.json().catch(()=>null))
