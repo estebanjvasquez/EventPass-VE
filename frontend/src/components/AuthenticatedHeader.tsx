@@ -13,6 +13,7 @@ type HeaderState = {
   branding: Brand
   isPlatformAdmin: boolean
   isSupport: boolean
+  manager: boolean
   impersonating: boolean
 }
 
@@ -32,7 +33,7 @@ export default function AuthenticatedHeader() {
   const location = useLocation()
   const platformView = location.pathname.startsWith('/superadmin')
   const [open, setOpen] = useState(false)
-  const [state, setState] = useState<HeaderState>({ organizationName: 'Organización', branding: {}, isPlatformAdmin: false, isSupport: false, impersonating: false })
+  const [state, setState] = useState<HeaderState>({ organizationName: 'Organización', branding: {}, isPlatformAdmin: false, isSupport: false, manager: false, impersonating: false })
 
   useEffect(() => {
     let active = true
@@ -41,13 +42,13 @@ export default function AuthenticatedHeader() {
       if (!active) return
       const isPlatformAdmin = platform.data === true
       if (platformView) {
-        setState({ organizationName: 'Plataforma global', branding: {}, isPlatformAdmin, isSupport: support.data === true, impersonating: false })
+        setState({ organizationName: 'Plataforma global', branding: {}, isPlatformAdmin, isSupport: support.data === true, manager: false, impersonating: false })
         return
       }
       const organization = await resolveActiveOrg()
       if (!active) return
       if (!organization) {
-        setState({ organizationName: 'EventPass VE', branding: {}, isPlatformAdmin, isSupport: support.data === true, impersonating: false })
+        setState({ organizationName: 'EventPass VE', branding: {}, isPlatformAdmin, isSupport: support.data === true, manager: false, impersonating: false })
         return
       }
       const { data } = await supabase.from('organizations').select('name,branding').eq('id', organization.organization_id).maybeSingle()
@@ -57,6 +58,7 @@ export default function AuthenticatedHeader() {
         branding: ((data as { branding?: Brand } | null)?.branding ?? {}),
         isPlatformAdmin,
         isSupport: support.data === true,
+        manager: isPlatformAdmin || organization.role === "owner" || organization.role === "admin",
         impersonating: organization.impersonating,
       })
     }
@@ -74,7 +76,7 @@ export default function AuthenticatedHeader() {
   const brandName = platformView ? 'Plataforma global' : state.branding.name ?? state.organizationName
   const accent = platformView ? '#059669' : state.branding.color ?? '#059669'
   const home = platformView ? platformUrl() : '/admin'
-  const links = platformView ? platformSections.map(section => ({ to: platformUrl(section.id), label: section.label, icon: ShieldCheck })) : navigation
+  const links = platformView ? platformSections.map(section => ({ to: platformUrl(section.id), label: section.label, icon: ShieldCheck })) : navigation.filter(entry => state.manager || !['/admin/eventos', '/admin/equipo-operativo', '/admin/patrocinantes'].includes(entry.to))
   const contextLabel = platformView ? 'Actuando como superadmin' : state.impersonating ? 'Vista de cliente' : 'Organización activa'
 
   return <header className="sticky top-0 z-[120] border-b border-zinc-200 bg-white/95 shadow-sm backdrop-blur">
@@ -101,6 +103,7 @@ export default function AuthenticatedHeader() {
             <div className="border-b border-zinc-100 px-4 py-3"><p className="truncate text-sm font-semibold text-zinc-900">{user?.email ?? 'Sesión activa'}</p><p className="mt-0.5 text-xs text-zinc-500">Accesos y navegación</p></div>
             <nav aria-label="Navegación de usuario" className="max-h-[min(60dvh,30rem)] overflow-y-auto p-2">
               {(!platformView || state.isPlatformAdmin) && links.map(({ to, label, icon: Icon }) => <Link key={to} to={to} onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-emerald-50 hover:text-emerald-900"><Icon className="h-4 w-4 text-emerald-700" />{label}</Link>)}
+              {!platformView && state.manager && <Link to="/admin/organizacion/configuracion" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-zinc-700">Configuración de la organización</Link>}
               {!platformView && <Link to="/admin/suscripcion" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-emerald-50 hover:text-emerald-900"><ShieldCheck className="h-4 w-4 text-emerald-700" />Suscripción</Link>}
               <a href="/manual/" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-emerald-50 hover:text-emerald-900"><BookOpen className="h-4 w-4 text-emerald-700" />Manual de usuario</a>
               {!platformView && <Link to="/admin/soporte" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-zinc-700">Preparación y soporte</Link>}

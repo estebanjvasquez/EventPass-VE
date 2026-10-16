@@ -1,3 +1,4 @@
+import { eventProfile, eventSubtypes, eventPurposes } from "../../lib/eventProfile";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, CalendarCog, Pencil, Plus, Trash2 } from "lucide-react";
@@ -102,7 +103,7 @@ export default function EventosAdmin() {
   async function changeStatus(ev: EventRow, status: EventStatus) {
     if (!orgId) return;
     if (status === "published") {
-      if (ev.event_type === "forum") {
+      if (ev.event_type === "forum" && ["forum", "conference"].includes(eventProfile(ev).subtype)) {
         const [stageResult, sessionResult] = await Promise.all([
           supabase
             .from("event_stages")
@@ -214,7 +215,7 @@ export default function EventosAdmin() {
           to="/admin/programas"
           className="mt-4 inline-flex rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-zinc-400"
         >
-          Gestionar programas, foro y exposición
+          Vincular eventos en programas
         </Link>
 
         {events.some((event) => event.status === "draft") && (
@@ -338,7 +339,7 @@ export default function EventosAdmin() {
                     <td className="px-5 py-3.5">
                       <p className="font-medium text-zinc-900">{ev.name}</p>
                       <p className="text-xs text-zinc-500">
-                        {TYPE_LABEL[ev.event_type]} · {ev.total_slots || "∞"}{" "}
+                        {eventProfile(ev).label || TYPE_LABEL[ev.event_type]} · {ev.total_slots || "∞"}{" "}
                         cupos
                       </p>
                     </td>
@@ -410,9 +411,7 @@ export default function EventosAdmin() {
           )}
         </div>
 
-        {orgId && <PaymentMethodsSection orgId={orgId} onError={setError} />}
-        {orgId && <BrandingSection orgId={orgId} onError={setError} />}
-        {orgId && <SubdomainSection orgId={orgId} onError={setError} />}
+        <Link to="/admin/organizacion/configuracion" className="mt-8 block rounded-xl border bg-white p-5 text-emerald-800">Configuración de la organización: identidad general, subdominio y medios de pago</Link>
       </main>
     </div>
   );
@@ -791,7 +790,7 @@ function SubdomainSection({
 // ---------------------------------------------------------------------------
 // Formulario de creación / edición de evento
 // ---------------------------------------------------------------------------
-function EventForm({
+export function EventForm({
   orgId,
   userId,
   event,
@@ -808,6 +807,9 @@ function EventForm({
     name: event?.name ?? "",
     description: event?.description ?? "",
     event_type: event?.event_type ?? ("forum" as EventType),
+    event_subtype: event ? eventProfile(event).subtype : "forum",
+    event_purpose: event ? eventProfile(event).purpose : "commercial",
+    guest_management: event ? eventProfile(event).guests : false,
     status: event?.status ?? ("draft" as EventStatus),
     start_date: toLocalInput(event?.start_date ?? null),
     end_date: toLocalInput(event?.end_date ?? null),
@@ -850,6 +852,7 @@ function EventForm({
       total_slots: Number(form.total_slots) || 0,
       config: {
         ...(event?.config ?? {}),
+        event_subtype: form.event_subtype, event_purpose: form.event_purpose, guest_management: form.guest_management,
         registration_mode: form.registration_mode,
         public_floorplan_visible: form.public_floorplan_visible,
         public_seat_selection_enabled:
@@ -906,15 +909,19 @@ function EventForm({
         <Field label="Tipo">
           <select
             value={form.event_type}
-            onChange={(e) => set("event_type", e.target.value as EventType)}
+            onChange={(e) => { const type = e.target.value as EventType; setForm(f => ({ ...f, event_type: type, event_subtype: eventSubtypes[type][0][0], event_purpose: type === "social" ? "private" : "commercial", guest_management: type === "social", registration_mode: type === "social" ? "invitation" : f.registration_mode })); }}
             className={inputCls}
           >
-            <option value="forum">Foro</option>
+            <option value="forum">Foro / encuentro profesional</option>
             <option value="exhibition">Exposición</option>
             <option value="workshop">Taller</option>
             <option value="social">Social</option>
           </select>
         </Field>
+        <Field label="Subtipo del evento"><select className={inputCls} value={form.event_subtype} onChange={e => set("event_subtype", e.target.value)}>{eventSubtypes[form.event_type].map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></Field>
+        <Field label="Finalidad"><select className={inputCls} value={form.event_purpose} onChange={e => set("event_purpose", e.target.value)}>{eventPurposes.map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></Field>
+        <label className="sm:col-span-2"><input type="checkbox" checked={form.guest_management} onChange={e => set("guest_management", e.target.checked)} /> Habilitar grupos, acompañantes, RSVP y mesas en este evento</label>
+        <p className="text-sm sm:col-span-2">Cada evento mantiene sus datos separados. Solo un administrador puede vincular eventos desde Programas para autorizar accesos combinados.</p>
         <Field label="Estado">
           <select
             value={form.status}
@@ -1272,4 +1279,11 @@ function Field({
       {children}
     </label>
   );
+}
+
+export function OrganizationSettings() {
+  const [orgId, setOrgId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => { let active=true; void resolveActiveOrg().then(org => { if(active) setOrgId(org?.organization_id ?? null); });return()=>{active=false}; }, []);
+  return <main className="mx-auto max-w-5xl space-y-5 p-6"><Link to="/admin" className="text-emerald-700 underline">Volver a la organización</Link><h1 className="text-2xl font-bold">Configuración de la organización</h1><p>Solo propietarios y administradores. Estos ajustes son generales; cada evento mantiene su propia configuración, invitados y operación.</p>{error && <p role="alert">{error}</p>}{orgId && <><PaymentMethodsSection orgId={orgId} onError={setError}/><BrandingSection orgId={orgId} onError={setError}/><SubdomainSection orgId={orgId} onError={setError}/></>}</main>
 }

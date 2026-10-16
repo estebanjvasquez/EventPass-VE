@@ -37,21 +37,22 @@ type DashboardMetrics = {
 };
 
 const modules = [
-  { title: "Eventos", description: "Crea exposiciones y foros, configura fechas y publica cada evento.", to: "/admin/eventos", icon: CalendarCog, featured: true },
+  { title: "Configuración de la organización", description: "Identidad general, subdominio y medios de pago. Solo administradores.", to: "/admin/organizacion/configuracion", icon: ShieldCheck, adminOnly: true },
+  { title: "Eventos", adminOnly: true, description: "Crea eventos profesionales o sociales con configuración independiente.", to: "/admin/eventos", icon: CalendarCog, featured: true },
   { title: "Registros", description: "Consulta participantes, pagos, estados y asignaciones.", to: "/admin/registros", icon: ClipboardList, featured: true },
   { title: "Acreditación", description: "Acredita personas, registra walk-ins, imprime y entrega credenciales durante el evento.", to: "/admin/acreditacion", icon: IdCard, featured: true },
   { title: "Centro de impresión", description: "Conecta impresoras, controla la cola, prepara lotes y supervisa estaciones.", to: "/admin/impresion", icon: Printer, featured: true, adminOnly: true },
   { title: "Badge Designer", description: "Diseña, versiona y publica credenciales para cada tipo de participante.", to: "/admin/badge-designer", icon: Palette, featured: true, adminOnly: true },
   { title: "Check-in", description: "Controla accesos y valida credenciales durante el evento.", to: "/admin/checkin", icon: ScanLine, featured: true },
-  { title: "Equipo operativo", description: "Administra responsables, proveedores y permisos de trabajo.", to: "/admin/equipo-operativo", icon: Users },
-  { title: "Proveedores", description: "Directorio de empresas y personal contratado para la operación.", to: "/admin/proveedores", icon: BriefcaseBusiness },
-  { title: "Patrocinantes", description: "Gestiona acuerdos, entregables, pagos y activaciones.", to: "/admin/patrocinantes", icon: Handshake },
-  { title: "Programas", description: "Organiza programas, invitados y registros vinculados.", to: "/admin/programas", icon: Ticket },
+  { title: "Equipo operativo", adminOnly: true, description: "Administra responsables, proveedores y permisos de trabajo.", to: "/admin/equipo-operativo", icon: Users },
+  { title: "Proveedores", adminOnly: true, description: "Directorio de empresas y personal contratado para la operación.", to: "/admin/proveedores", icon: BriefcaseBusiness },
+  { title: "Patrocinantes", adminOnly: true, description: "Gestiona acuerdos, entregables, pagos y activaciones.", to: "/admin/patrocinantes", icon: Handshake },
+  { title: "Programas", adminOnly: true, description: "Organiza programas, invitados y registros vinculados.", to: "/admin/programas", icon: Ticket },
   { title: "Soporte y preparación", description: "Reporta incidencias y revisa los requisitos para operar tu evento.", to: "/admin/soporte", icon: ShieldCheck },
   { title: "Suscripción", description: "Revisa el plan, límites y estado de la cuenta de la organización.", to: "/admin/suscripcion", icon: ShieldCheck },
 ];
 
-const eventTypeLabel: Record<string, string> = { exhibition: "Exposición", forum: "Foro", general: "Evento" };
+const eventTypeLabel: Record<string, string> = { exhibition: "Exposición", forum: "Foro", workshop: "Taller", social: "Social", general: "Evento" };
 
 export default function OrganizadorDashboard() {
   const [capabilities,setCapabilities]=useState<Record<string,boolean>|null>(null);

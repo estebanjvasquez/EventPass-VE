@@ -1,3 +1,4 @@
+import { eventProfile, eventSubtypes, eventPurposes } from "../../lib/eventProfile";
 import { useEffect, useMemo, useState } from "react";
 import type { ComponentType } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -175,7 +176,7 @@ export default function EventoAdministracion() {
     const common: Tile[] = [
       {
         label: "Invitaciones y operación",
-        description: "Códigos, hogares, mesas, producción y presupuesto.",
+        description: eventProfile(event).guests ? "Códigos, grupos, mesas, producción y presupuesto." : "Códigos, producción y presupuesto del evento.",
         to: `/admin/eventos/${event.id}/operaciones`,
         icon: Users,
         tone: "bg-emerald-50 text-emerald-800",
@@ -312,7 +313,7 @@ export default function EventoAdministracion() {
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold">
-                  {labels[event.event_type]}
+                  {eventProfile(event).label || labels[event.event_type]}
                 </span>
                 <span
                   className={`rounded-full px-3 py-1 text-xs font-semibold ${event.status === "published" ? "bg-emerald-100 text-emerald-800" : event.status === "closed" ? "bg-amber-100 text-amber-800" : "bg-zinc-100 text-zinc-600"}`}
@@ -477,6 +478,9 @@ export default function EventoAdministracion() {
                 </button>
               </div>
               <div className="mt-5 grid gap-4">
+                <label className="grid gap-1 text-sm">Subtipo del evento<select className="rounded-lg border p-2" value={eventProfile(draft).subtype} onChange={e => updateConfig("event_subtype", e.target.value)}>{eventSubtypes[draft.event_type].map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+                <label className="grid gap-1 text-sm">Finalidad<select className="rounded-lg border p-2" value={eventProfile(draft).purpose} onChange={e => updateConfig("event_purpose", e.target.value)}>{eventPurposes.map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+                <label className="text-sm"><input type="checkbox" checked={eventProfile(draft).guests} onChange={e => updateConfig("guest_management", e.target.checked)} /> Habilitar grupos, acompañantes, RSVP y mesas en este evento</label>
                 <label className="grid gap-1 text-sm font-medium">
                   Nombre
                   <input

@@ -1,10 +1,11 @@
+import { eventProfile } from '../lib/eventProfile'
 import { useEffect, useState, type ReactNode } from 'react'
 import { BarChart3, CalendarCog, CheckSquare, ChevronLeft, ClipboardList, FileText, Handshake, LayoutDashboard, Map, MonitorSmartphone, ScanLine, Settings2, Store, Users } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { resolveActiveOrg } from '../lib/activeOrg'
 import { supabase } from '../lib/supabase'
 
-type EventInfo = { id: string; name: string; event_type: string; status: string }
+type EventInfo = { id: string; name: string; event_type: string; config?: Record<string, unknown>; status: string }
 
 function eventIdFromPath(pathname: string) {
   const match = pathname.match(/^\/admin\/(?:eventos\/([^/]+)\/(?:resumen|administrar|conversiones|registros|formularios|lanzamiento|landing|entradas|talleres|operaciones)|agenda\/([^/]+)|stands\/([^/]+)|expositores\/([^/]+)|patrocinantes\/([^/]+)|personal\/([^/]+)|operacion-plano\/([^/]+)|asientos\/([^/]+)|foro-plano\/([^/]+)|plano-comercial\/([^/]+)|plano-publicar\/([^/]+))/)
@@ -14,6 +15,7 @@ function eventIdFromPath(pathname: string) {
 export default function EventAdminWorkspace({ children }: { children: ReactNode }) {
   const location = useLocation()
   const eventId = eventIdFromPath(location.pathname)
+  const [manager, setManager] = useState(false)
   const [event, setEvent] = useState<EventInfo | null>(null)
 
   useEffect(() => {
@@ -22,7 +24,8 @@ export default function EventAdminWorkspace({ children }: { children: ReactNode 
     async function load() {
       const active = await resolveActiveOrg()
       if (!active) return
-      const { data } = await supabase.from('events').select('id,name,event_type,status').eq('id', eventId).eq('organization_id', active.organization_id).maybeSingle()
+      if (mounted) setManager(active.role === "owner" || active.role === "admin")
+      const { data } = await supabase.from('events').select('id,name,event_type,status,config').eq('id', eventId).eq('organization_id', active.organization_id).maybeSingle()
       if (mounted) setEvent(data as EventInfo | null)
     }
     void load()
@@ -55,9 +58,9 @@ export default function EventAdminWorkspace({ children }: { children: ReactNode 
 
   return <div className="min-h-[calc(100dvh-4rem)] bg-zinc-50 lg:pl-72">
     <aside className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-200 bg-white/95 px-2 py-2 backdrop-blur lg:inset-y-16 lg:left-0 lg:right-auto lg:w-72 lg:border-r lg:border-t-0 lg:px-3 lg:py-5">
-      <div className="hidden px-3 lg:block"><Link to="/admin/eventos" className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-700"><ChevronLeft className="h-4 w-4" />Todos los eventos</Link><p className="mt-5 text-xs font-bold uppercase tracking-[.14em] text-zinc-500">Evento activo</p><p className="mt-1 truncate text-base font-bold text-zinc-900">{event?.name ?? 'Cargando evento…'}</p><p className="mt-1 text-xs text-zinc-500">{event?.status === 'published' ? 'Publicado' : 'Configuración y operación'}</p></div>
+      <div className="hidden px-3 lg:block"><Link to="/admin/eventos" className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-700"><ChevronLeft className="h-4 w-4" />Todos los eventos</Link><p className="mt-5 text-xs font-bold uppercase tracking-[.14em] text-zinc-500">Evento activo</p><p className="mt-1 truncate text-base font-bold text-zinc-900">{event?.name ?? 'Cargando evento…'}</p><p className="mt-1 text-xs text-zinc-500">{event ? `${eventProfile(event).label} · ${event.status === 'published' ? 'Publicado' : 'Configuración y operación'}` : 'Configuración y operación'}</p></div>
       <nav aria-label="Centro de control del evento" className="flex gap-1 overflow-x-auto lg:mt-6 lg:block lg:space-y-1">
-        {entries.map(({ to, label, icon: Icon }) => { const active = location.pathname === to || (label === 'Promoción y conversiones' && location.pathname === `${base}/conversiones`); return <Link key={to} to={to} className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2.5 text-xs font-semibold transition lg:text-sm ${active ? 'bg-emerald-700 text-white' : 'text-zinc-700 hover:bg-emerald-50 hover:text-emerald-900'}`}><Icon className="h-4 w-4" />{label}</Link> })}
+        {entries.filter(entry => manager || entry.to === `${base}/resumen` || entry.to === `${base}/registros` || entry.to === `/admin/operacion-plano/${eventId}`).map(({ to, label, icon: Icon }) => { const active = location.pathname === to || (label === 'Promoción y conversiones' && location.pathname === `${base}/conversiones`); return <Link key={to} to={to} className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2.5 text-xs font-semibold transition lg:text-sm ${active ? 'bg-emerald-700 text-white' : 'text-zinc-700 hover:bg-emerald-50 hover:text-emerald-900'}`}><Icon className="h-4 w-4" />{label}</Link> })}
       </nav>
     </aside>
     <div className="pb-16 lg:pb-0">{children}</div>

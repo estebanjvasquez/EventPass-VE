@@ -78,6 +78,7 @@ function PageFallback() {
 }
 
 
+const OrganizationSettings = lazy(() => import('./pages/admin/EventosAdmin').then(m => ({ default: m.OrganizationSettings })))
 function App() {
   return (
     <Suspense fallback={<PageFallback />}>
@@ -95,15 +96,15 @@ function App() {
         <Route path="/mi-registro" element={<MiRegistro />} />
         <Route path="/mi-registro/:accessToken" element={<MiRegistro />} />
         <Route path="/recuperar-registro" element={<RecuperarRegistro />} />
-        <Route path="/admin/eventos/:eventId/entradas" element={<RequireAuth><TicketCategoriesAdmin /></RequireAuth>} />
-        <Route path="/admin/programas/:programId/landing" element={<RequireAuth><EventLandingAdmin /></RequireAuth>} />
+        <Route path="/admin/eventos/:eventId/entradas" element={<RequireAuth><RequireOrgAdmin><TicketCategoriesAdmin /></RequireOrgAdmin></RequireAuth>} />
+        <Route path="/admin/programas/:programId/landing" element={<RequireAuth><RequireOrgAdmin><EventLandingAdmin /></RequireOrgAdmin></RequireAuth>} />
         <Route path="/e/:eventId" element={<RegistroEvento />} />
         <Route path="/e/:eventId/interes/:slug" element={<PublicLeadForm />} />
         <Route path="/p/:programId/registro" element={<RegistroPrograma />} />
         <Route path="/e/:eventId/agenda" element={<AgendaPublica />} />
         <Route path="/e/:eventId/programa" element={<ProgramaAgenda />} />
         <Route path="/p/:programId/agenda" element={<ProgramaAgenda />} />
-        <Route path="/admin/programas/:programId/agenda" element={<RequireAuth><ProgramaAgendaAdmin /></RequireAuth>} />
+        <Route path="/admin/programas/:programId/agenda" element={<RequireAuth><RequireOrgAdmin><ProgramaAgendaAdmin /></RequireOrgAdmin></RequireAuth>} />
         <Route path="/comprobante/:token" element={<CargarComprobante />} />
         <Route path="/programa/comprobante/:token" element={<CargarComprobantePrograma />} />
         <Route path="/credencial/:token" element={<CredencialEvento />} />
@@ -129,8 +130,8 @@ function App() {
           }
         />
         <Route path="/admin/registros" element={<RequireAuth><AdminPanel /></RequireAuth>} />
-        <Route path="/admin/puntos-acceso" element={<RequireAuth><PuntosAccesoAdmin /></RequireAuth>} />
-        <Route path="/admin/equipo-operativo" element={<RequireAuth><EquipoOperativoAdmin /></RequireAuth>} />
+        <Route path="/admin/puntos-acceso" element={<RequireAuth><RequireOrgAdmin><PuntosAccesoAdmin /></RequireOrgAdmin></RequireAuth>} />
+        <Route path="/admin/equipo-operativo" element={<RequireAuth><RequireOrgAdmin><EquipoOperativoAdmin /></RequireOrgAdmin></RequireAuth>} />
         <Route path="/admin/checkin/control" element={<RequireAuth><CheckinReportAdmin /></RequireAuth>} />
         <Route
           path="/admin/acreditacion"
@@ -147,46 +148,47 @@ function App() {
           path="/admin/eventos"
           element={
             <RequireAuth>
-              <EventosAdmin />
+              <RequireOrgAdmin><EventosAdmin /></RequireOrgAdmin>
             </RequireAuth>
           }
         />
-        <Route path="/admin/programas" element={<RequireAuth><ProgramasAdmin /></RequireAuth>} />
-        <Route path="/admin/programas/:programId/accesos" element={<RequireAuth><ProgramaAccesosAdmin /></RequireAuth>} />
-        <Route path="/admin/programas/:programId/configuracion" element={<RequireAuth><ProgramaConfiguracionAdmin /></RequireAuth>} />
-        <Route path="/admin/agenda/:eventId" element={<RequireAuth><AgendaAdmin /></RequireAuth>} />
-        <Route path="/admin/eventos/:eventId/talleres" element={<RequireAuth><WorkshopSessionsAdmin /></RequireAuth>} />
+        <Route path="/admin/organizacion/configuracion" element={<RequireAuth><RequireOrgAdmin><OrganizationSettings /></RequireOrgAdmin></RequireAuth>} />
+        <Route path="/admin/programas" element={<RequireAuth><RequireOrgAdmin><ProgramasAdmin /></RequireOrgAdmin></RequireAuth>} />
+        <Route path="/admin/programas/:programId/accesos" element={<RequireAuth><RequireOrgAdmin><ProgramaAccesosAdmin /></RequireOrgAdmin></RequireAuth>} />
+        <Route path="/admin/programas/:programId/configuracion" element={<RequireAuth><RequireOrgAdmin><ProgramaConfiguracionAdmin /></RequireOrgAdmin></RequireAuth>} />
+        <Route path="/admin/agenda/:eventId" element={<RequireAuth><RequireOrgAdmin><AgendaAdmin /></RequireOrgAdmin></RequireAuth>} />
+        <Route path="/admin/eventos/:eventId/talleres" element={<RequireAuth><RequireOrgAdmin><WorkshopSessionsAdmin /></RequireOrgAdmin></RequireAuth>} />
         <Route path="/admin/programs" element={<Navigate to="/admin/programas" replace />} />
-        <Route path="/admin/stands/:eventId" element={<RequireAuth><StandsAdmin /></RequireAuth>} />
-        <Route path="/admin/expositores/:eventId" element={<RequireAuth><ExpositoresAdmin /></RequireAuth>} />
+        <Route path="/admin/stands/:eventId" element={<RequireAuth><RequireOrgAdmin><StandsAdmin /></RequireOrgAdmin></RequireAuth>} />
+        <Route path="/admin/expositores/:eventId" element={<RequireAuth><RequireOrgAdmin><ExpositoresAdmin /></RequireOrgAdmin></RequireAuth>} />
         <Route path="/portal/expositor" element={<RequireAuth><PortalExpositorInicio /></RequireAuth>} />
         <Route path="/portal/expositor/:eventId" element={<RequireAuth><PortalExpositor /></RequireAuth>} />
         <Route path="/portal/expositor/:eventId/visitantes" element={<RequireAuth><PortalExpositorVisitantes /></RequireAuth>} />
         <Route path="/expo/:eventId/plano" element={<PlanoPublico />} />
-        <Route path="/admin/patrocinantes/:eventId" element={<RequireAuth><PatrocinantesAdmin /></RequireAuth>} />
-        <Route path="/admin/patrocinantes" element={<RequireAuth><PatrocinantesGestionAdmin /></RequireAuth>} />
-        <Route path="/admin/proveedores" element={<RequireAuth><ProveedoresAdmin /></RequireAuth>} />
-        <Route path="/admin/personal/:eventId" element={<RequireAuth><PersonalEventoAdmin /></RequireAuth>} />
+        <Route path="/admin/patrocinantes/:eventId" element={<RequireAuth><RequireOrgAdmin><PatrocinantesAdmin /></RequireOrgAdmin></RequireAuth>} />
+        <Route path="/admin/patrocinantes" element={<RequireAuth><RequireOrgAdmin><PatrocinantesGestionAdmin /></RequireOrgAdmin></RequireAuth>} />
+        <Route path="/admin/proveedores" element={<RequireAuth><RequireOrgAdmin><ProveedoresAdmin /></RequireOrgAdmin></RequireAuth>} />
+        <Route path="/admin/personal/:eventId" element={<RequireAuth><RequireOrgAdmin><PersonalEventoAdmin /></RequireOrgAdmin></RequireAuth>} />
         <Route path="/admin/personal" element={<Navigate to="/admin/eventos" replace />} />
         <Route path="/admin/operacion-plano/:eventId" element={<RequireAuth><OperacionPlanoAdmin /></RequireAuth>} />
         <Route
           path="/admin/asientos/:eventId"
           element={
             <RequireAuth>
-              <PlanoForoAdmin />
+              <RequireOrgAdmin><PlanoForoAdmin /></RequireOrgAdmin>
             </RequireAuth>
           }
         />
-        <Route path="/admin/eventos/:eventId/administrar" element={<RequireAuth><EventoAdministracion /></RequireAuth>} />
+        <Route path="/admin/eventos/:eventId/administrar" element={<RequireAuth><RequireOrgAdmin><EventoAdministracion /></RequireOrgAdmin></RequireAuth>} />
         <Route path="/admin/eventos/:eventId/resumen" element={<RequireAuth><EventOverview /></RequireAuth>} />
         <Route path="/admin/eventos/:eventId/registros" element={<RequireAuth><AdminPanel /></RequireAuth>} />
         <Route path="/admin/eventos/:eventId/conversiones" element={<RequireAuth><EventConversions /></RequireAuth>} />
-        <Route path="/admin/eventos/:eventId/formularios" element={<RequireAuth><EventLeadForms /></RequireAuth>} />
-        <Route path="/admin/eventos/:eventId/lanzamiento" element={<RequireAuth><EventLaunchChecklist /></RequireAuth>} />
-        <Route path="/admin/eventos/:eventId/landing" element={<RequireAuth><EventLandingAdmin /></RequireAuth>} />
-        <Route path="/admin/foro-plano/:eventId" element={<RequireAuth><PlanoForoAdmin /></RequireAuth>} />
-        <Route path="/admin/plano-comercial/:eventId" element={<RequireAuth><PlanoComercialAdmin /></RequireAuth>} />
-        <Route path="/admin/plano-publicar/:eventId" element={<RequireAuth><PlanoPublicarAdmin /></RequireAuth>} />
+        <Route path="/admin/eventos/:eventId/formularios" element={<RequireAuth><RequireOrgAdmin><EventLeadForms /></RequireOrgAdmin></RequireAuth>} />
+        <Route path="/admin/eventos/:eventId/lanzamiento" element={<RequireAuth><RequireOrgAdmin><EventLaunchChecklist /></RequireOrgAdmin></RequireAuth>} />
+        <Route path="/admin/eventos/:eventId/landing" element={<RequireAuth><RequireOrgAdmin><EventLandingAdmin /></RequireOrgAdmin></RequireAuth>} />
+        <Route path="/admin/foro-plano/:eventId" element={<RequireAuth><RequireOrgAdmin><PlanoForoAdmin /></RequireOrgAdmin></RequireAuth>} />
+        <Route path="/admin/plano-comercial/:eventId" element={<RequireAuth><RequireOrgAdmin><PlanoComercialAdmin /></RequireOrgAdmin></RequireAuth>} />
+        <Route path="/admin/plano-publicar/:eventId" element={<RequireAuth><RequireOrgAdmin><PlanoPublicarAdmin /></RequireOrgAdmin></RequireAuth>} />
         <Route
           path="/admin/suscripcion"
           element={
