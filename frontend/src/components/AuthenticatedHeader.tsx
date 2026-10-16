@@ -4,6 +4,7 @@ import { BookOpen, Building2, CalendarCog, ChevronDown, CircleUserRound, Clipboa
 import { useAuth } from '../lib/auth'
 import { clearImpersonation, resolveActiveOrg } from '../lib/activeOrg'
 import { supabase } from '../lib/supabase'
+import { enterOwnOrganization, platformSections, platformUrl, setAdminMode } from '../lib/adminNavigation'
 
 type Brand = { name?: string | null; logo_url?: string | null; color?: string | null }
 
@@ -29,15 +30,22 @@ export default function AuthenticatedHeader() {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  const platformView = location.pathname.startsWith('/superadmin')
   const [open, setOpen] = useState(false)
   const [state, setState] = useState<HeaderState>({ organizationName: 'Organización', branding: {}, isPlatformAdmin: false, isSupport: false, impersonating: false })
 
   useEffect(() => {
     let active = true
     async function load() {
-      const [organization, platform, support] = await Promise.all([resolveActiveOrg(), supabase.rpc('is_platform_admin'), supabase.rpc('is_support_operator')])
+      const [platform, support] = await Promise.all([supabase.rpc('is_platform_admin'), supabase.rpc('is_support_operator')])
       if (!active) return
       const isPlatformAdmin = platform.data === true
+      if (platformView) {
+        setState({ organizationName: 'Plataforma global', branding: {}, isPlatformAdmin, isSupport: support.data === true, impersonating: false })
+        return
+      }
+      const organization = await resolveActiveOrg()
+      if (!active) return
       if (!organization) {
         setState({ organizationName: 'EventPass VE', branding: {}, isPlatformAdmin, isSupport: support.data === true, impersonating: false })
         return
@@ -54,7 +62,7 @@ export default function AuthenticatedHeader() {
     }
     void load()
     return () => { active = false }
-  }, [location.pathname])
+  }, [location.pathname, platformView])
 
   async function leave() {
     setOpen(false)
@@ -63,20 +71,24 @@ export default function AuthenticatedHeader() {
     navigate('/admin/login', { replace: true })
   }
 
-  const brandName = state.branding.name ?? state.organizationName
-  const accent = state.branding.color ?? '#059669'
+  const brandName = platformView ? 'Plataforma global' : state.branding.name ?? state.organizationName
+  const accent = platformView ? '#059669' : state.branding.color ?? '#059669'
+  const home = platformView ? platformUrl() : '/admin'
+  const links = platformView ? platformSections.map(section => ({ to: platformUrl(section.id), label: section.label, icon: ShieldCheck })) : navigation
+  const contextLabel = platformView ? 'Actuando como superadmin' : state.impersonating ? 'Vista de cliente' : 'Organización activa'
 
   return <header className="sticky top-0 z-[120] border-b border-zinc-200 bg-white/95 shadow-sm backdrop-blur">
     <div className="mx-auto flex h-16 max-w-[1600px] items-center justify-between gap-3 px-4 sm:px-6">
-      <Link to="/admin" className="flex min-w-0 items-center gap-3" aria-label="Ir al inicio del organizador">
+      <Link to={home} className="flex min-w-0 items-center gap-3" aria-label={platformView ? 'Ir al resumen de superadmin' : 'Ir al inicio del organizador'}>
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-zinc-950 text-emerald-300" aria-hidden="true"><Ticket className="h-5 w-5" /></span>
-        <div className="hidden min-w-0 sm:block"><p className="text-xs font-bold uppercase tracking-[0.14em] text-zinc-500">EventosFácil</p><p className="truncate text-sm font-semibold text-zinc-900">Panel de organización</p></div>
+        <div className="hidden min-w-0 sm:block"><p className="text-xs font-bold uppercase tracking-[0.14em] text-zinc-500">EventosFácil</p><p className="truncate text-sm font-semibold text-zinc-900">{platformView ? 'Panel de superadmin' : 'Panel de organización'}</p></div>
       </Link>
 
       <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+        {state.isPlatformAdmin && <button type="button" onClick={() => { setOpen(false); if (platformView) { enterOwnOrganization(); navigate('/admin') } else { setAdminMode('platform'); navigate(platformUrl()) } }} className="rounded-lg border border-violet-200 px-2 py-2 text-xs font-semibold text-violet-800">{platformView ? 'Mi organización' : 'Actuar como superadmin'}</button>}
         <div className="hidden min-w-0 items-center gap-2 border-r border-zinc-200 pr-3 md:flex">
-          {state.branding.logo_url ? <img src={state.branding.logo_url} alt="" className="h-9 w-16 rounded-lg border border-zinc-100 bg-white object-contain p-1" /> : <span className="grid h-9 w-9 place-items-center rounded-lg bg-emerald-50" style={{ color: accent }}><Building2 className="h-4 w-4" /></span>}
-          <div className="min-w-0"><p className="max-w-56 truncate text-sm font-semibold text-zinc-900">{brandName}</p><p className="text-xs text-zinc-500">{state.impersonating ? 'Vista de cliente' : 'Organización activa'}</p></div>
+          {!platformView && state.branding.logo_url ? <img src={state.branding.logo_url} alt="" className="h-9 w-16 rounded-lg border border-zinc-100 bg-white object-contain p-1" /> : <span className="grid h-9 w-9 place-items-center rounded-lg bg-emerald-50" style={{ color: accent }}><Building2 className="h-4 w-4" /></span>}
+          <div className="min-w-0"><p className="max-w-56 truncate text-sm font-semibold text-zinc-900">{brandName}</p><p className="text-xs text-zinc-500">{contextLabel}</p></div>
         </div>
         <div className="relative">
           <button type="button" onClick={() => setOpen(value => !value)} aria-label="Abrir menú de usuario" aria-expanded={open} className="inline-flex h-10 items-center gap-2 rounded-xl border border-zinc-300 bg-white px-2.5 text-zinc-700 transition hover:border-emerald-400 hover:text-emerald-800">
@@ -85,15 +97,17 @@ export default function AuthenticatedHeader() {
             <ChevronDown className="h-4 w-4" aria-hidden="true" />
           </button>
           {open && <div className="absolute right-0 top-12 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl">
-            <div className="border-b border-zinc-100 px-4 py-3 md:hidden"><p className="truncate text-sm font-bold text-zinc-900">{brandName}</p><p className="mt-0.5 text-xs text-zinc-500">Organización activa</p></div>
+            <div className="border-b border-zinc-100 px-4 py-3 md:hidden"><p className="truncate text-sm font-bold text-zinc-900">{brandName}</p><p className="mt-0.5 text-xs text-zinc-500">{contextLabel}</p></div>
             <div className="border-b border-zinc-100 px-4 py-3"><p className="truncate text-sm font-semibold text-zinc-900">{user?.email ?? 'Sesión activa'}</p><p className="mt-0.5 text-xs text-zinc-500">Accesos y navegación</p></div>
             <nav aria-label="Navegación de usuario" className="max-h-[min(60dvh,30rem)] overflow-y-auto p-2">
-              {navigation.map(({ to, label, icon: Icon }) => <Link key={to} to={to} onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-emerald-50 hover:text-emerald-900"><Icon className="h-4 w-4 text-emerald-700" />{label}</Link>)}
-              <Link to="/admin/suscripcion" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-emerald-50 hover:text-emerald-900"><ShieldCheck className="h-4 w-4 text-emerald-700" />Suscripción</Link>
+              {(!platformView || state.isPlatformAdmin) && links.map(({ to, label, icon: Icon }) => <Link key={to} to={to} onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-emerald-50 hover:text-emerald-900"><Icon className="h-4 w-4 text-emerald-700" />{label}</Link>)}
+              {!platformView && <Link to="/admin/suscripcion" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-emerald-50 hover:text-emerald-900"><ShieldCheck className="h-4 w-4 text-emerald-700" />Suscripción</Link>}
               <a href="/manual/" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-emerald-50 hover:text-emerald-900"><BookOpen className="h-4 w-4 text-emerald-700" />Manual de usuario</a>
-              <Link to="/admin/soporte" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-zinc-700">Preparación y soporte</Link>
+              {!platformView && <Link to="/admin/soporte" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-zinc-700">Preparación y soporte</Link>}
               {state.isSupport && <Link to="/soporte" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl bg-sky-50 px-3 py-2.5 text-sm font-bold text-sky-900">Bandeja de soporte</Link>}
-              {state.isPlatformAdmin && <Link to="/superadmin" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl bg-violet-50 px-3 py-2.5 text-sm font-bold text-violet-900 hover:bg-violet-100"><ShieldCheck className="h-4 w-4 text-violet-700" />Ir a Superadmin</Link>}
+              {state.isPlatformAdmin && (platformView
+                ? <button onClick={() => { enterOwnOrganization(); setOpen(false); navigate('/admin') }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-emerald-800">Ir a mi organización</button>
+                : <Link to={platformUrl()} onClick={() => { setAdminMode('platform'); setOpen(false) }} className="flex items-center gap-3 rounded-xl bg-violet-50 px-3 py-2.5 text-sm font-bold text-violet-900 hover:bg-violet-100"><ShieldCheck className="h-4 w-4 text-violet-700" />Actuar como superadmin</Link>)}
             </nav>
             <div className="border-t border-zinc-100 p-2"><button type="button" onClick={() => void leave()} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-red-700 hover:bg-red-50"><LogOut className="h-4 w-4" />Cerrar sesión</button></div>
           </div>}

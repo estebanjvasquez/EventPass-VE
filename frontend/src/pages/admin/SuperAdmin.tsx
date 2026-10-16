@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, BarChart3, Building2, CalendarRange, CircleDollarSign, ExternalLink, KeyRound, LogIn, Mail, Search, ShieldCheck, Trash2, UserCog, UserPlus, Users, X } from 'lucide-react'
 import CommercialOperations from './CommercialOperations'
 import { supabase } from '../../lib/supabase'
 import { setImpersonatedOrg } from '../../lib/activeOrg'
+import { platformSections, platformTab, platformUrl, setAdminMode } from '../../lib/adminNavigation'
 import { slugAvailable, slugify } from '../../lib/onboarding'
 import { displayLabel, EVENT_STATUS_LABEL } from '../../lib/eventPresentation'
 
@@ -34,15 +35,14 @@ const ORG_STATUS: Record<string, { text: string; cls: string }> = {
 }
 const ROOT_DOMAIN = 'eventosfacil.net'
 
-type Tab = 'comercial' | 'resumen' | 'clientes' | 'usuarios' | 'planes' | 'catalogo' | 'pagos' | 'supers' | 'pagos_plataforma'
-
 export default function SuperAdmin() {
   const [allowed, setAllowed] = useState<boolean | null>(null)
-  const [tab, setTab] = useState<Tab>('resumen')
+  const [params, setParams] = useSearchParams()
+  const tab = platformTab(params.get('tab'))
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    supabase.rpc('is_platform_admin').then(({ data }) => setAllowed(data === true))
+    supabase.rpc('is_platform_admin').then(({ data }) => { setAllowed(data === true); if (data === true) setAdminMode('platform') })
   }, [])
 
   if (allowed === null)
@@ -62,25 +62,15 @@ export default function SuperAdmin() {
       </div>
     )
 
-  const tabs: { id: Tab; label: string }[] = [
-    {id:'comercial',label:'Comercial y soporte'},
-    { id: 'resumen', label: 'Resumen' },
-    { id: 'clientes', label: 'Organizaciones y soporte' },
-    { id: 'usuarios', label: 'Usuarios' },
-    { id: 'planes', label: 'Catálogo base' },
-    { id: 'catalogo', label: 'Eventos públicos' },
-    { id: 'pagos', label: 'Pagos' },
-    { id: 'supers', label: 'Superadmins' },
-    { id: 'pagos_plataforma', label: 'Datos de pago' },
-  ]
+  const tabs = platformSections
 
   return (
     <div className="min-h-[100dvh] bg-[#fafafa]">
       <header className="border-b border-zinc-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
-          <Link to="/admin" className="inline-flex items-center gap-2 text-sm font-medium text-zinc-600 hover:text-zinc-900">
+          <Link to={platformUrl()} className="inline-flex items-center gap-2 text-sm font-medium text-zinc-600 hover:text-zinc-900">
             <ArrowLeft className="h-4 w-4" />
-            Panel
+            Resumen de plataforma
           </Link>
           <span className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-900">
             <ShieldCheck className="h-4 w-4 text-emerald-600" />
@@ -95,7 +85,8 @@ export default function SuperAdmin() {
             <button
               key={t.id}
               type="button"
-              onClick={() => setTab(t.id)}
+              aria-pressed={tab === t.id}
+              onClick={() => { setError(null); setParams({ tab: t.id }) }}
               className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${tab === t.id ? 'bg-zinc-900 text-white' : 'border border-zinc-300 bg-white text-zinc-700 hover:border-zinc-400'}`}
             >
               {t.label}

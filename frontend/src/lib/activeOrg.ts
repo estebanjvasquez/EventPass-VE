@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { setAdminMode } from './adminNavigation'
 
 // La organización sobre la que operan las páginas admin. Normalmente es la del
 // usuario (su membresía); si un superadmin eligió "gestionar como cliente", se
@@ -8,14 +9,14 @@ const ACTIVE_KEY = 'admin_active_org'
 export function setActiveOrg(orgId:string){sessionStorage.setItem(ACTIVE_KEY,orgId)}
 
 export function setImpersonatedOrg(orgId: string | null) {
-  if (orgId) sessionStorage.setItem(KEY, orgId)
+  if (orgId) { sessionStorage.setItem(KEY, orgId); setAdminMode('organization') }
   else sessionStorage.removeItem(KEY)
 }
 export function getImpersonatedOrg(): string | null {
   return sessionStorage.getItem(KEY)
 }
 export function clearImpersonation() {
-  sessionStorage.removeItem(KEY)
+  setAdminMode('platform')
 }
 
 export type ActiveOrg = {

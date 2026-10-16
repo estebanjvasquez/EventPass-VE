@@ -13,7 +13,8 @@
     "preview": "vite preview",
     "test:commercial": "node ../scripts/test-commercial-ui.mjs",
     "test:support": "node ../scripts/test-support-preparation-ui.mjs",
-    "test:management": "node ../scripts/test-commercial-management-ui.mjs && node ../scripts/test-resource-metering.mjs && node ../scripts/test-events-isolation.mjs"
+    "test:management": "node ../scripts/test-commercial-management-ui.mjs && node ../scripts/test-resource-metering.mjs && node ../scripts/test-events-isolation.mjs",
+    "test:admin-navigation": "node ../scripts/test-admin-navigation-ui.mjs"
   },
   "dependencies": {
     "@dnd-kit/react": "^0.5.0",

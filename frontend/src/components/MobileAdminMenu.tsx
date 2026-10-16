@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { BookOpen, CalendarCog, Handshake, IdCard, LayoutDashboard, LogOut, Menu, ScanLine, ShieldCheck, Ticket, Users, X } from 'lucide-react'
 import { useAuth } from '../lib/auth'
+import { platformSections, platformUrl, setAdminMode } from '../lib/adminNavigation'
 
 const links = [
   { href: '/admin', label: 'Inicio', icon: LayoutDashboard },
@@ -19,6 +20,8 @@ export default function MobileAdminMenu() {
   const [open, setOpen] = useState(false)
   const isAdminRoute = location.pathname.startsWith('/admin') || location.pathname.startsWith('/superadmin')
   if (!isAdminRoute || location.pathname === '/admin/login') return null
+  const platform = location.pathname.startsWith('/superadmin')
+  const entries = platform ? platformSections.map(section => ({ href: platformUrl(section.id), label: section.label, icon: ShieldCheck })) : links
 
   return (
     <>
@@ -38,14 +41,14 @@ export default function MobileAdminMenu() {
             className="absolute right-3 top-16 max-h-[calc(100dvh-5rem)] w-[min(20rem,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-2 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            {links.map(({ href, label, icon: Icon }) => (
+            {entries.map(({ href, label, icon: Icon }) => (
               <Link key={href} to={href} onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-zinc-700 hover:bg-emerald-50 hover:text-emerald-800">
                 <Icon className="h-4 w-4 text-emerald-700" />{label}
               </Link>
             ))}
-            <Link to="/admin/suscripcion" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-zinc-700 hover:bg-emerald-50 hover:text-emerald-800"><ShieldCheck className="h-4 w-4 text-emerald-700" />Suscripción</Link>
+            {!platform && <Link to="/admin/suscripcion" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-zinc-700 hover:bg-emerald-50 hover:text-emerald-800"><ShieldCheck className="h-4 w-4 text-emerald-700" />Suscripción</Link>}
             <a href="/manual/" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-zinc-700 hover:bg-emerald-50 hover:text-emerald-800"><BookOpen className="h-4 w-4 text-emerald-700" />Manual de usuario</a>
-            <button type="button" onClick={() => { setOpen(false); void signOut() }} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-zinc-700 hover:bg-red-50 hover:text-red-700"><LogOut className="h-4 w-4" />Salir</button>
+            <button type="button" onClick={() => { setOpen(false); setAdminMode('platform'); void signOut() }} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-zinc-700 hover:bg-red-50 hover:text-red-700"><LogOut className="h-4 w-4" />Salir</button>
           </nav>
         </div>
       )}

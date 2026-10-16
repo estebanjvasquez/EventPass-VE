@@ -349,3 +349,7 @@ Rol independiente administrable por superadmin, bandeja `/soporte`, asignación 
 ## Control comercial y caja — 15 de octubre de 2026
 
 Consumo/tarifas históricas/presupuestos; seguimientos y renovaciones; siete ensayos concurrentes en PostgreSQL 17.11 efímero (incluidos 200 intentos en cuatro conexiones contra cuota 25); cobros parciales, gastos, devoluciones/anulación e indicadores de caja por contrato. Guía: `docs/GESTION_COMERCIAL_ETAPA3_2026-10-15.md`. Migración `20261015155712_commercial_management_stage3.sql`. Nuevas suites `test:management` y `test:concurrency`. Mantener workflows/artifacts preexistentes fuera del commit.
+
+## Contexto de superadmin — 16 de octubre de 2026
+
+Navegación de plataforma independiente de membresías de organización. Modo por pestaña, cambio explícito a organización propia/cliente, retorno que limpia impersonación, secciones de superadmin en URL y protección ante respuestas de acceso fallidas/obsoletas. Prueba de navegador `test:admin-navigation`. Guías `docs/NAVEGACION_SUPERADMIN_2026-10-16.md` y análisis paralelo del especialista `docs/ESTRATEGIA_B2B_VENEZUELA_2026-10-16.md`. Sin migraciones ni cambios de precios. No incluir workflows/artifacts previos en el commit.
